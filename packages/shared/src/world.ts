@@ -46,6 +46,27 @@ function slopeY(x: number, z: number): number {
   return (2 * e) / Math.hypot(dx, 2 * e, dz);
 }
 
+/** Dirt paths between camp, Bjørkvik, the quarries, the mine and the goblin camp (polylines). */
+export const PATHS: [number, number][][] = [
+  [[0, 0], [-6, 10], [-14, 22], [-24, 30]],
+  [[4, -2], [16, -12], [26, -22], [48, -20], [70, -16], [86, -14]],
+  [[2, -6], [14, -30], [30, -52], [46, -70], [50, -76]],
+  [[6, 4], [22, 22], [30, 44], [28, 70], [30, 90]],
+  [[22, 22], [46, 30], [66, 33]],
+  [[-34, 30], [-42, 10], [-50, -20], [-58, -48]],
+];
+/** Distance (m) to the nearest path centre line. */
+export function pathDist(x: number, z: number): number {
+  let best = Infinity;
+  for (const line of PATHS) for (let i = 0; i < line.length - 1; i++) {
+    const [ax, az] = line[i], [bx, bz] = line[i + 1];
+    const dx = bx - ax, dz = bz - az;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
+    best = Math.min(best, Math.hypot(x - (ax + dx * t), z - (az + dz * t)));
+  }
+  return best;
+}
+
 /** Places nothing should be built over (buildings, paths, the cave mouth). */
 export function keepClear(x: number, z: number): boolean {
   if (Math.hypot(x, z) < 18 || Math.hypot(x - VILLAGE.x, z - VILLAGE.z) < VILLAGE.r + 7 || Math.hypot(x - CAVE_ENTRANCE.x, z - CAVE_ENTRANCE.z) < 8) return true;
@@ -141,6 +162,7 @@ export function treesInChunk(cx: number, cz: number): Tree[] {
     if (Math.abs(x) > lim || Math.abs(z) > lim) continue;
     if (y < WATER_LEVEL + 0.6 || y > 16 || keepClear(x, z) || slopeY(x, z) < 0.8) continue;
     if (VEINS.some((v) => Math.abs(v.x - x) < 3.2 && Math.abs(v.z - z) < 3.2)) continue;
+    if (pathDist(x, z) < 2.4) continue;
     if (roll > 0.62) continue;
     const near = Math.hypot(x, z) < 75;
     const kind: TreeKind = (near ? roll < 0.38 : roll < 0.2) ? 'birch' : 'pine';
@@ -277,6 +299,7 @@ const R: Recipe[] = [
   { id: 'cooked_perch', skill: 'cooking', station: ['campfire', 'stove'], level: 1, inputs: [{ item: 'raw_perch', qty: 1 }], output: { item: 'cooked_perch', qty: 1 }, xp: 8, seconds: 2, burns: true },
   { id: 'cooked_trout', skill: 'cooking', station: ['campfire', 'stove'], level: 5, inputs: [{ item: 'raw_trout', qty: 1 }], output: { item: 'cooked_trout', qty: 1 }, xp: 15, seconds: 2.2, burns: true },
   { id: 'cooked_char', skill: 'cooking', station: ['campfire', 'stove'], level: 12, inputs: [{ item: 'raw_char', qty: 1 }], output: { item: 'cooked_char', qty: 1 }, xp: 25, seconds: 2.5, burns: true },
+  { id: 'cooked_wolf_meat', skill: 'cooking', station: ['campfire', 'stove'], level: 3, inputs: [{ item: 'raw_wolf_meat', qty: 1 }], output: { item: 'cooked_wolf_meat', qty: 1 }, xp: 12, seconds: 2.4, burns: true },
   { id: 'cooked_pike', skill: 'cooking', station: ['campfire', 'stove'], level: 18, inputs: [{ item: 'raw_pike', qty: 1 }], output: { item: 'cooked_pike', qty: 1 }, xp: 38, seconds: 2.8, burns: true },
 ];
 // Metal armour: stone uses shaped stone, iron uses bars (+ a little shaped stone), counts from the design doc.
@@ -295,6 +318,16 @@ for (const p of ARMOUR_PIECES) {
 }
 export const RECIPES: Recipe[] = R;
 export const RECIPE_BY_ID: Map<string, Recipe> = new Map(RECIPES.map((r) => [r.id, r]));
+/** Tab a recipe sits under in the crafting menus: by material tier, or food type. */
+export function recipeGroup(r: Recipe): string {
+  const out = ITEMS[r.output.item];
+  const ins = r.inputs.map((i) => ITEMS[i.item]);
+  if (r.skill === 'cooking') return ins.some((d) => d?.kind === 'meat') ? 'Meat' : 'Fish';
+  if (r.skill === 'carpentry' && (out.kind === 'ammo' || r.output.item === 'arrow_shaft')) return 'Arrows';
+  if (r.skill === 'leatherworking') return out.look === 'goblin' ? 'Goblinhide' : 'Wolf leather';
+  const look = out.look ?? ins[0]?.look ?? 'stone';
+  return look[0].toUpperCase() + look.slice(1);
+}
 export const recipeAt = (r: Recipe, k: StationKind) => (Array.isArray(r.station) ? r.station.includes(k) : r.station === k);
 /** Gear (weapons, armour, tools) rolls a rarity when crafted. */
 export const rollsRarity = (r: Recipe) => !!ITEMS[r.output.item]?.slot && ITEMS[r.output.item]?.kind !== 'ammo';

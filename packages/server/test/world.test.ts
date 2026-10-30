@@ -515,3 +515,16 @@ test('the pier is walkable ground', async () => {
   assert.equal(groundAt(end.x, end.z), PIER.deck);
   assert.ok(checkStep({ ...end, y: PIER.deck }, { ...end, y: PIER.deck }, 0.1).ok);
 });
+
+test('no eating to heal for 10 s after taking damage', () => {
+  const { world, c, p, last, advance } = game();
+  p.bag[0] = { id: 'cooked_wolf_meat', qty: 2 };
+  p.hp = 5;
+  p.lastHurtAt = world.now();
+  world.handle(c, { t: 'eat', index: 0 });
+  assert.match(last('notice')!.text, /fight/);
+  assert.equal(p.hp, 5);
+  advance(10_500);
+  world.handle(c, { t: 'eat', index: 0 });
+  assert.ok(p.hp > 5);
+});

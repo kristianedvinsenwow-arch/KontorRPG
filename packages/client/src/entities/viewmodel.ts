@@ -47,12 +47,7 @@ function makeGrip(r: number, skin: THREE.Material, knuckle: THREE.Material): THR
   palm.castShadow = palm.receiveShadow = false;
   const heel = ball(g, v3(-(fingerR + 0.004), -0.048, 0.01), 0.026, skin, 10);
   heel.scale.set(0.8, 0.7, 1);
-  // Thumb: wraps over the top of the index finger from the palm side.
-  const thumb = new THREE.Group();
-  thumb.position.set(-fingerR * 0.6, 0.05, -fingerR * 0.9);
-  g.add(thumb);
-  limb(thumb, v3(0.012, -0.012, 0.02), v3(-0.006, 0.004, -0.004), 0.0125, 0.011, skin, 8);
-  ball(thumb, v3(-0.008, 0.005, -0.006), 0.0115, skin, 8);
+  // (No separate thumb: it read as a lump. The palm and heel close the grip on their own.)
   return g;
 }
 
@@ -81,6 +76,7 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
   const s = 0.62;
   let tool: THREE.Group | null = null;
   let heldId: string | undefined;
+  let bow = false;
 
   const hand = makeGrip(HAFT_R * s, skin, knuckle);
   grip.add(hand);
@@ -97,6 +93,7 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
   root.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = false; o.receiveShadow = false; } });
 
   const rest = new THREE.Vector3(0.37, -0.39, -0.24);
+  const bowRest = new THREE.Vector3(0.1, -0.3, -0.36);
   const sway = new THREE.Vector2();
   let ph = 0, breath = 0, swing = 0, active = false;
   root.visible = false;
@@ -111,11 +108,20 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
       tool = makeHeld(id);
       root.visible = !!tool;
       if (!tool) return;
-      tool.scale.setScalar(s);
-      tool.position.y = id?.includes('sword') ? -0.03 : -0.09; // grip near the end of the haft
-      // Turn the head into the swing plane: the pick points forward, away from you, so it strikes with
-      // the point instead of slapping with the flat. A slight twist keeps it readable on screen.
-      tool.rotation.y = -Math.PI / 2 + 0.28;
+      bow = !!tool.userData.bow;
+      tool.scale.setScalar(bow ? 0.55 : s);
+      if (bow) {
+        // Bow: upright in front of you (slightly canted), string towards you, arrow pointing
+        // ahead. The grip frame is tilted for hafts, so undo that tilt for the bow.
+        tool.position.set(0, 0, 0);
+        const want = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0.55, -0.12));
+        tool.quaternion.copy(grip.quaternion.clone().invert().multiply(want));
+      } else {
+        tool.position.set(0, id?.includes('sword') ? -0.03 : -0.09, 0); // grip near the end of the haft
+        // Turn the head into the swing plane: the pick points forward, away from you, so it strikes
+        // with the point instead of slapping with the flat. A slight twist keeps it readable.
+        tool.rotation.set(0, -Math.PI / 2 + 0.28, 0);
+      }
       tool.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = false; o.receiveShadow = false; } });
       grip.add(tool);
     },
@@ -132,6 +138,22 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
       if (active) {
         swing += dt / SWING_SEC;
         if (swing >= 1) { swing = 0; active = false; }
+      }
+      if (bow) {
+        // Draw (raise to the eye, pull the string), release (snap + small kick), recover.
+        const t = active ? swing : 0;
+        const draw = !active ? 0.04 : t < 0.55 ? THREE.MathUtils.smoothstep(t, 0, 0.55) : t < 0.62 ? 1 : Math.max(0, 1 - (t - 0.62) * 12);
+        const up = !active ? 0 : t < 0.62 ? THREE.MathUtils.smoothstep(t, 0, 0.3) : 1 - THREE.MathUtils.smoothstep(t, 0.7, 1);
+        const kick = active && t >= 0.62 && t < 0.8 ? Math.sin(((t - 0.62) / 0.18) * Math.PI) : 0;
+        tool!.userData.draw(draw);
+        (tool!.userData.arrow as THREE.Object3D).visible = !(active && t >= 0.62 && t < 0.95);
+        elbow.position.set(
+          bowRest.x - up * 0.12 + Math.sin(ph) * 0.01 * bob + sway.x,
+          bowRest.y + up * 0.1 + Math.abs(Math.cos(ph)) * 0.012 * bob + Math.sin(breath * 1.6) * 0.004 + sway.y,
+          bowRest.z + kick * 0.05,
+        );
+        elbow.rotation.set(0.12 + up * 0.08 - kick * 0.12 + Math.sin(breath * 1.6) * 0.006, 0.1 - up * 0.05, 0.05 + sway.x * 1.5);
+        return;
       }
       // Swing curve around the elbow: wind up over the shoulder, fast strike, slow recovery.
       let lift = 0;

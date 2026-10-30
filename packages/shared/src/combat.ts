@@ -32,6 +32,8 @@ export const BURN = { maxStacks: 3, perStackPerSec: 0.15, sec: 4 };
 export const SLOW = { pct: 0.25, sec: 3 };
 export const FREEZE_SEC = 2.5;
 export const PROJECTILE_SPEED = 30;
+/** No eating to heal for this long after taking damage (no food mid-fight). */
+export const EAT_LOCK_MS = 10_000;
 
 export function weaponClass(main: Stack | undefined): WeaponClass | 'fists' {
   return (main && ITEMS[main.id]?.weapon) || 'fists';

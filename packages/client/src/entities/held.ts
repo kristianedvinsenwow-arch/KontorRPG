@@ -78,17 +78,54 @@ function makeRod(look: string | undefined): THREE.Group {
   return g;
 }
 
+/** Point a thin cylinder (height 1 along Y) from a to b. */
+function stretch(m: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3) {
+  m.position.copy(a).add(b).multiplyScalar(0.5);
+  m.scale.set(1, Math.max(1e-3, a.distanceTo(b)), 1);
+  m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), b.clone().sub(a).normalize());
+}
+
+/**
+ * A recurve-ish bow: grip at the origin, limbs up and down (±Y) curving back towards the archer
+ * (+Z), a string between the tips and a nocked arrow pointing forward (−Z). `userData.draw(k)`
+ * pulls the string back (0 = rest, 1 = full draw) and `userData.arrow` shows/hides the arrow.
+ */
 function makeBow(look: string | undefined): THREE.Group {
   const g = new THREE.Group();
-  const m = lookMat(look);
-  const limbArc = mesh(new THREE.TorusGeometry(0.5, 0.016, 6, 24, Math.PI * 0.7), m, g);
-  limbArc.rotation.z = Math.PI / 2 - Math.PI * 0.35;
-  limbArc.position.set(-0.42, 0.05, 0);
-  const a = Math.PI * 0.35, top = new THREE.Vector3(-0.42 + 0.5 * Math.cos(a), 0.05 + 0.5 * Math.sin(a), 0), bot = new THREE.Vector3(top.x, 0.05 - 0.5 * Math.sin(a), 0);
-  const str = new THREE.Mesh(new THREE.CylinderGeometry(0.003, 0.003, top.distanceTo(bot), 3), new THREE.MeshBasicMaterial({ color: 0xe8e0c8 }));
-  str.position.copy(top).add(bot).multiplyScalar(0.5);
-  g.add(str);
-  mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.14, 8).translate(0, 0.05, 0), grip(), g);
+  const m = look === 'pine' ? mat(0x7a5232, 'wood', { r: 0.6 }) : mat(0xb89a70, 'wood', { r: 0.6 });
+  const pts: THREE.Vector3[] = [];
+  for (let i = 0; i <= 16; i++) {
+    const y = -0.52 + (i / 16) * 1.04, a = Math.abs(y) / 0.52;
+    pts.push(new THREE.Vector3(0, y, 0.15 * a ** 1.8));
+  }
+  mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 32, 0.014, 6), m, g);
+  mesh(new THREE.CylinderGeometry(0.024, 0.024, 0.15, 8), grip(), g);
+  const top = pts[16].clone(), bot = pts[0].clone();
+  const strMat = new THREE.MeshBasicMaterial({ color: 0xece4cc });
+  const sa = new THREE.Mesh(new THREE.CylinderGeometry(0.0025, 0.0025, 1, 4), strMat), sb = sa.clone();
+  g.add(sa, sb);
+  const arrow = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.72, 5).translate(0, 0.36, 0), new THREE.MeshStandardMaterial({ color: 0xc8b48a, roughness: 0.7 }));
+  shaft.rotation.x = -Math.PI / 2; // along −Z
+  arrow.add(shaft);
+  const head = new THREE.Mesh(new THREE.ConeGeometry(0.016, 0.06, 4), new THREE.MeshStandardMaterial({ color: 0x8d8a84, roughness: 0.6 }));
+  head.rotation.x = -Math.PI / 2; head.position.z = -0.75;
+  arrow.add(head);
+  for (const r of [0, Math.PI / 2]) {
+    const f = new THREE.Mesh(new THREE.PlaneGeometry(0.05, 0.1), new THREE.MeshStandardMaterial({ color: 0xd84a3a, side: THREE.DoubleSide }));
+    f.rotation.set(-Math.PI / 2, r, 0); f.position.z = -0.06;
+    arrow.add(f);
+  }
+  g.add(arrow);
+  const draw = (k: number) => {
+    const nock = new THREE.Vector3(0, 0.0, top.z + 0.34 * k);
+    stretch(sa, top, nock); stretch(sb, bot, nock);
+    arrow.position.copy(nock);
+  };
+  draw(0);
+  g.userData.draw = draw;
+  g.userData.arrow = arrow;
+  g.userData.bow = true;
   return g;
 }
 

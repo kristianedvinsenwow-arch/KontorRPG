@@ -4,7 +4,7 @@
  * full 6 × 6 km map. Each chunk also scatters its own trees, rocks and decorative ore veins.
  */
 import * as THREE from 'three';
-import { CHUNK_SIZE, WORLD_HALF, WATER_LEVEL, heightAt, mulberry32 } from '@kontor/shared';
+import { CHUNK_SIZE, WORLD_HALF, WATER_LEVEL, heightAt, mulberry32, pathDist } from '@kontor/shared';
 import { TEX } from '../engine/procgen.js';
 import { buildProps, wind, type Collider } from './props.js';
 import { Water } from './water.js';
@@ -25,6 +25,7 @@ const C = {
   grassLo: new THREE.Color(0x5f7d3c),
   grassHi: new THREE.Color(0x7f9548),
   dirt: new THREE.Color(0x7a6548),
+  path: new THREE.Color(0x8a7556),
   sand: new THREE.Color(0xa69676),
   rock: new THREE.Color(0x7c7a74),
   snow: new THREE.Color(0xe8eef0),
@@ -54,6 +55,9 @@ function buildGround(cx: number, cz: number): THREE.Mesh {
     const v = (Math.sin(x * 0.11) * Math.cos(z * 0.09) + Math.sin(x * 0.031 + z * 0.047)) * 0.25 + 0.5;
     c.copy(C.grassLo).lerp(C.grassHi, v);
     if (v > 0.8) c.lerp(C.dirt, (v - 0.8) * 2.5);
+    // Trodden dirt paths between the places people go.
+    const pd = pathDist(x, z);
+    if (pd < 2.2) c.lerp(C.path, (1 - THREE.MathUtils.smoothstep(pd, 0.9, 2.2)) * 0.85);
     if (y < WATER_LEVEL + 0.8) c.lerp(C.sand, THREE.MathUtils.smoothstep(WATER_LEVEL + 0.8 - y, 0, 0.8));
     const steep = THREE.MathUtils.smoothstep(1 - N.y, 0.18, 0.4);
     c.lerp(C.rock, steep);

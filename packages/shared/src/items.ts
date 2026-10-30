@@ -12,7 +12,7 @@ export type Slot =
   | 'head' | 'shoulders' | 'chest' | 'legs' | 'hands' | 'feet' | 'back'
   | 'mainHand' | 'offHand' | 'ring' | 'neck' | 'pickaxe' | 'hatchet' | 'rod' | 'knife' | 'ammo';
 
-export type ItemKind = 'ore' | 'gem' | 'material' | 'bar' | 'log' | 'ammo' | 'fish' | 'food' | 'junk' | 'tool' | 'weapon' | 'armour' | 'bag' | 'coins' | 'trinket';
+export type ItemKind = 'ore' | 'gem' | 'material' | 'bar' | 'log' | 'ammo' | 'fish' | 'meat' | 'food' | 'junk' | 'tool' | 'weapon' | 'armour' | 'bag' | 'coins' | 'trinket';
 export type WeaponClass = 'sword' | 'longsword' | 'battleaxe' | 'bow' | 'staff' | 'fireStaff' | 'frostStaff';
 export type ArmourType = 'cloth' | 'leather' | 'metal';
 export type ToolKind = 'pickaxe' | 'hatchet' | 'rod' | 'knife';
@@ -187,7 +187,9 @@ for (const [id, name, raw, cooked, tier, food] of FISH) {
   add({ id: `raw_${id}`, name: `Raw ${name.toLowerCase()}`, kind: 'fish', stack: 10, tier, sellValue: raw, blurb: 'Cook it at a campfire or the inn’s stove.' });
   add({ id: `cooked_${id}`, name: `Cooked ${name.toLowerCase()}`, kind: 'food', stack: 10, tier, food, sellValue: cooked, blurb: `Eat it (hotbar) to heal ${food!.heal} HP${food!.buff ? ' and get a 10-minute buff' : ''}.` });
 }
-add({ id: 'burnt_fish', name: 'Burnt fish', kind: 'junk', stack: 10, sellValue: 0, blurb: 'Charcoal with fins. Drop it.' });
+add({ id: 'raw_wolf_meat', name: 'Raw wolf meat', kind: 'meat', stack: 10, tier: 1, sellValue: 1, blurb: 'Tough and gamey. Cook it at a campfire or the inn’s stove.' });
+add({ id: 'cooked_wolf_meat', name: 'Wolf steak', kind: 'food', stack: 10, tier: 1, food: { heal: 12, buff: { name: 'Well fed (wolf)', stats: { meleeDmg: 0.05, maxHp: 4 }, sec: 600 } }, sellValue: 2, blurb: 'Eat it (hotbar) to heal 12 HP and get a 10-minute buff. Not mid-fight.' });
+add({ id: 'burnt_fish', name: 'Burnt food', kind: 'junk', stack: 10, sellValue: 0, blurb: 'Charcoal. Drop it.' });
 add({ id: 'old_boot', name: 'Old boot', kind: 'junk', stack: 5, sellValue: 0, blurb: 'Someone lost this in the lake. Smells like it.' });
 add({ id: 'golden_perch', name: 'Golden perch', kind: 'fish', stack: 5, tier: 2, sellValue: 20, blurb: 'A rare, shimmering perch. Traders love it.' });
 
@@ -286,7 +288,7 @@ export const EQUIP_SLOTS: { slot: Slot; label: string }[] = [
 ];
 
 export const KIND_LABEL: Record<ItemKind, string> = {
-  ore: 'Ore', gem: 'Gem', material: 'Material', bar: 'Bar', log: 'Log', ammo: 'Ammunition', fish: 'Raw fish', food: 'Food', junk: 'Junk',
+  ore: 'Ore', gem: 'Gem', material: 'Material', bar: 'Bar', log: 'Log', ammo: 'Ammunition', fish: 'Raw fish', meat: 'Raw meat', food: 'Food', junk: 'Junk',
   tool: 'Tool', weapon: 'Weapon', armour: 'Armour', bag: 'Bag', coins: 'Coins', trinket: 'Trinket',
 };
 

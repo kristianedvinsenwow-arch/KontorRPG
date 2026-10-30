@@ -5,7 +5,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CHUNK_SIZE, VEINS, WORLD_HALF, WATER_LEVEL, heightAt, mulberry32, keepClear, treesInChunk } from '@kontor/shared';
+import { CHUNK_SIZE, VEINS, WORLD_HALF, WATER_LEVEL, heightAt, mulberry32, keepClear, pathDist, treesInChunk } from '@kontor/shared';
 import { registerTrees } from './trees.js';
 import { canvasTex, TEX } from '../engine/procgen.js';
 
@@ -66,6 +66,21 @@ function birchCrownGeo(): THREE.BufferGeometry {
     new THREE.IcosahedronGeometry(0.85, 0).translate(0.1, 4.7, 0.1),
   ];
   return faceted(mergeGeometries(parts.map((g) => g.toNonIndexed()))!, 21, 0.25, new THREE.Color(0x45612a), new THREE.Color(0x7f9a3e), 2.8, 5.4);
+}
+
+/** A low, lumpy shrub; berry bushes get red speckles. */
+function bushGeo(seed: number, berries: boolean): THREE.BufferGeometry {
+  const parts = [
+    new THREE.IcosahedronGeometry(0.6, 0).translate(0, 0.45, 0),
+    new THREE.IcosahedronGeometry(0.45, 0).translate(0.45, 0.35, 0.15),
+    new THREE.IcosahedronGeometry(0.42, 0).translate(-0.4, 0.33, -0.1),
+  ];
+  const g = faceted(mergeGeometries(parts.map((p) => p.toNonIndexed()))!, seed, 0.2, new THREE.Color(0x2c4a22), new THREE.Color(0x5a7a34), 0, 1);
+  if (berries) {
+    const col = g.attributes.color as THREE.BufferAttribute, rng = mulberry32(seed);
+    for (let i = 0; i < col.count; i += 3) if (rng() < 0.18) for (let k = 0; k < 3; k++) col.setXYZ(i + k, 0.7, 0.1, 0.12);
+  }
+  return g;
 }
 
 export function rockGeo(seed: number, flat: number): THREE.BufferGeometry {
@@ -144,12 +159,15 @@ export const PROP = {
   rockA: { geo: rockGeo(3, 0.7), mat: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 }) },
   rockB: { geo: rockGeo(7, 0.5), mat: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 }) },
   grass: { geo: tuftGeo(0.8, 0.45), mat: windMaterial(bladesTex, 0x6f8c42, 0.1) },
+  reed: { geo: tuftGeo(0.45, 1.3), mat: windMaterial(bladesTex, 0x4f6a30, 0.12) },
+  bush: { geo: bushGeo(5, false), mat: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 }) },
+  berryBush: { geo: bushGeo(9, true), mat: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.8 }) },
   heather: { geo: tuftGeo(0.55, 0.38), mat: windMaterial(flowerTex('#b77fc9'), 0xffffff, 0.06) },
   buttercup: { geo: tuftGeo(0.5, 0.42), mat: windMaterial(flowerTex('#f4d54a'), 0xffffff, 0.07) },
   cotton: { geo: tuftGeo(0.5, 0.45), mat: windMaterial(flowerTex('#f4f2ea'), 0xffffff, 0.08) },
 };
 // Shadows from thousands of grass cards cost a lot and look noisy; only the big things cast.
-const CASTS: Partial<Record<PropKey, boolean>> = { pineTrunk: true, pineCrown: true, birchTrunk: true, birchCrown: true, rockA: true, rockB: true };
+const CASTS: Partial<Record<PropKey, boolean>> = { pineTrunk: true, pineCrown: true, birchTrunk: true, birchCrown: true, rockA: true, rockB: true, bush: true, berryBush: true };
 type PropKey = keyof typeof PROP;
 
 /** Scatter one chunk's props deterministically, filling `colliders` for trees and big rocks. */
@@ -201,13 +219,26 @@ export function buildProps(cx: number, cz: number, colliders: Collider[], dense:
     colliders.push({ x: t.x, z: t.z, r: (t.kind === 'pine' ? 0.3 : 0.22) * t.s });
   }
 
+  // Bushes along forest edges and hillsides.
+  for (let i = 0; i < 26; i++) {
+    const x = cx * CHUNK_SIZE + rng() * CHUNK_SIZE, z = cz * CHUNK_SIZE + rng() * CHUNK_SIZE;
+    const y = heightAt(x, z);
+    const s = 0.5 + rng() * 0.7, ry = rng() * 6.28, roll = rng();
+    if (y < WATER_LEVEL + 0.5 || y > 14 || !inWorld(x, z) || keepClear(x, z) || pathDist(x, z) < 2 || nearVein(x, z, 2)) continue;
+    if (normalAt(x, z).y < 0.85) continue;
+    add(roll < 0.3 ? 'berryBush' : 'bush', x, y - 0.1, z, s, ry, s * (0.8 + rng() * 0.3), 0.85 + rng() * 0.3);
+  }
+
   // Ground cover: grass everywhere it's green and gentle, flower patches here and there.
   const tufts = dense ? 1400 : 500;
   for (let i = 0; i < tufts; i++) {
     const x = cx * CHUNK_SIZE + rng() * CHUNK_SIZE, z = cz * CHUNK_SIZE + rng() * CHUNK_SIZE;
     const y = heightAt(x, z);
-    if (y < WATER_LEVEL + 0.35 || y > 15 || !inWorld(x, z)) continue;
+    if (y > 15 || !inWorld(x, z)) continue;
+    // Reeds in the shallows.
+    if (y < WATER_LEVEL + 0.35) { if (y > WATER_LEVEL - 0.7 && rng() < 0.5) add('reed', x, y - 0.05, z, 0.8 + rng() * 0.5, rng() * 3, 1 + rng() * 0.6, 0.8 + rng() * 0.3); continue; }
     if (normalAt(x, z).y < 0.86) continue;
+    if (pathDist(x, z) < 1.1) continue; // keep the paths clear
     const s = 0.7 + rng() * 0.7, ry = rng() * Math.PI;
     const patch = Math.sin(x * 0.13 + z * 0.07) * Math.cos(z * 0.11 - x * 0.05);
     const r = rng();

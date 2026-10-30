@@ -5,7 +5,7 @@
  */
 import {
   COMING_SKILLS, EQUIP_SLOTS, IMBUE, INN, ITEMS, NPC_BY_ID, QUESTS, RECIPES, SKILLS, STATION_BY_ID, TALENT_TREE, TREES,
-  canLearn, countItem, knifeRepair, knifeUses, formatStat, levelFromXp, levelProgress, pointsLeft, questAvailable, recipeAt, respecCost, xpForLevel,
+  canLearn, countItem, knifeRepair, knifeUses, recipeGroup, formatStat, levelFromXp, levelProgress, pointsLeft, questAvailable, recipeAt, respecCost, xpForLevel,
   type ClientMsg, type Stack, type StatKey, type TreeId,
 } from '@kontor/shared';
 import { gameStore, uiStore, type GameState } from '../state/store.js';
@@ -193,10 +193,20 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
   // ---------------------------------------------------------------- crafting
 
   const want = new Map<string, number>();
+  const craftTab = new Map<string, string>();
   function craft(g: GameState, stationId: string): HTMLElement[] {
     const st = STATION_BY_ID.get(stationId)!;
     const list = el('div', 'recipes');
-    for (const r of RECIPES.filter((x) => recipeAt(x, st.kind))) {
+    // Tabs by material tier or food type, so long recipe lists stay short.
+    const here = RECIPES.filter((x) => recipeAt(x, st.kind));
+    const groups = [...new Set(here.map(recipeGroup))];
+    const tab = groups.includes(craftTab.get(st.kind) ?? '') ? craftTab.get(st.kind)! : groups[0];
+    const tabs = el('div', 'tabs');
+    if (groups.length > 1) for (const gname of groups) {
+      const n = here.filter((r) => recipeGroup(r) === gname && levelFromXp(g.xp[r.skill] ?? 0) >= r.level && r.inputs.every((i) => countItem(g.bag, i.item) >= i.qty)).length;
+      tabs.append(btn(n ? `${gname} (${n})` : gname, gname === tab ? 'tab on' : 'tab', () => { craftTab.set(st.kind, gname); render(); }));
+    }
+    for (const r of here.filter((x) => recipeGroup(x) === tab)) {
       const lvl = levelFromXp(g.xp[r.skill] ?? 0);
       const can = Math.min(...r.inputs.map((i) => Math.floor(countItem(g.bag, i.item) / i.qty)));
       const locked = lvl < r.level;
@@ -258,6 +268,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
         list.prepend(row);
       }
     }
+    if (groups.length > 1) body.append(tabs);
     body.append(list, goldLine(g));
     return [header(st.name, { furnace: 'Smelt ore into bars', anvil: 'Shape stone, smith weapons and metal armour', workbench: 'Carpentry: shafts, arrows, bows, staffs, rods', campfire: 'Cook your catch', stove: 'Cook your catch (burns less)', tanning: 'Leatherworking: tan hides, make leather armour' }[st.kind], 'E'), body];
   }

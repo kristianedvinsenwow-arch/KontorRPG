@@ -6,7 +6,7 @@
 import * as THREE from 'three';
 import { INTERP_DELAY_MS, PLAYER_COLORS, RACES, type PlayerState } from '@kontor/shared';
 import { addLabel, removeLabel, type Label } from '../engine/labels.js';
-import { makeCharacter, animateCharacter, type Character } from '../entities/character.js';
+import { makeCharacter, animateCharacter, aimPose, type Character } from '../entities/character.js';
 import { applyGear } from '../entities/held.js';
 
 interface Sample { at: number; s: PlayerState }
@@ -104,6 +104,7 @@ export class Remotes {
       const spd = a.s.spd + (c.s.spd - a.s.spd) * t;
       animateCharacter(r.model, spd, c.s.pitch, c.s.act === 'swing' || c.s.act === 'spin', dt);
       if (c.s.act === 'spin') r.model.body.rotation.y += dt * 14; else r.model.body.rotation.y = 0;
+      if (c.s.act === 'shoot' || c.s.act === 'cast') aimPose(r.model, c.s.act);
     }
   }
 

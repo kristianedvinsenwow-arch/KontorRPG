@@ -316,6 +316,7 @@ export function animateCharacter(c: Character, speed: number, pitch: number, swi
     c.arms[0].shoulder.rotation.x = -sw * 0.8;
     c.arms[0].elbow.rotation.x = 0.25;
     c.arms[0].shoulder.rotation.z = 0;
+    c.arms[1].shoulder.rotation.z = 0;
     // Tool arm: carried with the forearm forward.
     c.arms[1].shoulder.rotation.x = 0.3 + sw * 0.3;
     c.arms[1].elbow.rotation.x = 0.95;
@@ -439,5 +440,20 @@ function buildFace(head: THREE.Group, face: number, skin: THREE.Material, hair: 
       ball(head, v3(0, -0.01, -0.118), 0.02, skin, 10).scale.set(1, 0.9, 1);
       arcMouth(0.024, 0.75);
     }
+  }
+}
+
+/** Ranged poses for other players: drawing a bow (arms forward, string hand pulled back) or casting. */
+export function aimPose(c: Character, kind: 'shoot' | 'cast'): void {
+  if (kind === 'shoot') {
+    c.arms[1].shoulder.rotation.set(1.45, 0, 0.15);
+    c.arms[1].elbow.rotation.x = 0.05;
+    c.arms[0].shoulder.rotation.set(1.35, 0, -0.45);
+    c.arms[0].elbow.rotation.x = 1.5;
+  } else {
+    c.arms[1].shoulder.rotation.set(1.9, 0, 0.1);
+    c.arms[1].elbow.rotation.x = 0.3;
+    c.arms[0].shoulder.rotation.set(1.1, 0, -0.2);
+    c.arms[0].elbow.rotation.x = 0.4;
   }
 }

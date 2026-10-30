@@ -245,7 +245,7 @@ net.on((msg) => {
       if (!p) break;
       const txt = msg.kind === 'dodge' ? 'Dodged' : msg.kind === 'block' ? `Blocked ${msg.dmg}` : msg.kind === 'heal' ? `+${msg.dmg}` : `${msg.dmg}${msg.crit ? '!' : ''}`;
       floatText(txt, `${msg.kind}${msg.crit ? ' crit' : ''}${mine ? ' me' : ''}`, p);
-      if (mine && msg.kind !== 'heal' && msg.kind !== 'dodge') document.getElementById('hurt')?.animate([{ opacity: 0.55 }, { opacity: 0 }], { duration: 450 });
+      if (mine && msg.kind !== 'heal' && msg.kind !== 'dodge') { document.getElementById('hurt')?.animate([{ opacity: 0.55 }, { opacity: 0 }], { duration: 450 }); gameStore.set({ hurtAt: Date.now() }); }
       break;
     }
     case 'fx': {

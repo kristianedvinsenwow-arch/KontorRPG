@@ -48,6 +48,11 @@ export class Places {
     this.lodge();
     this.village();
     this.pier();
+    this.fence();
+    this.signpost(-7, 12.5, [['Bjørkvik', VILLAGE.x, VILLAGE.z], ['Camp', 0, 0]]);
+    this.signpost(18, -16, [['Grey Ridge', 86, -14], ['Old Mine', 50, -78], ['Camp', 0, 0]]);
+    this.signpost(24, 26, [['North Scree', 30, 94], ['Wolf pack ⚠', 66, 33], ['Camp', 0, 0]]);
+    this.signpost(-38, 22, [['Goblin camp ⚠', -62, -60], ['Bjørkvik', VILLAGE.x, VILLAGE.z]]);
     this.caveMouth();
   }
 
@@ -301,6 +306,58 @@ export class Places {
     this.fires.push({ light: lamp, mats: [], base: 3 });
     const end = new THREE.Vector3(P.x + P.ux * (P.length - 1), P.deck + 2.4, P.z + P.uz * (P.length - 1));
     tag('Fishing pier', 'Cast off the end', 'place', end, 30);
+  }
+
+  /** A split-rail fence around Bjørkvik's east side, open towards the paths and the lake. */
+  private fence(): void {
+    const r = 23.5, a0 = -0.6, a1 = 2.1, step = 2.4 / r;
+    const pts: THREE.Vector3[] = [];
+    for (let a = a0; a <= a1 + 1e-6; a += step) {
+      const x = VILLAGE.x + Math.cos(a) * r, z = VILLAGE.z + Math.sin(a) * r;
+      pts.push(new THREE.Vector3(x, heightAt(x, z), z));
+      this.colliders.push({ x, z, r: 0.25 });
+    }
+    for (const p of pts) { const post = bx(this.group, 0.12, 1.1, 0.12, M.darkWood, p.x, p.y + 0.5, p.z); void post; }
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      for (const h of [0.45, 0.85]) {
+        const rail = mesh(new THREE.CylinderGeometry(0.035, 0.035, 1, 5), M.wood, this.group);
+        const pa = a.clone().setY(a.y + h), pb = b.clone().setY(b.y + h);
+        rail.position.copy(pa).add(pb).multiplyScalar(0.5);
+        rail.scale.y = pa.distanceTo(pb);
+        rail.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), pb.clone().sub(pa).normalize());
+        this.colliders.push({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2, r: 0.3 });
+      }
+    }
+  }
+
+  /** A signpost with boards pointing at places. */
+  private signpost(x: number, z: number, signs: [string, number, number][]): void {
+    const g = new THREE.Group();
+    g.position.set(x, heightAt(x, z), z);
+    this.group.add(g);
+    bx(g, 0.14, 2.4, 0.14, M.darkWood, 0, 1.2, 0);
+    signs.forEach(([text, tx, tz], i) => {
+      const board = new THREE.Group();
+      board.position.y = 2.05 - i * 0.36;
+      board.rotation.y = Math.atan2(tx - x, tz - z) - Math.PI / 2; // local +X points at the place
+      g.add(board);
+      const tex = canvasTex((c, s) => {
+        c.fillStyle = '#7a5a3a'; c.fillRect(0, 0, s, s / 4);
+        c.fillStyle = '#f0e2c0'; c.font = `700 ${s * 0.13}px "Saira Condensed", sans-serif`; c.textBaseline = 'middle';
+        c.fillText(text, s * 0.06, s / 8);
+      }, 256);
+      tex.repeat.set(1, 0.25); tex.offset.set(0, 0.75);
+      const m = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.8 });
+      for (const side of [1, -1]) {
+        const p = mesh(new THREE.PlaneGeometry(1.1, 0.27), m, board);
+        p.position.set(0.62, 0, side * 0.035);
+        if (side < 0) p.rotation.y = Math.PI;
+      }
+      const tip = mesh(new THREE.ConeGeometry(0.14, 0.2, 3), M.wood, board); tip.rotation.z = -Math.PI / 2; tip.position.x = 1.25; tip.scale.z = 0.3;
+      bx(board, 1.1, 0.28, 0.06, M.wood, 0.62, 0, 0);
+    });
+    this.colliders.push({ x, z, r: 0.2 });
   }
 
   /** The Old Mine's entrance: a timber-framed adit in a heap of rock. */

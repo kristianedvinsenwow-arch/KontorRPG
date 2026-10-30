@@ -3,7 +3,7 @@
  * the right-click cooldown sweeps over the weapon), food (5), health, buffs, tracked quests, and
  * the "knocked out" screen.
  */
-import { ITEMS, QUEST_BY_ID, SPECIALS, countItem, formatStat, weaponClass, type HoldSlot, type StatKey } from '@kontor/shared';
+import { EAT_LOCK_MS, ITEMS, QUEST_BY_ID, SPECIALS, countItem, formatStat, weaponClass, type HoldSlot, type StatKey } from '@kontor/shared';
 import { gameStore, type GameState } from '../state/store.js';
 import { icon, el } from './panels.js';
 import { attachTip, itemTip } from './tooltip.js';
@@ -21,7 +21,11 @@ export function initHotbar(onHold: (s: HoldSlot) => void, onEat: (index: number)
   const hpFill = el('i'); const hpText = el('span');
   const hpBar = el('div', 'hp'); hpBar.append(hpFill, hpText);
   const buffs = el('div', 'buffs');
-  hp.append(hpBar, buffs);
+  // Right-click ability: a bar that fills while it recharges.
+  const sp = el('div', 'special');
+  const spFill = el('i'), spText = el('span');
+  sp.append(spFill, spText);
+  hp.append(hpBar, sp, buffs);
   const tracker = el('div'); tracker.id = 'tracker';
   const dead = el('div'); dead.id = 'dead'; dead.hidden = true;
   const deadCard = el('div', 'card');
@@ -34,6 +38,7 @@ export function initHotbar(onHold: (s: HoldSlot) => void, onEat: (index: number)
   document.body.append(dead);
 
   const cells: { cell: HTMLElement; cd: HTMLElement }[] = [];
+  let foodLock: HTMLElement | null = null;
   const build = (g: GameState) => {
     bar.replaceChildren();
     cells.length = 0;
@@ -57,6 +62,8 @@ export function initHotbar(onHold: (s: HoldSlot) => void, onEat: (index: number)
     fc.type = 'button';
     if (food) { fc.append(icon({ ...food, qty: countItem(g.bag, food.id) })); attachTip(fc, () => itemTip(food)); fc.onclick = () => onEat(fi); }
     fc.append(el('kbd', '', '5'), el('small', '', 'Eat'));
+    const lock = el('div', 'cd'); fc.append(lock);
+    foodLock = lock;
     bar.append(fc);
     // Health and buffs.
     hpFill.style.width = `${Math.max(0, Math.min(1, g.hp / g.maxHp)) * 100}%`;
@@ -86,14 +93,26 @@ export function initHotbar(onHold: (s: HoldSlot) => void, onEat: (index: number)
     /** Per frame: right-click cooldown sweep on the weapon slot. */
     frame() {
       const g = gameStore.get();
-      const left = g.specialReady - Date.now();
+      const now = Date.now();
+      const left = g.specialReady - now;
+      const special = SPECIALS[weaponClass(g.equip.mainHand)];
+      const total = special.cd * 1000;
+      const frac = left > 0 ? 1 - Math.min(1, left / total) : 1;
+      spFill.style.width = `${frac * 100}%`;
+      sp.classList.toggle('ready', left <= 0);
+      const label = left > 0 ? `${special.name} · ${(left / 1000).toFixed(1)} s` : `Right click · ${special.name} ready`;
+      if (spText.textContent !== label) spText.textContent = label;
       const c = cells[0];
-      if (!c) return;
-      if (left > 0) {
-        const total = SPECIALS[weaponClass(g.equip.mainHand)].cd * 1000;
-        c.cd.style.height = `${Math.min(1, left / total) * 100}%`;
-        c.cd.textContent = String(Math.ceil(left / 1000));
-      } else if (c.cd.textContent) { c.cd.style.height = '0'; c.cd.textContent = ''; }
+      if (c) {
+        if (left > 0) { c.cd.style.height = `${Math.min(1, left / total) * 100}%`; c.cd.textContent = String(Math.ceil(left / 1000)); }
+        else if (c.cd.textContent) { c.cd.style.height = '0'; c.cd.textContent = ''; }
+      }
+      // Food is locked for 10 s after taking damage.
+      const lockLeft = g.hurtAt + EAT_LOCK_MS - now;
+      if (foodLock) {
+        if (lockLeft > 0) { foodLock.style.height = `${(lockLeft / EAT_LOCK_MS) * 100}%`; foodLock.textContent = String(Math.ceil(lockLeft / 1000)); }
+        else if (foodLock.textContent) { foodLock.style.height = '0'; foodLock.textContent = ''; }
+      }
     },
   };
 }

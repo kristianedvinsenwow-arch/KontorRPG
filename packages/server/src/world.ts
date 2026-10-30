@@ -7,7 +7,7 @@
 import {
   AOI_CHUNKS, CAVE_ENTRANCE, CAVE_EXIT, CAVE_EXIT_OUT, CAVE_START, CHUNK_SIZE, IMBUE, INN, ITEMS, MAX_CHAT_LEN, MAX_NAME_LEN,
   NPC_BY_ID, PLAYER_COLORS, PROTOCOL_VERSION, QUEST_BY_ID, RECIPE_BY_ID, START_GOLD, STATION_BY_ID, TICK_HZ, USE_RANGE,
-  addStack, burnChance, knifeRepair, knifeUses, STATIONS, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
+  EAT_LOCK_MS, addStack, burnChance, knifeRepair, knifeUses, STATIONS, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
   questAvailable, r2, r3, recipeAt, removeItem, resizeBag, respecCost, rollCraftRarity, rollEffects, rollsRarity,
   validateBuild, xpMult, COMBAT_TREES, TALENT_TREE,
   type Buff, type ClientMsg, type HoldSlot, type MobKind, type PlayerState, type ServerMsg, type SkillId, type Slot,
@@ -523,6 +523,8 @@ export class World {
     const s = p.bag[index];
     const food = s ? ITEMS[s.id]?.food : undefined;
     if (!s || !food) return;
+    const lock = p.lastHurtAt + EAT_LOCK_MS - this.now();
+    if (lock > 0) return this.notice(p, `You can’t eat in a fight — wait ${Math.ceil(lock / 1000)} s after the last hit.`, 'error');
     if (p.hp >= p.stats.maxHp && !food.buff) return this.notice(p, 'You’re not hungry.', 'info');
     s.qty--;
     if (s.qty <= 0) p.bag[index] = null;

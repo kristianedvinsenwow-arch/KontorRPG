@@ -101,12 +101,14 @@ export interface GameState {
   rooms: (string | null)[];
   /** Right-click ready again at (Date.now ms). */
   specialReady: number;
+  /** When you last took damage (Date.now ms): food is locked for a while after. */
+  hurtAt: number;
   /** Crafting queue; `endsAt` is when the current item finishes (performance.now ms). */
   job: { recipe: string; done: number; total: number; endsAt: number; seconds: number } | null;
 }
 export const gameStore = createStore<GameState>({
   bag: [], equip: {}, gold: 0, held: 'mainHand', xp: {}, hp: 1, maxHp: 1, dead: false, buffs: [], talents: {}, respecs: 0, quests: {},
-  lease: { room: null, until: null, storage: [] }, rooms: [], specialReady: 0, job: null,
+  lease: { room: null, until: null, storage: [] }, rooms: [], specialReady: 0, hurtAt: 0, job: null,
 });
 export const settingsStore = createStore<Settings>(loadSettings());
 settingsStore.subscribe(saveSettings);

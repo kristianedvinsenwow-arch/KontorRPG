@@ -29,6 +29,8 @@ export const QUESTS: QuestDef[] = [
   { id: 'halvard_wolves', npc: 'halvard', name: 'Wolf trouble', period: 'twice-weekly', text: 'The pack east of camp keeps taking sheep. Thin it out: 6 wolves.', need: { kill: 'wolf', qty: 6 }, reward: { gold: 30, xp: ['combat', 400] } },
   { id: 'halvard_goblins', npc: 'halvard', name: 'Goblin trinkets', period: 'daily', text: 'Bring me 5 goblin trinkets so I know you’ve been busy.', need: { item: 'goblin_trinket', qty: 5 }, reward: { gold: 20, xp: ['combat', 250] } },
   { id: 'halvard_knut', npc: 'halvard', name: 'Old Knut', period: 'weekly', text: 'A troll called Old Knut sits in the deepest hall of the Old Mine. Put him down.', need: { kill: 'troll', qty: 1 }, reward: { gold: 100, xp: ['combat', 1500] } },
+  { id: 'halvard_pelts', npc: 'halvard', name: 'Pelts for winter', period: 'daily', text: 'Bring me 4 wolf pelts — skin them yourself, mind. A good knife helps.', need: { item: 'wolf_pelt', qty: 4 }, reward: { gold: 18, xp: ['leatherworking', 180] } },
+  { id: 'hilde_steaks', npc: 'hilde', name: 'Steak night', period: 'twice-weekly', text: 'The guests are tired of fish. Six wolf steaks, please.', need: { item: 'cooked_wolf_meat', qty: 6 }, reward: { gold: 24, xp: ['cooking', 260] } },
   { id: 'tor_birch', npc: 'tor', name: 'Firewood', period: 'daily', text: 'Ten birch logs for the lodge’s fires.', need: { item: 'birch_log', qty: 10 }, reward: { gold: 10, xp: ['woodcutting', 120] } },
   { id: 'tor_pine', npc: 'tor', name: 'Roof beams', period: 'weekly', text: 'The lodge roof needs new beams: 10 pine logs.', need: { item: 'pine_log', qty: 10 }, reward: { gold: 45, xp: ['woodcutting', 600] } },
 ];
