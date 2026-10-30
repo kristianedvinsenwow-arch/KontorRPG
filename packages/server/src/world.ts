@@ -10,7 +10,7 @@
 import {
   CHUNK_SIZE, AOI_CHUNKS, MAX_CHAT_LEN, MAX_NAME_LEN, PLAYER_COLORS, PROTOCOL_VERSION, TICK_HZ,
   ITEMS, RECIPE_BY_ID, START_GOLD, STATIONS, TRADING_POST, USE_RANGE, MINE_RANGE, VEIN_BY_ID, VEIN_TYPES, VEINS,
-  addItem, bagCapacity, checkStep, countItem, derive, emptyBag, heightAt, levelFromXp, maxSpeed, r2, r3,
+  addItem, bagCapacity, faceOf, checkStep, countItem, derive, emptyBag, heightAt, levelFromXp, maxSpeed, r2, r3,
   removeItem, resizeBag, roomFor, swingSeconds, validateBuild,
   type Bag, type CharacterBuild, type ClientMsg, type Equipment, type PlayerState, type ServerMsg, type SkillId, type Slot,
 } from '@kontor/shared';
@@ -180,7 +180,7 @@ export class World {
     const equip = c.equip ?? {};
     const cap = bagCapacity(derive(build).bagBonus, equip);
     const bag = resizeBag(c.bag ?? [], cap) ?? (c.bag ?? emptyBag(cap)); // never lose items if rules changed
-    const state: PlayerState = { id, name, color, race: build.race, x: r2(x), y: r2(y), z: r2(z), yaw: r3(yaw), pitch: 0, spd: 0, gear: gearOf(equip) };
+    const state: PlayerState = { id, name, color, race: build.race, face: faceOf(build), x: r2(x), y: r2(y), z: r2(z), yaw: r3(yaw), pitch: 0, spd: 0, gear: gearOf(equip) };
     const now = this.now();
     const p: ServerPlayer = {
       state, client, lastValid: { x, y, z, at: now }, lastSeq: -1, strikes: 0, lastChatAt: 0, actUntil: 0,
@@ -199,7 +199,7 @@ export class World {
   }
 
   private broadcastRoster(): void {
-    const players = [...this.players.values()].map((p) => ({ id: p.state.id, name: p.state.name, color: p.state.color, race: p.state.race }));
+    const players = [...this.players.values()].map((p) => ({ id: p.state.id, name: p.state.name, color: p.state.color, race: p.state.race, face: p.state.face }));
     this.broadcast({ t: 'roster', players });
   }
 
@@ -258,7 +258,7 @@ export class World {
     const swing = swingSeconds(tool.swingSec ?? 2.6, mining, derive(p.build).miningSpeed) * 1000;
     if (now - p.lastMineAt < swing * 0.8) return;
     const st = this.veins.get(nodeId) ?? { left: 0, until: 0 };
-    if (st.until > now) return err('This vein is depleted. It will come back soon.');
+    if (st.until > now) return err('This vein is depleted.');
     if (roomFor(p.bag, type.item) < 1) return err('Your bag is full.');
     p.lastMineAt = now;
     p.actUntil = now + 450;
@@ -274,17 +274,18 @@ export class World {
     }
     if (st.left <= 0) {
       // Shared depletion: empty for everyone until it respawns.
-      st.until = now + type.respawnSec * 1000;
-      this.broadcast({ t: 'nodes', depleted: [[nodeId, type.respawnSec]] });
+      const [lo, hi] = type.respawnSec;
+      st.until = now + (lo + this.rand() * (hi - lo)) * 1000;
+      this.broadcast({ t: 'nodes', depleted: [[nodeId, 1]] });
     }
     this.veins.set(nodeId, st);
     p.dirty = true;
     this.sendInv(p);
   }
 
-  private depletedList(now: number): [string, number][] {
-    const out: [string, number][] = [];
-    for (const [id, st] of this.veins) if (st.until > now) out.push([id, Math.ceil((st.until - now) / 1000)]);
+  private depletedList(now: number): [string, 0 | 1][] {
+    const out: [string, 0 | 1][] = [];
+    for (const [id, st] of this.veins) if (st.until > now) out.push([id, 1]);
     return out;
   }
 
@@ -434,7 +435,7 @@ export class World {
       this.stepCraft(p, now);
       p.state.act = now < p.actUntil ? 'swing' : undefined;
     }
-    const restored: [string, number][] = [];
+    const restored: [string, 0 | 1][] = [];
     for (const [id, st] of this.veins) if (st.until && st.until <= now) { this.veins.delete(id); restored.push([id, 0]); }
     if (restored.length) this.broadcast({ t: 'nodes', depleted: restored });
 

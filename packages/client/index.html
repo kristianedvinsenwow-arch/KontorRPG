@@ -28,7 +28,7 @@
     <div id="jobbar" class="chip" hidden><span id="jobtext"></span><div class="bar"><i id="jobfill"></i></div></div>
     <div id="purse" class="chip"><span class="gold" id="goldtext">0 g</span><span id="bagtext">Bag 0/16</span></div>
     <div id="keys" class="chip">
-      <kbd>WASD</kbd> walk <kbd>Click</kbd> mine <kbd>E</kbd> use <kbd>I</kbd> bag <kbd>K</kbd> skills <kbd>C</kbd> character <kbd>Enter</kbd> chat <kbd>F9</kbd> boss key
+      <kbd>WASD</kbd> walk <kbd>Click</kbd> mine <kbd>E</kbd> use <kbd>C</kbd> character &amp; bag <kbd>K</kbd> skills <kbd>Enter</kbd> chat <kbd>F9</kbd> boss key
     </div>
     <div id="fps"></div>
   </div>
@@ -54,6 +54,11 @@
       <div class="sec">
         <span class="lbl">Colour</span>
         <div id="swatches"></div>
+      </div>
+
+      <div class="sec">
+        <span class="lbl">Face</span>
+        <div id="faces" class="faces"></div>
       </div>
 
       <div class="sec">
@@ -121,10 +126,9 @@
         <div id="charRace" class="note"></div>
         <div id="charStats" class="derived"></div>
         <div id="charPerks" class="perklist"></div>
-        <div class="lbl">Equipment</div>
-        <ul class="slots" id="slots"></ul>
-        <button id="closeChar" class="btn ghost">Close (C)</button>
+        <button id="closeChar" class="btn ghost">Close (C / I)</button>
       </div>
+      <div class="charinv" id="charInv"></div>
     </div>
   </section>
 

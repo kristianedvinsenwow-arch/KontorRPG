@@ -5,7 +5,7 @@
  */
 import {
   ATTRS, ATTR_MAX, ATTR_MIN, ATTR_START, MAJOR_PERKS, MINOR_PERKS, MAX_NAME_LEN, PLAYER_COLORS, RACES,
-  BASE_BAG_SLOTS, derive, freePoints, maxSpeed, validateBuild,
+  BASE_BAG_SLOTS, FACES, derive, faceOf, freePoints, maxSpeed, validateBuild,
   type AttrKey, type CharacterBuild, type Perk, type Race,
 } from '@kontor/shared';
 import { netStore, settingsStore, uiStore } from '../state/store.js';
@@ -51,6 +51,17 @@ export function initCreator(onEnter: (name: string, color: number, build: Charac
     const cur = settingsStore.get().build.race;
     $('races').replaceChildren(...(Object.keys(RACES) as Race[]).map((r) =>
       optionCard(RACES[r].name, [['', RACES[r].blurb]], r === cur, () => setBuild({ ...build(), race: r }))));
+  }
+
+  function renderFaces() {
+    const cur = faceOf(settingsStore.get().build);
+    $('faces').replaceChildren(...FACES.map((f, i) => {
+      const b = el('button', 'face-opt', f.name);
+      b.title = f.blurb;
+      b.setAttribute('aria-pressed', String(i === cur));
+      b.onclick = () => setBuild({ ...build(), face: i });
+      return b;
+    }));
   }
 
   function renderSwatches() {
@@ -126,6 +137,7 @@ export function initCreator(onEnter: (name: string, color: number, build: Charac
 
   function render() {
     renderRaces();
+    renderFaces();
     renderAttrs();
     renderPerks('majors', MAJOR_PERKS, 'major');
     renderPerks('minors', MINOR_PERKS, 'minor');

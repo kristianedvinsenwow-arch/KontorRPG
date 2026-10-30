@@ -16,14 +16,15 @@ export interface VeinTypeDef {
   level: number;
   power: number;
   xp: number;
-  respawnSec: number;
+  /** A depleted vein comes back after a random time in this range (seconds). Players aren't told when. */
+  respawnSec: [number, number];
   swings: [number, number];
   gem: { item: string; chance: number };
 }
 
 export const VEIN_TYPES: Record<VeinType, VeinTypeDef> = {
-  stone: { name: 'Stone vein', item: 'stone', level: 1, power: 1, xp: 8, respawnSec: 45, swings: [4, 7], gem: { item: 'quartz', chance: 1 / 300 } },
-  iron: { name: 'Iron vein', item: 'iron_ore', level: 8, power: 1, xp: 20, respawnSec: 120, swings: [3, 6], gem: { item: 'sapphire', chance: 1 / 250 } },
+  stone: { name: 'Stone vein', item: 'stone', level: 1, power: 1, xp: 8, respawnSec: [45 * 60, 120 * 60], swings: [4, 7], gem: { item: 'quartz', chance: 1 / 300 } },
+  iron: { name: 'Iron vein', item: 'iron_ore', level: 8, power: 1, xp: 20, respawnSec: [45 * 60, 120 * 60], swings: [3, 6], gem: { item: 'sapphire', chance: 1 / 250 } },
 };
 
 export interface Vein { id: string; type: VeinType; x: number; y: number; z: number; r: number }

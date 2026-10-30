@@ -15,6 +15,7 @@ interface Remote {
   name: string;
   color: number;
   race: string;
+  face: number;
   model: Character;
   buf: Sample[];
   lastSeen: number;
@@ -45,12 +46,12 @@ export class Remotes {
     for (const s of players) {
       seen.add(s.id);
       let r = this.map.get(s.id);
-      if (!r || r.name !== s.name || r.color !== s.color || r.race !== s.race) {
+      if (!r || r.name !== s.name || r.color !== s.color || r.race !== s.race || r.face !== (s.face ?? 0)) {
         if (r) this.scene.remove(r.model.g);
-        const model = makeCharacter(s.color, s.name, s.race);
+        const model = makeCharacter(s.color, s.name, s.race, s.face ?? 0);
         model.g.position.set(s.x, s.y, s.z);
         this.scene.add(model.g);
-        r = { id: s.id, name: s.name, color: s.color, race: s.race, model, buf: [], lastSeen: now };
+        r = { id: s.id, name: s.name, color: s.color, race: s.race, face: s.face ?? 0, model, buf: [], lastSeen: now };
         this.map.set(s.id, r);
       }
       applyGear(r.model, s.gear);

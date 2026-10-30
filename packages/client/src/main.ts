@@ -5,7 +5,7 @@ import './styles.css';
 import * as THREE from 'three';
 import {
   EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, RACES, RECIPE_BY_ID, STATIONS, TRADING_POST, USE_RANGE, VEIN_TYPES,
-  derive, levelFromXp, r2, r3, swingSeconds,
+  derive, faceOf, levelFromXp, r2, r3, swingSeconds,
   type CharacterBuild, type StationId, type Vein,
 } from '@kontor/shared';
 import { createGfx } from './engine/renderer.js';
@@ -26,7 +26,7 @@ import { initPause, initBossKey } from './ui/menu.js';
 import { initCreator } from './ui/creator.js';
 import { initAccount } from './ui/account.js';
 import { Auth } from './net/auth.js';
-import { CharacterPreview, fillCharacterPanel, fillEquipment } from './ui/characterPanel.js';
+import { CharacterPreview, fillCharacterPanel } from './ui/characterPanel.js';
 
 const view = document.getElementById('view')!;
 const gfx = createGfx(view, settingsStore.get().quality);
@@ -60,14 +60,14 @@ const hud = initHud((text) => net.send({ t: 'chat', text }));
 
 const syncCreatorPreview = () => {
   const s = settingsStore.get();
-  creatorPreview.setCharacter(s.color, s.build.race);
+  creatorPreview.setCharacter(s.color, s.build.race, faceOf(s.build));
 };
 /** Apply a character (from the creator, or the saved one the server sends back). */
 function useCharacter(name: string, color: number, build: CharacterBuild) {
   myBuild = build;
   speedBonus = derive(build).speedBonus;
   eyeHeight = RACES[build.race].eye;
-  preview.setCharacter(color, build.race);
+  preview.setCharacter(color, build.race, faceOf(build));
   fillCharacterPanel(name, build);
 }
 initCreator(
@@ -85,8 +85,8 @@ initPause(() => { uiStore.set({ panel: 'none' }); input.lock(); });
 initBossKey(() => input.unlock());
 
 const panels = initPanels((m) => net.send(m), () => { if (me) input.lock(); });
-const GAME_PANELS = ['inventory', 'skills', 'craft', 'shop'];
-function openPanel(panel: 'inventory' | 'skills' | 'craft' | 'shop', station?: StationId) {
+const GAME_PANELS = ['character', 'skills', 'craft', 'shop'];
+function openPanel(panel: 'character' | 'skills' | 'craft' | 'shop', station?: StationId) {
   uiStore.set({ panel, ...(station ? { station } : {}) });
   input.unlock();
 }
@@ -103,28 +103,19 @@ document.addEventListener('pointerlockchange', () => {
 
 input.onKey((code) => {
   const u = uiStore.get();
-  if (u.panel === 'menu' || u.bossKey) return;
+  if (u.panel === 'menu' || u.bossKey || u.chatOpen) return;
+  // C and I both open the character sheet (gear + bag); K skills; E the station or trader you stand at.
+  const want = code === 'KeyC' || code === 'KeyI' ? 'character' : code === 'KeyK' ? 'skills' : null;
   if (GAME_PANELS.includes(u.panel)) {
-    const closeKey = { inventory: 'KeyI', skills: 'KeyK', craft: 'KeyE', shop: 'KeyE' }[u.panel as 'inventory'];
-    if (code === 'Escape' || code === closeKey || (code === 'KeyI' && u.panel === 'shop')) { uiStore.set({ panel: 'none' }); return; }
-    if (code === 'KeyI') { openPanel('inventory'); return; }
-    if (code === 'KeyK') { openPanel('skills'); return; }
+    const close = code === 'Escape' || want === u.panel || (code === 'KeyE' && (u.panel === 'craft' || u.panel === 'shop'));
+    if (close) { uiStore.set({ panel: 'none' }); input.lock(); return; }
+    if (want) openPanel(want);
     return;
   }
-  if (u.panel === 'none' && !u.chatOpen && me) {
-    if (code === 'KeyI') return openPanel('inventory');
-    if (code === 'KeyK') return openPanel('skills');
-    if (code === 'KeyE' && near) return near.kind === 'shop' ? openPanel('shop') : openPanel('craft', near.station);
-  }
-  if (code === 'KeyC') {
-    if (u.panel === 'character') { uiStore.set({ panel: 'none' }); input.lock(); }
-    else { uiStore.set({ panel: 'character' }); input.unlock(); }
-  } else if (code === 'Enter' && !u.chatOpen && u.panel === 'none') {
-    uiStore.set({ chatOpen: true });
-    input.unlock();
-  } else if (code === 'Escape' && u.panel === 'character') {
-    uiStore.set({ panel: 'none' });
-  }
+  if (u.panel !== 'none' || !me) return;
+  if (want) return openPanel(want);
+  if (code === 'KeyE' && near) return near.kind === 'shop' ? openPanel('shop') : openPanel('craft', near.station);
+  if (code === 'Enter') { uiStore.set({ chatOpen: true }); input.unlock(); }
 });
 document.getElementById('closeChar')!.onclick = () => { uiStore.set({ panel: 'none' }); input.lock(); };
 uiStore.subscribe((u) => {
@@ -166,7 +157,6 @@ net.on((msg) => {
       const gear = { t: msg.equip.tool, m: msg.equip.mainHand, s: msg.equip.shoulders, b: msg.equip.back };
       viewmodel.setHeld(heldOf(gear));
       preview.setGear(gear);
-      fillEquipment(msg.equip);
       break;
     }
     case 'skills':
@@ -227,7 +217,7 @@ function mineBlocker(v: Vein): string | null {
   const g = gameStore.get();
   const type = VEIN_TYPES[v.type];
   const tool = g.equip.tool ? ITEMS[g.equip.tool] : null;
-  if (veins.isDepleted(v.id)) return `${type.name} — depleted, back in ${veins.secondsLeft(v.id)}s`;
+  if (veins.isDepleted(v.id)) return `${type.name} — mined out`;
   if (!tool) return `You need a pickaxe — <b>Trader Ingrid</b> at the trading post sells one`;
   if ((tool.toolPower ?? 0) < type.power) return 'You need a stronger pickaxe';
   const lvl = levelFromXp(g.xp.mining ?? 0);
@@ -354,4 +344,4 @@ function frame() {
 frame();
 
 // Exposed for automated smoke tests and debugging in the console.
-(window as any).__kontor = { get me() { return me; }, get build() { return myBuild; }, get aimed() { return aimed; }, remotes, net, terrain, veins, netStore, uiStore, gameStore, settingsStore, creatorPreview, preview, auth, openPanel };
+(window as any).__kontor = { get me() { return me; }, get build() { return myBuild; }, get aimed() { return aimed; }, remotes, net, terrain, veins, viewmodel, netStore, uiStore, gameStore, settingsStore, creatorPreview, preview, auth, openPanel };

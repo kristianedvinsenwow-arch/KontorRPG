@@ -112,7 +112,7 @@ export class Camp {
     for (const sx of [-0.5, 0.5]) bx(post, 0.04, 0.7, 0.04, darkWood, sx, 3.25, -0.66);
 
     // The trader behind the counter.
-    this.vendor = makeCharacter(5, 'Trader Ingrid', 'human');
+    this.vendor = makeCharacter(5, 'Trader Ingrid', 'human', 2);
     applyGear(this.vendor, { b: 'leather_backpack' });
     this.vendor.g.position.set(0, 0, -0.1);
     this.vendor.g.rotation.y = 0;

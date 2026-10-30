@@ -236,12 +236,12 @@ test('mining respects the swing timer, gives stone and XP, and depletes the vein
   assert.equal(countItem(p.bag, 'stone'), 1);
   assert.equal(p.xp.mining, VEIN_TYPES.stone.xp);
   let swings = 1;
-  while (!last('nodes')?.depleted.some(([id, s]) => id === vein.id && s > 0)) { advance(3000); world.handle(c, { t: 'mine', node: vein.id }); swings++; assert.ok(swings < 10); }
+  while (!last('nodes')?.depleted.some(([id, s]) => id === vein.id && s === 1)) { advance(3000); world.handle(c, { t: 'mine', node: vein.id }); swings++; assert.ok(swings < 10); }
   assert.equal(countItem(p.bag, 'stone'), swings);
   advance(3000);
   world.handle(c, { t: 'mine', node: vein.id });
   assert.match(last('notice')!.text, /depleted/);
-  advance(VEIN_TYPES.stone.respawnSec * 1000);
+  advance(VEIN_TYPES.stone.respawnSec[1] * 1000);
   world.step();
   assert.deepEqual(last('nodes')!.depleted, [[vein.id, 0]]);
 });
@@ -353,4 +353,30 @@ test('bag, equipment, gold and XP are saved and loaded', async () => {
   assert.equal(inv.equip.tool, 'iron_pickaxe');
   assert.equal(inv.gold, 42);
   assert.equal((c2.inbox.find((m) => m.t === 'skills') as any).xp.mining, 1234);
+});
+
+test('depleted veins come back after 45 min – 2 h, and nobody is told when', () => {
+  const { world, c, p, place, last, advance } = m1();
+  p.equip.tool = 'stone_pickaxe';
+  const vein = VEIN_BY_ID.get('camp-3')!;
+  place(vein.x + 1.5, vein.z);
+  for (let i = 0; i < 10 && !world.veins.get(vein.id)?.until; i++) { advance(3000); world.handle(c, { t: 'mine', node: vein.id }); }
+  assert.deepEqual(last('nodes')!.depleted, [[vein.id, 1]]);
+  advance(44 * 60 * 1000); world.step();
+  assert.deepEqual(last('nodes')!.depleted, [[vein.id, 1]]); // still the depletion message
+  advance(76 * 60 * 1000 + 1000); world.step();
+  assert.deepEqual(last('nodes')!.depleted, [[vein.id, 0]]);
+});
+
+test('the chosen face is shared with other players', () => {
+  const { world } = setup();
+  const c = fakeClient();
+  world.connect(c);
+  world.handle(c, { t: 'hello', name: 'Faces', color: 2, proto: PROTOCOL_VERSION, build: { ...defaultBuild(), face: 3 } });
+  const roster = c.inbox.find((m) => m.t === 'roster') as Extract<ServerMsg, { t: 'roster' }>;
+  assert.equal(roster.players[0].face, 3);
+  const bad = fakeClient();
+  world.connect(bad);
+  world.handle(bad, { t: 'hello', name: 'Bad', color: 2, proto: PROTOCOL_VERSION, build: { ...defaultBuild(), face: 9 } });
+  assert.equal(bad.inbox[0].t, 'reject');
 });

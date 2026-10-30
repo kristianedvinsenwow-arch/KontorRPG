@@ -116,10 +116,26 @@ export interface CharacterBuild {
   attrs: Attrs;
   major: string;
   minor: string;
+  /** Index into FACES (looks only). Older saved builds without one use 0. */
+  face?: number;
 }
 
+/** Five faces to pick from in the creator (purely cosmetic; drawn by the client). */
+export const FACES = [
+  { name: 'Friendly', blurb: 'Round eyes, button nose, easy smile' },
+  { name: 'Stern', blurb: 'Heavy brows, long nose, flat mouth, moustache' },
+  { name: 'Cheerful', blurb: 'Big eyes, rosy cheeks, toothy grin' },
+  { name: 'Weathered', blurb: 'Squint, crooked nose, stubble' },
+  { name: 'Dreamy', blurb: 'Sleepy eyes, pointy nose, freckles' },
+] as const;
+
 export function defaultBuild(): CharacterBuild {
-  return { race: 'human', attrs: { str: 5, dex: 5, int: 5, sta: 5 }, major: MAJOR_PERKS[0].id, minor: MINOR_PERKS[0].id };
+  return { race: 'human', attrs: { str: 5, dex: 5, int: 5, sta: 5 }, major: MAJOR_PERKS[0].id, minor: MINOR_PERKS[0].id, face: 0 };
+}
+
+export function faceOf(b: { face?: number } | null | undefined): number {
+  const f = b?.face ?? 0;
+  return Number.isInteger(f) && f >= 0 && f < FACES.length ? f : 0;
 }
 
 /** Points freed by lowering attributes and not yet spent elsewhere. */
@@ -140,6 +156,7 @@ export function validateBuild(b: unknown): string | null {
   if (freePoints(c.attrs) !== 0) return 'attr_total';
   if (!MAJOR_PERKS.some((p) => p.id === c.major)) return 'major';
   if (!MINOR_PERKS.some((p) => p.id === c.minor)) return 'minor';
+  if (c.face !== undefined && (!Number.isInteger(c.face) || c.face < 0 || c.face >= FACES.length)) return 'face';
   return null;
 }
 

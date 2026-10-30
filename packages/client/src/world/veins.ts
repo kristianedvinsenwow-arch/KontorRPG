@@ -14,8 +14,8 @@ interface VeinView {
   rock: THREE.Mesh;
   ore: THREE.Group;
   rubble: THREE.Mesh;
-  /** When it comes back (performance.now ms), 0 = available. */
-  backAt: number;
+  /** Mined out; the server says when it is back (and never tells anyone when that will be). */
+  depleted: boolean;
   hit: number;
 }
 
@@ -77,26 +77,24 @@ export class Veins {
       g.add(rubble);
       g.scale.setScalar(v.r);
       this.group.add(g);
-      this.views.set(v.id, { v, g, rock, ore, rubble, backAt: 0, hit: 0 });
+      this.views.set(v.id, { v, g, rock, ore, rubble, depleted: false, hit: 0 });
       this.colliders.push({ x: v.x, z: v.z, r: 0.85 * v.r });
     }
   }
 
-  /** Server update: [id, seconds left] — 0 means the vein is back. */
-  setDepleted(list: [string, number][]): void {
-    const now = performance.now();
+  /** Server update: [id, 1] depleted, [id, 0] back. */
+  setDepleted(list: [string, 0 | 1][]): void {
     for (const [id, s] of list) {
       const view = this.views.get(id);
       if (!view) continue;
-      view.backAt = s > 0 ? now + s * 1000 : 0;
-      const gone = s > 0;
+      const gone = s === 1;
+      view.depleted = gone;
       view.rock.visible = view.ore.visible = !gone;
       view.rubble.visible = gone;
     }
   }
 
-  isDepleted(id: string): boolean { return (this.views.get(id)?.backAt ?? 0) > performance.now(); }
-  secondsLeft(id: string): number { return Math.max(0, Math.ceil(((this.views.get(id)?.backAt ?? 0) - performance.now()) / 1000)); }
+  isDepleted(id: string): boolean { return !!this.views.get(id)?.depleted; }
 
   /** A little shake when your pickaxe lands. */
   hit(id: string): void { const v = this.views.get(id); if (v) v.hit = 1; }

@@ -113,7 +113,9 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
       if (!tool) return;
       tool.scale.setScalar(s);
       tool.position.y = id?.includes('sword') ? -0.03 : -0.09; // grip near the end of the haft
-      tool.rotation.y = 0.35; // head crosses the haft like a T, turned slightly so it reads in depth
+      // Turn the head into the swing plane: the pick points forward, away from you, so it strikes with
+      // the point instead of slapping with the flat. A slight twist keeps it readable on screen.
+      tool.rotation.y = -Math.PI / 2 + 0.28;
       tool.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = false; o.receiveShadow = false; } });
       grip.add(tool);
     },

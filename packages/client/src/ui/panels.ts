@@ -1,5 +1,6 @@
 /**
- * M1 panels: inventory (I), skills (K), crafting at a station and the trading post (both E).
+ * M1 panels: gear + bag inside the character sheet (C / I), skills (K), crafting at a station and
+ * the trading post (both E).
  * They only ever send requests; what you own changes when the server answers (gameStore).
  */
 import {
@@ -80,40 +81,31 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void) {
 
   function render() {
     const u = uiStore.get(), g = gameStore.get();
-    const open = u.panel === 'inventory' || u.panel === 'skills' || u.panel === 'craft' || u.panel === 'shop';
+    if (u.panel === 'character') $('charInv').replaceChildren(...inventory(gameStore.get()));
+    const open = u.panel === 'skills' || u.panel === 'craft' || u.panel === 'shop';
     root.hidden = !open;
     if (!open) return;
     card.className = `pcard ${u.panel}`;
-    if (u.panel === 'inventory') card.replaceChildren(...inventory(g));
-    else if (u.panel === 'skills') card.replaceChildren(...skills(g));
+    if (u.panel === 'skills') card.replaceChildren(...skills(g));
     else if (u.panel === 'craft') card.replaceChildren(...craft(g, u.station));
     else card.replaceChildren(...shop(g));
   }
 
+  /** Gear and bag, rendered into the character sheet. */
   function inventory(g: GameState): HTMLElement[] {
-    const eq = el('ul', 'slots compact');
+    const eq = el('div', 'gear');
     for (const { slot, label } of EQUIP_SLOTS) {
-      const li = el('li');
       const id = g.equip[slot];
-      li.append(el('span', '', label));
-      if (id) {
-        const b = el('button', 'worn');
-        b.type = 'button';
-        b.title = `${ITEMS[id].name} — click to take off\n${itemLines(id).join('\n')}`;
-        b.append(icon(id, 1, false), el('b', '', ITEMS[id].name));
-        b.onclick = () => send({ t: 'unequip', slot });
-        li.append(b);
-      } else li.append(el('b', 'empty', 'Empty'));
-      eq.append(li);
+      const b = el('button', id ? 'gslot worn' : 'gslot');
+      b.type = 'button';
+      b.title = id ? `${ITEMS[id].name} — click to take off\n${itemLines(id).join('\n')}` : `${label}: empty`;
+      if (id) { b.append(icon(id, 1, false)); b.onclick = () => send({ t: 'unequip', slot }); }
+      else b.disabled = true;
+      b.append(el('span', '', label));
+      eq.append(b);
     }
-    const right = el('div', 'pcol');
-    right.append(goldChip(g), bagGrid(g, (i) => send({ t: 'equip', index: i }), () => true),
-      el('p', 'note', 'Click gear to wear it. Click worn gear to take it off. Sell at the trading post.'));
-    const body = el('div', 'pbody two');
-    const left = el('div', 'pcol');
-    left.append(el('div', 'lbl', 'Equipment'), eq);
-    body.append(left, right);
-    return [header('Inventory', 'Your bag', 'I'), body];
+    return [el('div', 'lbl', 'Equipment'), eq, goldChip(g), bagGrid(g, (i) => send({ t: 'equip', index: i }), () => true),
+      el('p', 'note', 'Click gear in your bag to wear it, and worn gear to take it off. Sell at the trading post.')];
   }
 
   function skills(g: GameState): HTMLElement[] {
@@ -217,7 +209,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void) {
     if (u.panel !== lastPanel) {
       const was = lastPanel;
       lastPanel = u.panel;
-      if (['inventory', 'skills', 'craft', 'shop'].includes(was) && u.panel === 'none') onClose();
+      if (['skills', 'craft', 'shop'].includes(was) && u.panel === 'none') onClose();
     }
     render();
   });

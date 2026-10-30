@@ -9,6 +9,8 @@ import { mat, bx, ball, limb, mesh, mergeStatic, nameSprite, v3, lerp } from '..
 
 export interface Character {
   g: THREE.Group;
+  /** Scaled body (everything but the name tag); rocks side to side for the dwarf waddle. */
+  body: THREE.Group;
   legs: { hip: THREE.Group; knee: THREE.Group }[];
   upper: THREE.Group;
   head: THREE.Group;
@@ -52,7 +54,7 @@ export function makePickaxe(): THREE.Group {
   return g;
 }
 
-export function makeCharacter(colorIndex: number, name?: string, race: Race = 'human'): Character {
+export function makeCharacter(colorIndex: number, name?: string, race: Race = 'human', face = 0): Character {
   const col = PLAYER_COLORS[colorIndex % PLAYER_COLORS.length];
   const tunicColor = new THREE.Color(col).multiplyScalar(0.75).getHex();
   const M = {
@@ -88,7 +90,8 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
     ball(knee, v3(), 0.073 * W, M.pants, 10);
     limb(knee, v3(), v3(0, -shin, 0), 0.07 * W, 0.06 * W, M.pants);
     bx(knee, 0.13 * W, 0.16, 0.15 * Wz, M.boot, 0, -shin - 0.02, -0.01); // boot shaft
-    bx(knee, 0.12 * W, 0.08, 0.26 * Wz, M.boot, 0, -shin - 0.09, -0.05); // foot
+    const footLen = race === 'gnome' ? 0.37 : 0.26; // gnomes get long, pointy-ish feet
+    bx(knee, 0.12 * W, 0.08, footLen * Wz, M.boot, 0, -shin - 0.09, -0.05 - (footLen - 0.26) * 0.5); // foot
     legs.push({ hip, knee });
   }
 
@@ -115,42 +118,30 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
   pack.visible = false;
   limb(upper, v3(0, 0.6, 0), v3(0, 0.7, 0), 0.06, 0.055, M.skin, 10);
 
-  // Head with hood.
+  // Head: a skin ellipsoid with one of five faces, ears, and hair on the top and back only.
   const head = new THREE.Group();
   head.position.y = 0.79;
   upper.add(head);
-  const face = ball(head, v3(), 0.112, M.skin, 18);
-  face.scale.set(0.95, 1.12, 1);
-  ball(head, v3(0.04, 0.02, -0.1), 0.014, M.eye, 6);
-  ball(head, v3(-0.04, 0.02, -0.1), 0.014, M.eye, 6);
-  // Face details: brows, nose, ears and a little beard shadow give the head a readable silhouette.
-  bx(head, 0.038, 0.011, 0.012, M.hair, 0.042, 0.047, -0.103, 0, 0, -0.12);
-  bx(head, 0.038, 0.011, 0.012, M.hair, -0.042, 0.047, -0.103, 0, 0, 0.12);
-  const nose = mesh(new THREE.ConeGeometry(0.018, 0.045, 6), M.skin, head);
-  nose.position.set(0, -0.005, -0.118); nose.rotation.x = -Math.PI / 2 + 0.35;
+  const skull = ball(head, v3(), 0.112, M.skin, 18);
+  skull.scale.set(0.95, 1.12, 1);
   ball(head, v3(0.106, 0.0, 0.0), 0.024, M.skin, 8).scale.set(0.5, 1, 0.8);
   ball(head, v3(-0.106, 0.0, 0.0), 0.024, M.skin, 8).scale.set(0.5, 1, 0.8);
-  bx(head, 0.05, 0.008, 0.01, mat(0x8c5a46, null, { r: 0.6 }), 0, -0.052, -0.104);
-  // Hair: a cap over the top and back of the head, tilted back so the forehead and face stay open.
-  const hair = mesh(new THREE.SphereGeometry(0.122, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.56), M.hair, head);
-  hair.position.set(0, 0.012, 0.012);
-  hair.rotation.x = -0.32;
-  hair.scale.set(1, 1.05, 1.05);
+  buildFace(head, face, M.skin, M.hair, race);
+  // Hair cap tilted towards the back, so its front edge sits high on the forehead.
+  const hair = mesh(new THREE.SphereGeometry(0.121, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.5), M.hair, head);
+  hair.position.set(0, 0.03, 0.012);
+  hair.rotation.x = 0.42;
+  hair.scale.set(1.02, 1.08, 1.06);
   if (race === 'dwarf') {
     // A proper dwarf beard: a broad wedge with a forked tip, plus a moustache.
     const beardM = mat(0x8a4b26, 'cloth', { r: 0.95 });
     const beard = mesh(new THREE.ConeGeometry(0.11, 0.26, 7), beardM, head);
-    beard.position.set(0, -0.15, -0.075); beard.rotation.x = Math.PI + 0.25; beard.scale.set(1.1, 1, 0.6);
+    beard.position.set(0, -0.16, -0.075); beard.rotation.x = Math.PI + 0.25; beard.scale.set(1.1, 1, 0.6);
     for (const sx of [-1, 1]) {
       const fork = mesh(new THREE.ConeGeometry(0.035, 0.12, 6), beardM, head);
-      fork.position.set(sx * 0.03, -0.3, -0.04); fork.rotation.set(Math.PI + 0.3, 0, sx * 0.15);
+      fork.position.set(sx * 0.03, -0.31, -0.04); fork.rotation.set(Math.PI + 0.3, 0, sx * 0.15);
     }
-    bx(head, 0.11, 0.025, 0.03, beardM, 0, -0.035, -0.11);
-  }
-  if (race === 'gnome') {
-    // Tall pointed hat in the player's colour, leaning back.
-    const hat = mesh(new THREE.ConeGeometry(0.14, 0.42, 12), M.sleeve, head);
-    hat.position.set(0, 0.27, 0.06); hat.rotation.x = 0.22;
+    for (const sx of [-1, 1]) bx(head, 0.055, 0.02, 0.025, beardM, sx * 0.03, -0.038, -0.112, 0, 0, sx * -0.35);
   }
   head.scale.set(H / W, H, H / Wz);
 
@@ -196,7 +187,7 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
   body.scale.setScalar(scale);
   g.add(body);
 
-  const ch: Character = { g, legs, upper, head, arms, tool: null, pack, pauldrons, race, hipY, stride: 1 / (scale * (0.35 + 0.65 * L)), ph: 0, swing: 0 };
+  const ch: Character = { g, body, legs, upper, head, arms, tool: null, pack, pauldrons, race, hipY, stride: 1 / (scale * (0.35 + 0.65 * L)), ph: 0, swing: 0 };
   if (name) {
     ch.tag = nameSprite(name, col);
     ch.tag.position.y = R.height + 0.3;
@@ -230,18 +221,48 @@ export function animateCharacter(c: Character, speed: number, pitch: number, swi
   c.legs[0].knee.rotation.x = -Math.max(0, Math.sin(c.ph + 1.2)) * amp * 1.2;
   c.legs[1].knee.rotation.x = -Math.max(0, Math.sin(c.ph + 1.2 + Math.PI)) * amp * 1.2;
   c.upper.position.y = c.hipY + Math.abs(Math.cos(c.ph)) * amp * 0.04;
+  if (c.race === 'dwarf') {
+    // Dwarves waddle: the whole body rocks onto the planted foot each step, with a little twist.
+    const k = Math.min(1, speed / 3);
+    c.body.rotation.z = Math.sin(c.ph) * 0.13 * k;
+    c.body.position.x = Math.sin(c.ph) * 0.035 * k;
+    c.upper.rotation.y = Math.sin(c.ph) * 0.12 * k;
+    c.upper.rotation.z = -Math.sin(c.ph) * 0.05 * k;
+  }
   c.head.rotation.x = THREE.MathUtils.clamp(-pitch * 0.6, -0.6, 0.6);
 
-  // Arms swing opposite the legs; the tool arm lifts and strikes while swinging.
-  c.swing = swinging ? (c.swing + dt * 2.4) % 1 : lerp(c.swing, 0, Math.min(1, dt * 8));
-  const strike = swinging ? Math.sin(c.swing * Math.PI * 2) : 0;
+  // A swing, once started, always plays to the end (remote 'swing' flags are short).
+  if (c.swing > 0 || swinging) {
+    c.swing += dt / SWING_ANIM_SEC;
+    if (c.swing >= 1) c.swing = swinging ? c.swing % 1 : 0;
+  }
+  const t = c.swing;
   // The model faces −Z: positive X rotation brings an arm forward, and elbows bend forward.
-  c.arms[0].shoulder.rotation.x = -sw * 0.8;
-  c.arms[0].elbow.rotation.x = 0.25;
-  // Tool arm: carried with the forearm forward; swinging lifts it overhead and chops down.
-  c.arms[1].shoulder.rotation.x = swinging ? 1.6 + strike * 1.1 : 0.3 + sw * 0.3;
-  c.arms[1].elbow.rotation.x = swinging ? 0.45 - strike * 0.3 : 0.95;
+  if (t > 0) {
+    // Two-handed overhead chop: wind up behind the head, strike down in front, recover.
+    const up = t < 0.5 ? THREE.MathUtils.smoothstep(t, 0, 0.5) : t < 0.66 ? 1 - THREE.MathUtils.smoothstep(t, 0.5, 0.66) : 0;
+    const follow = t >= 0.5 ? (t < 0.75 ? THREE.MathUtils.smoothstep(t, 0.5, 0.66) : 1 - THREE.MathUtils.smoothstep(t, 0.75, 1)) : 0;
+    const sh = lerp(0.55, 2.75, up) - follow * 0.15;
+    const el = lerp(0.3, 1.35, up) - follow * 0.2;
+    c.arms[1].shoulder.rotation.x = sh;
+    c.arms[1].elbow.rotation.x = el;
+    c.arms[0].shoulder.rotation.x = sh * 0.88;
+    c.arms[0].elbow.rotation.x = el + 0.2;
+    c.arms[0].shoulder.rotation.z = -0.25 * (1 - up * 0.5); // left hand comes across to the haft
+    c.upper.rotation.x = -0.12 * up + 0.22 * follow; // lean back on the wind-up, into the strike
+  } else {
+    c.arms[0].shoulder.rotation.x = -sw * 0.8;
+    c.arms[0].elbow.rotation.x = 0.25;
+    c.arms[0].shoulder.rotation.z = 0;
+    // Tool arm: carried with the forearm forward.
+    c.arms[1].shoulder.rotation.x = 0.3 + sw * 0.3;
+    c.arms[1].elbow.rotation.x = 0.95;
+    c.upper.rotation.x = 0;
+  }
 }
+
+/** Seconds per third-person swing (matches the first-person one). */
+const SWING_ANIM_SEC = 0.62;
 
 /** Tier colours for metal gear (design doc §6). Leather is the starter look. */
 export const GEAR_COLORS: Record<string, { color: number; metal: number; rough: number }> = {
@@ -265,5 +286,91 @@ export function setShoulders(c: Character, tier: keyof typeof GEAR_COLORS | null
       const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
       if (m) { m.color.setHex(g.color); m.metalness = g.metal; m.roughness = g.rough; }
     });
+  }
+}
+
+const FACE_M = {
+  white: mat(0xf4efe6, null, { r: 0.35 }),
+  iris: mat(0x2c3a46, null, { r: 0.25 }),
+  mouth: mat(0x7a3530, null, { r: 0.6 }),
+  teeth: mat(0xf2ede0, null, { r: 0.4 }),
+  cheek: mat(0xe0907e, null, { r: 0.7 }),
+  freckle: mat(0xa8664a, null, { r: 0.7 }),
+};
+
+/** One of five faces (FACES in shared): eyes, brows, nose and mouth, all on the −Z front of the head. */
+function buildFace(head: THREE.Group, face: number, skin: THREE.Material, hair: THREE.Material, race: Race): void {
+  const Z = -0.101; // just proud of the face surface at eye height
+  const ZM = -0.108; // mouth line (the face is rounder lower down)
+  const eye = (sx: number, r: number, sy: number, lid = 0) => {
+    const w = ball(head, v3(sx * 0.038, 0.02, Z), r, FACE_M.white, 10);
+    w.scale.set(1, sy, 0.55);
+    const iris = ball(head, v3(sx * 0.038, 0.02 - (lid ? 0.003 : 0), Z - r * 0.5), r * 0.58, FACE_M.iris, 8);
+    iris.scale.set(1, Math.min(1, sy * 1.1), 0.5);
+    if (lid) {
+      // Heavy upper eyelid: a skin dome over the top half of the eye.
+      const l = mesh(new THREE.SphereGeometry(r * 1.12, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.5), skin, head);
+      l.position.set(sx * 0.038, 0.02, Z + 0.001); l.rotation.x = -Math.PI / 2 + lid; l.scale.set(1, 1, 0.6);
+    }
+  };
+  const brow = (tilt: number, y = 0.05, thick = 0.011) => {
+    for (const sx of [-1, 1]) bx(head, 0.036, thick, 0.012, hair, sx * 0.04, y, Z - 0.006, 0, 0, sx * tilt);
+  };
+  /** Mouth as a torus arc: curve > 0 smiles, < 0 frowns. */
+  const arcMouth = (w: number, curve: number, y = -0.052) => {
+    const ang = Math.PI * 0.7;
+    const m = mesh(new THREE.TorusGeometry(w, 0.0055, 5, 12, ang), FACE_M.mouth, head);
+    m.position.set(0, y + (curve > 0 ? w * 0.75 : -w * 0.75), ZM);
+    m.rotation.z = curve > 0 ? -Math.PI / 2 - ang / 2 : Math.PI / 2 - ang / 2;
+    m.scale.set(1, Math.abs(curve), 1);
+  };
+  switch (face) {
+    case 1: { // Stern
+      eye(-1, 0.017, 0.6); eye(1, 0.017, 0.6);
+      brow(-0.32, 0.044, 0.014);
+      const n = bx(head, 0.022, 0.06, 0.03, skin, 0, -0.008, -0.112, 0.25, 0, 0);
+      void n;
+      bx(head, 0.046, 0.007, 0.01, FACE_M.mouth, 0, -0.058, ZM);
+      if (race !== 'dwarf') for (const sx of [-1, 1]) bx(head, 0.04, 0.014, 0.016, hair, sx * 0.022, -0.04, -0.108, 0, 0, sx * -0.28);
+      break;
+    }
+    case 2: { // Cheerful
+      eye(-1, 0.022, 1.05); eye(1, 0.022, 1.05);
+      brow(0.18, 0.058);
+      ball(head, v3(0, -0.012, -0.118), 0.024, skin, 10);
+      bx(head, 0.05, 0.022, 0.012, FACE_M.mouth, 0, -0.057, ZM + 0.002);
+      bx(head, 0.044, 0.01, 0.01, FACE_M.teeth, 0, -0.051, ZM - 0.003);
+      for (const sx of [-1, 1]) ball(head, v3(sx * 0.06, -0.022, -0.088), 0.017, FACE_M.cheek, 8).scale.set(1, 0.7, 0.4);
+      break;
+    }
+    case 3: { // Weathered
+      eye(-1, 0.017, 0.4); eye(1, 0.018, 0.45);
+      brow(-0.1, 0.042, 0.013);
+      const n = mesh(new THREE.BoxGeometry(0.03, 0.055, 0.04), skin, head);
+      n.position.set(0.004, -0.01, -0.115); n.rotation.set(0.2, 0.2, 0.22);
+      arcMouth(0.022, -0.6, -0.06);
+      // Stubble: a darker shell over the jaw.
+      const st = mesh(new THREE.SphereGeometry(0.113, 14, 8, 0, Math.PI * 2, Math.PI * 0.66, Math.PI * 0.26), mat(0xb08a72, null, { r: 0.95 }), head);
+      st.scale.set(0.96, 1.12, 1.01);
+      break;
+    }
+    case 4: { // Dreamy
+      eye(-1, 0.019, 0.95, 0.35); eye(1, 0.019, 0.95, 0.35);
+      brow(0.08, 0.056, 0.009);
+      const n = mesh(new THREE.ConeGeometry(0.016, 0.05, 6), skin, head);
+      n.position.set(0, -0.006, -0.124); n.rotation.x = -Math.PI / 2 + 0.25;
+      const o = mesh(new THREE.TorusGeometry(0.011, 0.005, 6, 12), FACE_M.mouth, head);
+      o.position.set(0, -0.056, ZM);
+      for (const [x, y] of [[-0.06, -0.02], [-0.048, -0.03], [-0.067, -0.032], [0.06, -0.02], [0.05, -0.031], [0.068, -0.03]]) {
+        ball(head, v3(x, y, -0.092), 0.0045, FACE_M.freckle, 5).scale.set(1, 1, 0.4);
+      }
+      break;
+    }
+    default: { // Friendly
+      eye(-1, 0.019, 0.95); eye(1, 0.019, 0.95);
+      brow(0.1, 0.052);
+      ball(head, v3(0, -0.01, -0.118), 0.02, skin, 10).scale.set(1, 0.9, 1);
+      arcMouth(0.024, 0.75);
+    }
   }
 }

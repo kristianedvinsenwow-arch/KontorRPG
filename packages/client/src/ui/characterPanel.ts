@@ -5,7 +5,7 @@
  * WebGL context, no texture readback).
  */
 import * as THREE from 'three';
-import { EQUIP_SLOTS, ITEMS, PERKS, RACES, type CharacterBuild, type Equipment, type PlayerState, type Race } from '@kontor/shared';
+import { PERKS, RACES, type CharacterBuild, type PlayerState, type Race } from '@kontor/shared';
 import { makeCharacter, animateCharacter, setShoulders, type Character, type GEAR_COLORS } from '../entities/character.js';
 import { applyGear } from '../entities/held.js';
 import { derivedTiles } from './creator.js';
@@ -41,17 +41,26 @@ export class CharacterPreview {
   }
 
   /** Rebuilds the model only when colour or race changed. */
-  setCharacter(color: number, race: Race): void {
-    const k = `${color}|${race}`;
+  setCharacter(color: number, race: Race, face = 0): void {
+    const k = `${color}|${race}|${face}`;
     if (k === this.key) return;
+    const faceChanged = this.key && this.key.split('|')[2] !== String(face);
     this.key = k;
+    if (faceChanged) this.zoomUntil = performance.now() + 2600; // show the new face up close
     if (this.model) this.scene.remove(this.model.g);
-    this.model = makeCharacter(color, undefined, race);
+    this.model = makeCharacter(color, undefined, race, face);
     if (this.gear) applyGear(this.model, this.gear);
     this.scene.add(this.model.g);
   }
 
   private gear: PlayerState['gear'] | null = null;
+  /** Until when the camera zooms in on the face (after picking one). */
+  private zoomUntil = 0;
+  private zoom = 0;
+  /** Debug/preview: play the tool swing. */
+  swinging = false;
+  /** Debug/preview: walk in place at this speed (m/s). */
+  speed = 0;
   /** Dress the preview in your worn gear. */
   setGear(gear: PlayerState['gear']): void {
     this.gear = gear;
@@ -74,12 +83,17 @@ export class CharacterPreview {
     const r = this.el.getBoundingClientRect();
     const canvas = renderer.domElement.getBoundingClientRect();
     if (r.width < 2 || r.height < 2) return;
-    if (!this.dragging) this.yaw += dt * 0.35;
+    const zoomed = performance.now() < this.zoomUntil;
+    this.zoom += ((zoomed ? 1 : 0) - this.zoom) * Math.min(1, dt * 5);
+    if (!this.dragging) this.yaw = zoomed ? this.yaw + (Math.round(this.yaw / (Math.PI * 2)) * Math.PI * 2 - this.yaw) * Math.min(1, dt * 4) : this.yaw + dt * 0.35;
     this.model.g.rotation.y = this.yaw;
-    animateCharacter(this.model, 0, 0, false, dt);
+    animateCharacter(this.model, this.speed, 0, this.swinging, dt);
     this.cam.aspect = r.width / r.height;
-    this.cam.position.set(0, 1.2, -4.6);
-    this.cam.lookAt(0, 0.92, 0);
+    // Face height for this race (eye level), so the zoom lands on the face for gnomes too.
+    const eyeY = RACES[this.model.race].eye;
+    const z = this.zoom;
+    this.cam.position.set(0, 1.2 + (eyeY + 0.06 - 1.2) * z, -4.6 + 3.55 * z);
+    this.cam.lookAt(0, 0.92 + (eyeY + 0.03 - 0.92) * z, 0);
     this.cam.updateProjectionMatrix();
     const x = r.left - canvas.left, y = canvas.bottom - r.bottom;
     renderer.setScissorTest(true);
@@ -91,20 +105,6 @@ export class CharacterPreview {
     renderer.setScissorTest(false);
     renderer.setViewport(0, 0, canvas.width, canvas.height);
   }
-}
-
-/** Worn gear in the character panel (from the server's inventory message). */
-export function fillEquipment(equip: Equipment): void {
-  document.getElementById('slots')!.replaceChildren(...EQUIP_SLOTS.map(({ slot, label }) => {
-    const li = document.createElement('li');
-    const id = equip[slot];
-    const def = id ? ITEMS[id] : undefined;
-    const a = document.createElement('span'); a.textContent = label;
-    const b = document.createElement('b'); b.textContent = def?.name ?? 'Empty'; if (!def) b.style.color = 'var(--muted)';
-    const c = document.createElement('em'); c.textContent = def?.tier ? `${def.tier[0].toUpperCase()}${def.tier.slice(1)} tier` : '';
-    li.append(a, b, c);
-    return li;
-  }));
 }
 
 /** Fill the in-game character panel's text from the build. */

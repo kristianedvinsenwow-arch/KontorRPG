@@ -12,6 +12,8 @@ export interface PlayerState {
   name: string;
   color: number; // index into PLAYER_COLORS
   race: Race;
+  /** Face index (FACES). */
+  face?: number;
   x: number;
   y: number;
   z: number;
@@ -47,7 +49,7 @@ export type ServerMsg =
   | { t: 'snap'; tick: number; at: number; players: PlayerState[] }
   | { t: 'leave'; id: string }
   /** Everyone online, wherever they are (snapshots only carry players inside your area of interest). */
-  | { t: 'roster'; players: { id: string; name: string; color: number; race: Race }[] }
+  | { t: 'roster'; players: { id: string; name: string; color: number; race: Race; face?: number }[] }
   | { t: 'correct'; seq: number; x: number; y: number; z: number; reason: string }
   | { t: 'chat'; from: string; name: string; text: string; at: number }
   | { t: 'system'; text: string }
@@ -58,8 +60,8 @@ export type ServerMsg =
   | { t: 'skills'; xp: Partial<Record<SkillId, number>> }
   /** Something you gained: XP and/or an item (drives the pop-ups). */
   | { t: 'gain'; skill?: SkillId; xp?: number; item?: string; qty?: number; rare?: boolean }
-  /** Depleted veins: [id, seconds until it respawns]; 0 means it is back. */
-  | { t: 'nodes'; depleted: [string, number][] }
+  /** Vein changes: [id, 1] depleted, [id, 0] back. When it returns is deliberately not sent. */
+  | { t: 'nodes'; depleted: [string, 0 | 1][] }
   /** Your crafting queue (recipe null = idle). */
   | { t: 'job'; recipe: string | null; done: number; total: number; seconds: number }
   | { t: 'notice'; text: string; kind: 'error' | 'info' | 'rare' };

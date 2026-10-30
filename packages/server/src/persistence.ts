@@ -36,7 +36,7 @@ export interface CharacterStore {
 
 interface Row {
   user_id: string; name: string; color: number; race: CharacterBuild['race'];
-  attrs: CharacterBuild['attrs']; major_perk: string; minor_perk: string;
+  attrs: CharacterBuild['attrs']; major_perk: string; minor_perk: string; face: number | null;
   pos_x: number | null; pos_y: number | null; pos_z: number | null; yaw: number; gold: number;
   inventory: unknown; equipment: unknown; skills: unknown;
 }
@@ -73,7 +73,7 @@ export class SupabaseStore implements CharacterStore {
     const rows = (await r.json()) as Row[];
     const row = rows[0];
     if (!row) return null;
-    const build: CharacterBuild = { race: row.race, attrs: row.attrs, major: row.major_perk, minor: row.minor_perk };
+    const build: CharacterBuild = { race: row.race, attrs: row.attrs, major: row.major_perk, minor: row.minor_perk, face: row.face ?? 0 };
     const equip = sanitiseEquipment(row.equipment);
     return {
       userId: row.user_id, name: row.name, color: row.color, gold: row.gold, build, equip,
@@ -86,7 +86,7 @@ export class SupabaseStore implements CharacterStore {
   async create(c: StoredCharacter): Promise<void> {
     const body = {
       user_id: c.userId, name: c.name, color: c.color, race: c.build.race, attrs: c.build.attrs,
-      major_perk: c.build.major, minor_perk: c.build.minor, gold: c.gold,
+      major_perk: c.build.major, minor_perk: c.build.minor, face: c.build.face ?? 0, gold: c.gold,
       inventory: c.bag, equipment: c.equip, skills: c.xp,
     };
     const r = await fetch(`${this.url}/rest/v1/characters`, { method: 'POST', headers: this.headers({ Prefer: 'return=minimal' }), body: JSON.stringify(body) });
