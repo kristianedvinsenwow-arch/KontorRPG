@@ -115,14 +115,11 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
   ball(head, v3(0.106, 0.0, 0.0), 0.024, M.skin, 8).scale.set(0.5, 1, 0.8);
   ball(head, v3(-0.106, 0.0, 0.0), 0.024, M.skin, 8).scale.set(0.5, 1, 0.8);
   bx(head, 0.05, 0.008, 0.01, mat(0x8c5a46, null, { r: 0.6 }), 0, -0.052, -0.104);
-  if (race !== 'gnome') { // gnomes wear a pointed hat instead (below)
-    const hood = mesh(new THREE.SphereGeometry(0.15, 18, 12, 0, Math.PI * 2, 0, Math.PI * 0.62), M.hood, head);
-    hood.position.set(0, 0.02, 0.02);
-    hood.scale.set(1, 1.05, 1.08);
-    hood.rotation.x = 0.35;
-  }
-  bx(head, 0.24, 0.07, 0.2, M.hood, 0, -0.1, 0.03); // hood collar
-  ball(head, v3(0, 0.07, -0.04), 0.1, M.hair, 10).scale.set(1, 0.5, 1);
+  // Hair: a cap over the top and back of the head, tilted back so the forehead and face stay open.
+  const hair = mesh(new THREE.SphereGeometry(0.122, 18, 10, 0, Math.PI * 2, 0, Math.PI * 0.56), M.hair, head);
+  hair.position.set(0, 0.012, 0.012);
+  hair.rotation.x = -0.32;
+  hair.scale.set(1, 1.05, 1.05);
   if (race === 'dwarf') {
     // A proper dwarf beard: a broad wedge with a forked tip, plus a moustache.
     const beardM = mat(0x8a4b26, 'cloth', { r: 0.95 });
@@ -137,9 +134,9 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
   if (race === 'gnome') {
     // Tall pointed hat in the player's colour, leaning back.
     const hat = mesh(new THREE.ConeGeometry(0.14, 0.42, 12), M.sleeve, head);
-    hat.position.set(0, 0.22, 0.04); hat.rotation.x = 0.22;
+    hat.position.set(0, 0.27, 0.06); hat.rotation.x = 0.22;
     mesh(new THREE.TorusGeometry(0.13, 0.022, 8, 18), M.belt, head).rotation.x = Math.PI / 2 - 0.22;
-    head.children.at(-1)!.position.set(0, 0.05, 0.005);
+    head.children.at(-1)!.position.set(0, 0.1, 0.02); // brim sits above the brows, not over the eyes
   }
   head.scale.set(H / W, H, H / Wz);
 
@@ -161,7 +158,10 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
   }
   const tool = makePickaxe();
   tool.position.set(0, -0.27, 0);
-  tool.rotation.set(-Math.PI / 2 + 0.25, 0, 0);
+  // In forearm space: tilt the haft so it rises forward out of the fist, then spin it about its own
+  // axis so the picks sit fore and aft (upright) instead of sideways. Grip ~8 cm up the haft.
+  tool.rotation.set(-2.15, Math.PI / 2, 0, 'XYZ');
+  tool.translateY(-0.08);
   tool.traverse((o) => (o.userData.keep = true));
   arms[1].elbow.add(tool);
 
@@ -191,16 +191,19 @@ export function animateCharacter(c: Character, speed: number, pitch: number, swi
   const sw = Math.sin(c.ph) * amp;
   c.legs[0].hip.rotation.x = sw;
   c.legs[1].hip.rotation.x = -sw;
-  c.legs[0].knee.rotation.x = Math.max(0, Math.sin(c.ph + 1.2)) * amp * 1.2;
-  c.legs[1].knee.rotation.x = Math.max(0, Math.sin(c.ph + 1.2 + Math.PI)) * amp * 1.2;
+  // Knees bend backwards (shin swings back), so the rotation is negative.
+  c.legs[0].knee.rotation.x = -Math.max(0, Math.sin(c.ph + 1.2)) * amp * 1.2;
+  c.legs[1].knee.rotation.x = -Math.max(0, Math.sin(c.ph + 1.2 + Math.PI)) * amp * 1.2;
   c.upper.position.y = c.hipY + Math.abs(Math.cos(c.ph)) * amp * 0.04;
   c.head.rotation.x = THREE.MathUtils.clamp(-pitch * 0.6, -0.6, 0.6);
 
   // Arms swing opposite the legs; the tool arm lifts and strikes while swinging.
   c.swing = swinging ? (c.swing + dt * 2.4) % 1 : lerp(c.swing, 0, Math.min(1, dt * 8));
   const strike = swinging ? Math.sin(c.swing * Math.PI * 2) : 0;
+  // The model faces −Z: positive X rotation brings an arm forward, and elbows bend forward.
   c.arms[0].shoulder.rotation.x = -sw * 0.8;
-  c.arms[0].elbow.rotation.x = -0.25;
-  c.arms[1].shoulder.rotation.x = swinging ? -1.6 - strike * 1.1 : sw * 0.6 - 0.35;
-  c.arms[1].elbow.rotation.x = swinging ? -0.4 + strike * 0.3 : -0.55;
+  c.arms[0].elbow.rotation.x = 0.25;
+  // Tool arm: carried with the forearm forward; swinging lifts it overhead and chops down.
+  c.arms[1].shoulder.rotation.x = swinging ? 1.6 + strike * 1.1 : 0.3 + sw * 0.3;
+  c.arms[1].elbow.rotation.x = swinging ? 0.45 - strike * 0.3 : 0.95;
 }
