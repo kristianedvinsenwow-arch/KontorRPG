@@ -15,6 +15,8 @@ import { netStore, settingsStore, uiStore } from './state/store.js';
 import { initHud } from './ui/hud.js';
 import { initPause, initBossKey } from './ui/menu.js';
 import { initCreator } from './ui/creator.js';
+import { initAccount } from './ui/account.js';
+import { Auth } from './net/auth.js';
 import { CharacterPreview, fillCharacterPanel } from './ui/characterPanel.js';
 
 const view = document.getElementById('view')!;
@@ -33,6 +35,7 @@ preview.setEnvironment(scene.environment);
 creatorPreview.setEnvironment(scene.environment);
 const remotes = new Remotes(scene);
 const net = new NetClient();
+const auth = new Auth();
 
 let me: LocalPlayer | null = null;
 let myBuild: CharacterBuild | null = null;
@@ -48,19 +51,24 @@ const syncCreatorPreview = () => {
   const s = settingsStore.get();
   creatorPreview.setCharacter(s.color, s.build.race);
 };
+/** Apply a character (from the creator, or the saved one the server sends back). */
+function useCharacter(name: string, color: number, build: CharacterBuild) {
+  myBuild = build;
+  speedBonus = derive(build).speedBonus;
+  eyeHeight = RACES[build.race].eye;
+  preview.setCharacter(color, build.race);
+  fillCharacterPanel(name, build);
+}
 initCreator(
   (name, color, build) => {
-    myBuild = build;
-    speedBonus = derive(build).speedBonus;
-    eyeHeight = RACES[build.race].eye;
-    net.connect(name, color, build);
-    preview.setCharacter(color, build.race);
-    fillCharacterPanel(name, build);
+    useCharacter(name, color, build);
+    net.connect(name, color, build, () => auth.token);
     uiStore.set({ panel: 'none' });
     input.lock();
   },
   syncCreatorPreview,
 );
+void auth.init().then(() => initAccount(auth));
 syncCreatorPreview();
 initPause(() => { uiStore.set({ panel: 'none' }); input.lock(); });
 initBossKey(() => input.unlock());
@@ -99,6 +107,8 @@ uiStore.subscribe((u) => {
 net.on((msg) => {
   switch (msg.t) {
     case 'welcome':
+      useCharacter(msg.character.name, msg.character.color, msg.character.build);
+      if (msg.saved) hud.system(`Welcome back, ${msg.character.name}.`);
       if (!me) me = createLocalPlayer(msg.you.x, msg.you.y, msg.you.z, msg.you.yaw);
       else { me.x = msg.you.x; me.y = msg.you.y; me.z = msg.you.z; } // reconnect: server's spawn wins
       lastSent = { x: me.x, y: me.y, z: me.z, yaw: me.yaw, pitch: me.pitch, at: performance.now() };
@@ -196,4 +206,4 @@ function frame() {
 frame();
 
 // Exposed for automated smoke tests and debugging in the console.
-(window as any).__kontor = { get me() { return me; }, get build() { return myBuild; }, remotes, net, terrain, netStore, uiStore, settingsStore, creatorPreview };
+(window as any).__kontor = { get me() { return me; }, get build() { return myBuild; }, remotes, net, terrain, netStore, uiStore, settingsStore, creatorPreview, auth };

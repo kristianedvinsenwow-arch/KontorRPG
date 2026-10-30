@@ -14,6 +14,16 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
+      # Accounts and character storage (Supabase project "kontor-rpg", Stockholm).
+      # URL and publishable key are public by design; the secret key must be pasted in Render.
+      - key: SUPABASE_URL
+        value: https://xblngcjarybauizqwthb.supabase.co
+      - key: SUPABASE_PUBLISHABLE_KEY
+        value: sb_publishable_8TTmfljGK-EuvbFBpRG1Yg_pMbCOR8i
+      - key: SUPABASE_SECRET_KEY
+        sync: false # Supabase dashboard → Project Settings → API Keys → Secret keys
+      - key: REQUIRE_LOGIN
+        value: "false" # set to "true" once everyone has logged in once
     # disk:
     #   name: kontor-data
     #   mountPath: /var/data

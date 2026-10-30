@@ -10,6 +10,8 @@ import {
   type ClientMsg, type PlayerState, type ServerMsg,
 } from '@kontor/shared';
 
+import type { CharacterStore, StoredCharacter } from './persistence.js';
+
 export interface Client {
   send(msg: ServerMsg): void;
   close(reason: string): void;
@@ -27,12 +29,19 @@ interface ServerPlayer {
   build: CharacterBuild;
   /** Fastest this character may move, from perks (e.g. Pack Mule −10%, Small Frame +10%). */
   speedCap: number;
+  /** Account id when logged in; null for guests (nothing is saved). */
+  userId: string | null;
+  savedAt: number;
 }
 
 export interface WorldOptions {
   build: string;
   now?: () => number;
   log?: (...a: unknown[]) => void;
+  /** Where characters are kept. Without one, everyone plays as a guest. */
+  store?: CharacterStore;
+  /** When true, a valid login token is required to join. */
+  requireLogin?: boolean;
 }
 
 let nextId = 1;
@@ -59,6 +68,7 @@ export class World {
     for (const [id, p] of this.players) {
       if (p.client === client) {
         this.players.delete(id);
+        void this.save(p);
         this.broadcast({ t: 'leave', id });
         this.broadcast({ t: 'system', text: `${p.state.name} logged out` });
         this.broadcastRoster();
@@ -67,7 +77,8 @@ export class World {
     }
   }
 
-  handle(client: Client, msg: ClientMsg): void {
+  /** Returns a promise only for hello with a store (login + database lookups); everything else is synchronous. */
+  handle(client: Client, msg: ClientMsg): void | Promise<void> {
     if (msg.t === 'ping') return client.send({ t: 'pong', at: msg.at });
     if (msg.t === 'hello') return this.hello(client, msg);
     const p = this.byClient(client);
@@ -81,32 +92,58 @@ export class World {
     return undefined;
   }
 
-  private hello(client: Client, msg: Extract<ClientMsg, { t: 'hello' }>): void {
+  private hello(client: Client, msg: Extract<ClientMsg, { t: 'hello' }>): void | Promise<void> {
     if (!this.pending.has(client)) return; // only one hello per connection
-    if (msg.proto !== PROTOCOL_VERSION) {
-      client.send({ t: 'reject', reason: 'outdated_client' });
-      client.close('outdated_client');
-      return;
-    }
-    const bad = validateBuild(msg.build);
-    if (bad) {
-      client.send({ t: 'reject', reason: `invalid_character:${bad}` });
-      client.close('invalid_character');
-      return;
-    }
+    const reject = (reason: string) => { client.send({ t: 'reject', reason }); client.close(reason.split(':')[0]); };
+    if (msg.proto !== PROTOCOL_VERSION) return reject('outdated_client');
     this.pending.delete(client);
-    const build = msg.build;
+    const store = this.opts.store;
+    if (!store || (!msg.token && !this.opts.requireLogin)) {
+      // Guest: nothing is saved.
+      const bad = validateBuild(msg.build);
+      if (bad) return reject(`invalid_character:${bad}`);
+      this.join(client, { name: sanitizeName(msg.name), color: msg.color, build: msg.build, pos: null, userId: null }, false);
+      return;
+    }
+    return (async () => {
+      const userId = msg.token ? await store.verify(msg.token) : null;
+      if (!userId) return reject('login_required');
+      let saved = await store.load(userId);
+      const isNew = !saved;
+      if (!saved) {
+        // First login: the character from the creator becomes the saved one.
+        const bad = validateBuild(msg.build);
+        if (bad) return reject(`invalid_character:${bad}`);
+        saved = { userId, name: sanitizeName(msg.name), color: Math.abs(Math.floor(msg.color)) % PLAYER_COLORS.length, build: msg.build, pos: null, gold: 0 };
+        await store.create(saved);
+      }
+      // Same account in a second tab or on another computer: the newest session wins.
+      for (const p of this.players.values()) {
+        if (p.userId === userId) { p.client.send({ t: 'system', text: 'You logged in somewhere else.' }); p.client.close('replaced'); this.disconnect(p.client); }
+      }
+      this.join(client, { ...saved, userId }, !isNew);
+    })().catch((e) => { this.log('login failed', e); reject('server_error'); });
+  }
+
+  private join(client: Client, c: Omit<StoredCharacter, 'gold' | 'userId'> & { userId: string | null }, wasSaved: boolean): void {
+    const build = c.build;
     const id = `p${nextId++}`;
-    const name = sanitizeName(msg.name);
-    const color = Math.abs(Math.floor(msg.color)) % PLAYER_COLORS.length;
-    // Spawn in the clearing, spread out a little so players don't stack.
-    const a = Math.random() * Math.PI * 2, d = 2 + Math.random() * 5;
-    const x = Math.cos(a) * d, z = Math.sin(a) * d, y = heightAt(x, z);
-    const state: PlayerState = { id, name, color, race: build.race, x: r2(x), y: r2(y), z: r2(z), yaw: r3(-a + Math.PI / 2), pitch: 0, spd: 0 };
+    const name = c.name;
+    const color = Math.abs(Math.floor(c.color)) % PLAYER_COLORS.length;
+    let x: number, z: number, yaw: number;
+    if (c.pos && checkStep(c.pos, c.pos, 0.1).ok) {
+      x = c.pos.x; z = c.pos.z; yaw = c.pos.yaw; // back where you logged out
+    } else {
+      // Spawn in the clearing, spread out a little so players don't stack.
+      const a = Math.random() * Math.PI * 2, d = 2 + Math.random() * 5;
+      x = Math.cos(a) * d; z = Math.sin(a) * d; yaw = -a + Math.PI / 2;
+    }
+    const y = heightAt(x, z);
+    const state: PlayerState = { id, name, color, race: build.race, x: r2(x), y: r2(y), z: r2(z), yaw: r3(yaw), pitch: 0, spd: 0 };
     const now = this.now();
     this.players.set(id, { state, client, lastValid: { x, y, z, at: now }, lastSeq: -1, strikes: 0, lastChatAt: 0, actUntil: 0,
-      build, speedCap: maxSpeed(1, derive(build).speedBonus) });
-    client.send({ t: 'welcome', id, build: this.opts.build, proto: PROTOCOL_VERSION, tickHz: TICK_HZ, you: state });
+      build, speedCap: maxSpeed(1, derive(build).speedBonus), userId: c.userId, savedAt: now });
+    client.send({ t: 'welcome', id, build: this.opts.build, proto: PROTOCOL_VERSION, tickHz: TICK_HZ, you: state, character: { name, color, build }, saved: wasSaved });
     this.broadcast({ t: 'system', text: `${name} logged in` });
     this.broadcastRoster();
     this.log(`join ${name} (${id}); online ${this.players.size}`);
@@ -179,9 +216,24 @@ export class World {
     for (const p of this.players.values()) p.client.send(msg);
   }
 
+  /** Persist one player's position (logged-in players only). Errors are logged, never thrown. */
+  async save(p: ServerPlayer): Promise<void> {
+    if (!p.userId || !this.opts.store) return;
+    p.savedAt = this.now();
+    const s = p.state;
+    try { await this.opts.store.savePosition(p.userId, { x: s.x, y: s.y, z: s.z, yaw: s.yaw }); }
+    catch (e) { this.log('save failed', p.userId, e); }
+  }
+
+  /** Save everyone who moved since their last save. Called every 30 s and on shutdown. */
+  async saveAll(): Promise<void> {
+    await Promise.all([...this.players.values()].filter((p) => p.lastValid.at > p.savedAt).map((p) => this.save(p)));
+  }
+
   /** On shutdown: tell everyone so clients show "server restarting" instead of an error. */
-  shutdown(): void {
+  async shutdown(): Promise<void> {
     this.broadcast({ t: 'system', text: 'Server restarting — you will reconnect in a moment.' });
+    await this.saveAll();
   }
 }
 

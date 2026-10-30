@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@kontor/shared": "workspace:*",
+    "@supabase/supabase-js": "^2.118.0",
     "three": "^0.170.0"
   },
   "devDependencies": {

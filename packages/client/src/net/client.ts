@@ -11,7 +11,7 @@ export class NetClient {
   private ws: WebSocket | null = null;
   private handlers: Handler[] = [];
   private retry = 0;
-  private hello: { name: string; color: number; build: CharacterBuild } | null = null;
+  private hello: { name: string; color: number; build: CharacterBuild; token?: () => string | undefined } | null = null;
   private firstBuild: string | null = null;
   private pingTimer = 0;
   private versionTimer = 0;
@@ -21,8 +21,9 @@ export class NetClient {
 
   on(h: Handler): void { this.handlers.push(h); }
 
-  connect(name: string, color: number, build: CharacterBuild): void {
-    this.hello = { name, color, build };
+  /** `token` returns the current login token (refreshed by Supabase), so reconnects stay logged in. */
+  connect(name: string, color: number, build: CharacterBuild, token?: () => string | undefined): void {
+    this.hello = { name, color, build, token };
     this.open();
     clearInterval(this.versionTimer);
     this.versionTimer = window.setInterval(() => this.checkVersion(), 60_000);
@@ -38,7 +39,7 @@ export class NetClient {
     this.ws = ws;
     ws.onopen = () => {
       this.retry = 0;
-      if (this.hello) this.send({ t: 'hello', name: this.hello.name, color: this.hello.color, proto: PROTOCOL_VERSION, build: this.hello.build });
+      if (this.hello) this.send({ t: 'hello', name: this.hello.name, color: this.hello.color, proto: PROTOCOL_VERSION, build: this.hello.build, token: this.hello.token?.() });
       clearInterval(this.pingTimer);
       this.pingTimer = window.setInterval(() => this.send({ t: 'ping', at: performance.now() }), 3000);
     };
@@ -54,6 +55,7 @@ export class NetClient {
       } else if (msg.t === 'reject') {
         netStore.set({ status: 'rejected' });
         if (msg.reason === 'outdated_client') this.reload('Your game is out of date — reloading…');
+        if (msg.reason === 'login_required') for (const h of this.handlers) h({ t: 'system', text: 'Your login expired — log in again from the start screen.' });
       }
       for (const h of this.handlers) h(msg);
     };

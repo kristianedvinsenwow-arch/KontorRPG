@@ -151,3 +151,11 @@ select:focus { border-color: var(--amber); outline: none; }
 .charside .slots li b { font-size: 12px; }
 .charwrap { max-height: calc(100vh - 32px); }
 .charside { overflow-y: auto; }
+.account { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--r); background: rgba(255, 255, 255, .03); }
+.account .lbl { margin: 0; }
+.loginrow { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+.loginrow input { background: rgba(255, 255, 255, .045); border: 1px solid var(--line); color: var(--fg); font: 14px var(--mono); padding: 9px 11px; border-radius: var(--r); }
+.loginrow input:focus { border-color: var(--amber); outline: none; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--amber); text-decoration: underline; font: inherit; }
+.note.welcome { color: var(--fg); }
+.creator.locked #races, .creator.locked #swatches, .creator.locked #attrs, .creator.locked #majors, .creator.locked #minors { pointer-events: none; opacity: .55; }

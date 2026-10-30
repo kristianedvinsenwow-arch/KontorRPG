@@ -135,3 +135,52 @@ test('race is shared with other players', () => {
   const roster = c.inbox.find((m) => m.t === 'roster') as Extract<ServerMsg, { t: 'roster' }>;
   assert.equal(roster.players[0].race, 'gnome');
 });
+
+import { MemoryStore } from '../src/persistence.js';
+
+test('logged-in characters are created once, then loaded with their saved position', async () => {
+  const store = new MemoryStore();
+  let t = 5_000_000;
+  const world = new World({ build: 'test', now: () => t, store });
+  const c1 = fakeClient();
+  world.connect(c1);
+  await world.handle(c1, { t: 'hello', name: 'Durin', color: 3, proto: PROTOCOL_VERSION, build: { ...defaultBuild(), race: 'dwarf' }, token: 'dev:user-1' });
+  const w1 = c1.inbox.find((m) => m.t === 'welcome') as Extract<ServerMsg, { t: 'welcome' }>;
+  assert.equal(w1.saved, false);
+  assert.equal(store.rows.get('user-1')?.build.race, 'dwarf');
+  // Walk a bit, log out → position saved.
+  t += 100;
+  const x = w1.you.x + 0.4;
+  world.handle(c1, { t: 'input', seq: 1, x, y: heightAt(x, w1.you.z), z: w1.you.z, yaw: 1, pitch: 0 });
+  world.disconnect(c1);
+  await new Promise((r) => setTimeout(r, 0));
+  assert.equal(store.rows.get('user-1')?.pos?.x, Math.round(x * 100) / 100);
+  // Log in again from another "computer" sending a different build: the saved one wins.
+  const c2 = fakeClient();
+  world.connect(c2);
+  await world.handle(c2, { t: 'hello', name: 'Someone', color: 0, proto: PROTOCOL_VERSION, build: defaultBuild(), token: 'dev:user-1' });
+  const w2 = c2.inbox.find((m) => m.t === 'welcome') as Extract<ServerMsg, { t: 'welcome' }>;
+  assert.equal(w2.saved, true);
+  assert.equal(w2.character.name, 'Durin');
+  assert.equal(w2.you.race, 'dwarf');
+  assert.equal(w2.you.x, Math.round(x * 100) / 100);
+});
+
+test('bad tokens are rejected and a second login replaces the first', async () => {
+  const store = new MemoryStore();
+  const world = new World({ build: 'test', store, requireLogin: true });
+  const bad = fakeClient();
+  world.connect(bad);
+  await world.handle(bad, { t: 'hello', name: 'X', color: 0, proto: PROTOCOL_VERSION, build: defaultBuild(), token: 'nope' });
+  assert.equal(bad.inbox[0].t, 'reject');
+  const guest = fakeClient();
+  world.connect(guest);
+  await world.handle(guest, { t: 'hello', name: 'G', color: 0, proto: PROTOCOL_VERSION, build: defaultBuild() });
+  assert.equal(guest.inbox[0].t, 'reject'); // login required
+  const a = fakeClient(), b = fakeClient();
+  world.connect(a); world.connect(b);
+  await world.handle(a, { t: 'hello', name: 'Anna', color: 0, proto: PROTOCOL_VERSION, build: defaultBuild(), token: 'dev:u2' });
+  await world.handle(b, { t: 'hello', name: 'Anna', color: 0, proto: PROTOCOL_VERSION, build: defaultBuild(), token: 'dev:u2' });
+  assert.equal(a.closed, 'replaced');
+  assert.equal(world.players.size, 1);
+});

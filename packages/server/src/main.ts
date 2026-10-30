@@ -8,6 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { TICK_HZ, decodeClient, encode, type ServerMsg } from '@kontor/shared';
 import { World, type Client } from './world.js';
+import { SupabaseStore, type CharacterStore } from './persistence.js';
 import { serveStatic } from './static.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -17,7 +18,17 @@ const here = dirname(fileURLToPath(import.meta.url));
 const CLIENT_DIST = process.env.CLIENT_DIST ?? resolve(here, '../../client/dist');
 
 const log = (...a: unknown[]) => console.log(new Date().toISOString(), ...a);
-const world = new World({ build: BUILD, log });
+
+// Accounts and storage: on when the three Supabase variables are set (see README), otherwise
+// everyone plays as a guest and nothing is saved.
+const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
+const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY ?? '';
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY ?? '';
+const store: CharacterStore | undefined = SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY && SUPABASE_SECRET_KEY
+  ? new SupabaseStore(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY) : undefined;
+/** Guests are allowed unless REQUIRE_LOGIN=true (recommended once everyone has an account). */
+const requireLogin = !!store && process.env.REQUIRE_LOGIN === 'true';
+const world = new World({ build: BUILD, log, store, requireLogin });
 const statics = serveStatic(CLIENT_DIST);
 
 const server = createServer((req, res) => {
@@ -25,6 +36,12 @@ const server = createServer((req, res) => {
   if (path === '/health') {
     res.writeHead(200, { 'content-type': 'application/json' });
     res.end(JSON.stringify({ ok: true, players: world.players.size, tick: world.tick }));
+    return;
+  }
+  if (path === '/config') {
+    // Public client configuration. The publishable key is safe to expose; the secret key never leaves the server.
+    res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    res.end(JSON.stringify({ accounts: !!store, requireLogin, supabaseUrl: store ? SUPABASE_URL : null, supabaseKey: store ? SUPABASE_PUBLISHABLE_KEY : null }));
     return;
   }
   if (path === '/version') {
@@ -58,7 +75,7 @@ wss.on('connection', (ws: WebSocket & { alive?: boolean }) => {
   ws.on('message', (data) => {
     if (--budget < 0) return;
     const msg = decodeClient(data.toString());
-    if (msg) world.handle(client, msg);
+    if (msg) void world.handle(client, msg);
   });
   ws.on('close', () => { clearInterval(refill); world.disconnect(client); });
   ws.on('error', () => ws.terminate());
@@ -74,17 +91,20 @@ const heartbeat = setInterval(() => {
 }, 15000);
 
 const tick = setInterval(() => world.step(), 1000 / TICK_HZ);
+const autosave = setInterval(() => void world.saveAll(), 30_000);
 
-server.listen(PORT, () => log(`KontorRPG server ${BUILD} on :${PORT} (client from ${CLIENT_DIST})`));
+server.listen(PORT, () => log(`KontorRPG server ${BUILD} on :${PORT} (client from ${CLIENT_DIST}); accounts: ${store ? 'Supabase' : 'off (guests only)'}`));
 
 function shutdown(signal: string) {
   log(`${signal}: shutting down`);
-  world.shutdown(); // later milestones flush players to the database here
   clearInterval(tick);
   clearInterval(heartbeat);
-  for (const ws of wss.clients) ws.close(1012, 'restart');
-  server.close(() => process.exit(0));
-  setTimeout(() => process.exit(0), 3000).unref();
+  clearInterval(autosave);
+  void world.shutdown().finally(() => {
+    for (const ws of wss.clients) ws.close(1012, 'restart');
+    server.close(() => process.exit(0));
+  });
+  setTimeout(() => process.exit(0), 5000).unref();
 }
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('SIGINT', () => shutdown('SIGINT'));

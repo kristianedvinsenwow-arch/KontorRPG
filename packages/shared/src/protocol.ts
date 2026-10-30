@@ -23,14 +23,16 @@ export interface PlayerState {
 
 // ---------- client → server ----------
 export type ClientMsg =
-  | { t: 'hello'; name: string; color: number; proto: number; build: CharacterBuild }
+  /** `token` is the Supabase login token when accounts are enabled; omitted for guests. */
+  | { t: 'hello'; name: string; color: number; proto: number; build: CharacterBuild; token?: string }
   | { t: 'input'; seq: number; x: number; y: number; z: number; yaw: number; pitch: number; act?: 'swing' }
   | { t: 'chat'; text: string }
   | { t: 'ping'; at: number };
 
 // ---------- server → client ----------
 export type ServerMsg =
-  | { t: 'welcome'; id: string; build: string; proto: number; tickHz: number; you: PlayerState }
+  /** `character` is what the server will use — for a saved account it may differ from what the client sent. */
+  | { t: 'welcome'; id: string; build: string; proto: number; tickHz: number; you: PlayerState; character: { name: string; color: number; build: CharacterBuild }; saved: boolean }
   | { t: 'snap'; tick: number; at: number; players: PlayerState[] }
   | { t: 'leave'; id: string }
   /** Everyone online, wherever they are (snapshots only carry players inside your area of interest). */
@@ -68,7 +70,7 @@ export function decodeClient(raw: string): ClientMsg | null {
     case 'hello':
       if (typeof m.name !== 'string' || !num(m.color) || !num(m.proto)) return null;
       // The build's contents are checked by validateBuild on the server; here only its shape.
-      return { t: 'hello', name: m.name, color: m.color, proto: m.proto, build: m.build && typeof m.build === 'object' ? m.build : null };
+      return { t: 'hello', name: m.name, color: m.color, proto: m.proto, build: m.build && typeof m.build === 'object' ? m.build : null, token: typeof m.token === 'string' ? m.token : undefined };
     case 'input':
       if (![m.seq, m.x, m.y, m.z, m.yaw, m.pitch].every(num)) return null;
       return { t: 'input', seq: m.seq, x: m.x, y: m.y, z: m.z, yaw: m.yaw, pitch: m.pitch, act: m.act === 'swing' ? 'swing' : undefined };

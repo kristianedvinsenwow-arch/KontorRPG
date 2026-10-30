@@ -18,6 +18,15 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
   return e;
 };
 
+/** Locked = a saved character from your account: shown, but not editable (respec comes later). */
+let locked: { name: string } | null = null;
+/** Why entering is blocked (e.g. login required), or null. */
+let blockReason: string | null = null;
+let rerender: () => void = () => {};
+
+export function setCreatorLocked(saved: { name: string } | null): void { locked = saved; rerender(); }
+export function setEnterBlocked(reason: string | null): void { blockReason = reason; rerender(); }
+
 export function initCreator(onEnter: (name: string, color: number, build: CharacterBuild) => void, onChange: () => void) {
   const nameIn = $<HTMLInputElement>('nameIn');
   const enter = $<HTMLButtonElement>('enter');
@@ -108,8 +117,11 @@ export function initCreator(onEnter: (name: string, color: number, build: Charac
     const b = settingsStore.get().build;
     const bad = validateBuild(b);
     const free = freePoints(b.attrs);
-    enter.disabled = !!bad;
-    enter.textContent = free > 0 ? `Place ${free} more point${free === 1 ? '' : 's'}` : 'Enter the world';
+    enter.disabled = !!bad || !!blockReason;
+    enter.textContent = blockReason ?? (locked ? `Continue as ${locked.name}` : free > 0 ? `Place ${free} more point${free === 1 ? '' : 's'}` : 'Enter the world');
+    document.querySelector('.brief.creator')!.classList.toggle('locked', !!locked);
+    nameIn.readOnly = !!locked;
+    nameIn.value = settingsStore.get().name;
   }
 
   function render() {
@@ -122,6 +134,7 @@ export function initCreator(onEnter: (name: string, color: number, build: Charac
   }
   renderSwatches();
   render();
+  rerender = () => { renderSwatches(); render(); onChange(); };
 
   settingsStore.subscribe((st) => { quality.value = st.quality; });
   quality.onchange = () => settingsStore.set({ quality: quality.value as 'low' | 'medium' | 'high' });
