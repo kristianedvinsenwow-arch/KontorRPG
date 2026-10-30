@@ -158,7 +158,7 @@ test('stored bags are sanitised', () => {
   assert.equal(bag.filter(Boolean).length, 1);
 });
 
-import { rollCraftRarity, rollEffects, itemStats, computeStats, defaultBuild, canLearn, sanitiseTalents, periodKey, caveClearance, CAVE_START, walkable, outgoing, incoming, emptyStats, TREE_BY_ID, isFishable, LAKE } from '../src/index.js';
+import { rollCraftRarity, rollEffects, itemStats, computeStats, canLearn, sanitiseTalents, periodKey, caveClearance, CAVE_START, walkable, outgoing, incoming, emptyStats, TREE_BY_ID, isFishable } from '../src/index.js';
 
 test('crafted gear rolls rarity; luck raises the odds; effects come from the right groups', () => {
   let seed = 1;
