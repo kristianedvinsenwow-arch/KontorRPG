@@ -185,198 +185,257 @@ test('bad tokens are rejected and a second login replaces the first', async () =
   assert.equal(world.players.size, 1);
 });
 
-// ------------------------------------------------------------------ M1: mining, smithing, trading
-import { ITEMS, STATIONS, TRADING_POST, VEIN_BY_ID, VEIN_TYPES, countItem, xpForLevel } from '@kontor/shared';
+// ------------------------------------------------------------------ gameplay systems
+import { ITEMS, NPC_BY_ID, STATION_BY_ID, VEIN_BY_ID, VEIN_TYPES, TREE_BY_ID, MOBS, INN, CAVE_ENTRANCE, CAVE_START, QUEST_BY_ID, countItem, xpForLevel, isFishable, LAKE, heightAt as h } from '@kontor/shared';
 
-function m1() {
+function game(random: () => number = () => 0.5, store?: MemoryStore) {
   let t = 2_000_000;
-  const world = new World({ build: 'test', now: () => t, random: () => 0.5 });
+  const world = new World({ build: 'test', now: () => t, random, store });
   const c = fakeClient();
   world.connect(c);
-  world.handle(c, { t: 'hello', name: 'Miner', color: 0, proto: PROTOCOL_VERSION, build: defaultBuild() });
+  world.handle(c, { t: 'hello', name: 'Tester', color: 0, proto: PROTOCOL_VERSION, build: defaultBuild() });
   const id = (c.inbox.find((m) => m.t === 'welcome') as any).id as string;
   const p = world.inspect(id)!;
-  const place = (x: number, z: number) => { const y = heightAt(x, z); Object.assign(p.state, { x, y, z }); p.lastValid = { x, y, z, at: t }; };
+  const place = (x: number, z: number) => { const y = h(x, z); Object.assign(p.state, { x, y, z }); p.lastValid = { x, y, z, at: t }; };
   const last = <T extends ServerMsg['t']>(k: T) => c.inbox.filter((m) => m.t === k).at(-1) as Extract<ServerMsg, { t: T }> | undefined;
-  return { world, c, p, place, last, advance: (ms: number) => (t += ms) };
+  const at = (npc: string) => { const n = NPC_BY_ID.get(npc)!; place(n.x + 1.2, n.z + 1.2); };
+  return { world, c, p, place, last, at, advance: (ms: number) => (t += ms), now: () => t };
 }
 
-test('new characters start with 16 empty slots, 15 gold and no pickaxe', () => {
-  const { last } = m1();
+test('new characters start with 16 empty slots, 15 gold and no tools', () => {
+  const { last } = game();
   const inv = last('inv')!;
   assert.equal(inv.bag.length, 16);
   assert.equal(inv.gold, 15);
-  assert.equal(inv.equip.tool, undefined);
+  assert.deepEqual(inv.equip, {});
 });
 
-test('you cannot mine without a pickaxe; buy one at the trading post and equip it', () => {
-  const { world, c, p, place, last } = m1();
-  const vein = VEIN_BY_ID.get('camp-0')!;
-  place(vein.x + 1.5, vein.z);
-  world.handle(c, { t: 'mine', node: vein.id });
-  assert.match(last('notice')!.text, /pickaxe/);
-  world.handle(c, { t: 'buy', item: 'stone_pickaxe' });
-  assert.match(last('notice')!.text, /trading post/); // too far away
-  place(TRADING_POST.x + 1, TRADING_POST.z);
-  world.handle(c, { t: 'buy', item: 'stone_pickaxe' });
-  assert.equal(last('inv')!.gold, 5);
+test('buy a pickaxe from Ingrid, equip it, mine; vein wear is shared and it depletes', () => {
+  const { world, c, p, place, last, at, advance } = game();
+  at('ingrid');
+  world.handle(c, { t: 'buy', npc: 'ingrid', item: 'stone_pickaxe' });
+  assert.equal(p.gold, 5);
   world.handle(c, { t: 'equip', index: p.bag.findIndex((s) => s?.id === 'stone_pickaxe') });
-  assert.equal(p.equip.tool, 'stone_pickaxe');
-  assert.equal(p.state.gear?.t, 'stone_pickaxe');
-  assert.equal(countItem(p.bag, 'stone_pickaxe'), 0);
-});
-
-test('mining respects the swing timer, gives stone and XP, and depletes the vein for everyone', () => {
-  const { world, c, p, place, last, advance } = m1();
-  p.equip.tool = 'stone_pickaxe';
+  assert.equal(p.equip.pickaxe?.id, 'stone_pickaxe');
   const vein = VEIN_BY_ID.get('camp-0')!;
   place(vein.x + 1.5, vein.z);
   world.handle(c, { t: 'mine', node: vein.id });
-  world.handle(c, { t: 'mine', node: vein.id }); // too soon: ignored
-  assert.equal(countItem(p.bag, 'stone'), 1);
-  assert.equal(p.xp.mining, VEIN_TYPES.stone.xp);
-  let swings = 1;
-  while (!last('nodes')?.depleted.some(([id, s]) => id === vein.id && s === 1)) { advance(3000); world.handle(c, { t: 'mine', node: vein.id }); swings++; assert.ok(swings < 10); }
-  assert.equal(countItem(p.bag, 'stone'), swings);
-  advance(3000);
-  world.handle(c, { t: 'mine', node: vein.id });
-  assert.match(last('notice')!.text, /depleted/);
-  advance(VEIN_TYPES.stone.respawnSec[1] * 1000);
-  world.step();
+  const n = last('node')!;
+  assert.equal(n.id, vein.id);
+  assert.equal(n.left, n.total - 1);
+  for (let i = 0; i < 10 && !world.nodes.get(vein.id)?.until; i++) { advance(3000); world.handle(c, { t: 'mine', node: vein.id }); }
+  assert.deepEqual(last('nodes')!.depleted, [[vein.id, 1]]);
+  assert.equal(countItem(p.bag, 'stone'), n.total);
+  advance(VEIN_TYPES.stone.respawnSec[1] * 1000 + 1000); world.step();
   assert.deepEqual(last('nodes')!.depleted, [[vein.id, 0]]);
 });
 
-test('iron veins need Mining 8, and mining from far away is refused', () => {
-  const { world, c, p, place, last } = m1();
-  p.equip.tool = 'stone_pickaxe';
-  const iron = [...VEIN_BY_ID.values()].find((v) => v.type === 'iron')!;
-  place(iron.x + 10, iron.z);
-  world.handle(c, { t: 'mine', node: iron.id });
-  assert.match(last('notice')!.text, /far/);
-  place(iron.x + 1.2, iron.z);
-  world.handle(c, { t: 'mine', node: iron.id });
-  assert.match(last('notice')!.text, /Mining 8/);
-  p.xp.mining = xpForLevel(8);
-  world.handle(c, { t: 'mine', node: iron.id });
-  assert.equal(countItem(p.bag, 'iron_ore'), 1);
+test('trees are chopped with a hatchet and fall when depleted', () => {
+  const { world, c, p, place, last, advance } = game();
+  p.equip.hatchet = { id: 'stone_hatchet', qty: 1 };
+  world.recompute(p);
+  const tree = [...TREE_BY_ID.values()].find((x) => x.kind === 'birch')!;
+  place(tree.x + 1.2, tree.z);
+  for (let i = 0; i < 10 && !world.nodes.get(tree.id)?.until; i++) { advance(3000); world.handle(c, { t: 'chop', node: tree.id }); }
+  assert.ok(countItem(p.bag, 'birch_log') >= 3);
+  assert.deepEqual(last('nodes')!.depleted, [[tree.id, 1]]);
 });
 
-test('ores stack to 10 and a full bag stops mining', () => {
-  const { world, c, p, place, last } = m1();
-  p.equip.tool = 'stone_pickaxe';
-  p.bag = p.bag.map(() => ({ id: 'stone', qty: 10 }));
-  const vein = VEIN_BY_ID.get('camp-1')!;
-  place(vein.x + 1.5, vein.z);
-  world.handle(c, { t: 'mine', node: vein.id });
-  assert.match(last('notice')!.text, /full/);
+test('drop and pick up: items go to the ground and back', () => {
+  const { world, c, p, last } = game();
+  p.bag[0] = { id: 'stone', qty: 7 };
+  world.handle(c, { t: 'drop', index: 0, qty: 7 });
+  assert.equal(p.bag[0], null);
+  const g = last('ground')!.add![0];
+  assert.equal(g.item.qty, 7);
+  world.handle(c, { t: 'pickup', id: g.id });
+  assert.equal(countItem(p.bag, 'stone'), 7);
+  assert.deepEqual(last('ground')!.remove, [g.id]);
 });
 
-test('crafting is a timed queue at the station and stops when materials run out', () => {
-  const { world, c, p, place, last, advance } = m1();
-  p.bag[0] = { id: 'stone', qty: 5 };
-  world.handle(c, { t: 'craft', recipe: 'shaped_stone', count: 5 });
-  assert.match(last('notice')!.text, /anvil/);
-  place(STATIONS.anvil.x + 1.5, STATIONS.anvil.z);
-  world.handle(c, { t: 'craft', recipe: 'shaped_stone', count: 5 });
-  assert.equal(last('job')!.total, 5);
-  world.step();
-  assert.equal(countItem(p.bag, 'shaped_stone'), 0); // not yet done
-  for (let i = 0; i < 4; i++) { advance(1700); world.step(); }
-  assert.equal(countItem(p.bag, 'shaped_stone'), 2);
-  assert.equal(countItem(p.bag, 'stone'), 1);
-  assert.equal(last('job')!.recipe, null);
-  assert.match(last('notice')!.text, /Out of materials/);
-  assert.equal(p.xp.smithing, 12);
+test('crafting gear can roll a rarity with effects', () => {
+  const { world, c, p, place, advance } = game(() => 0.001);
+  const anvil = STATION_BY_ID.get('camp_anvil')!;
+  place(anvil.x + 1.5, anvil.z);
+  p.xp.smithing = xpForLevel(3);
+  p.bag[0] = { id: 'shaped_stone', qty: 4 };
+  world.handle(c, { t: 'craft', recipe: 'stone_sword', count: 1, station: anvil.id });
+  advance(4000); world.step();
+  const sword = p.bag.find((s) => s?.id === 'stone_sword')!;
+  assert.equal(sword.r, 3); // 0.001 < epic threshold
+  assert.equal(sword.fx!.length, 3);
 });
 
-test('recipes check Smithing level; walking away cancels the queue', () => {
-  const { world, c, p, place, last, advance } = m1();
-  place(STATIONS.furnace.x + 1, STATIONS.furnace.z);
-  p.bag[0] = { id: 'iron_ore', qty: 10 };
-  world.handle(c, { t: 'craft', recipe: 'iron_bar', count: 5 });
-  assert.match(last('notice')!.text, /Smithing 8/);
-  p.xp.smithing = xpForLevel(8);
-  world.handle(c, { t: 'craft', recipe: 'iron_bar', count: 5 });
-  advance(2100); world.step();
-  assert.equal(countItem(p.bag, 'iron_bar'), 1);
-  place(STATIONS.furnace.x + 20, STATIONS.furnace.z);
-  advance(2100); world.step();
-  assert.equal(countItem(p.bag, 'iron_bar'), 1);
-  assert.equal(last('job')!.recipe, null);
+test('cooking can burn; stations must match the recipe', () => {
+  const { world, c, p, place, last, advance } = game(() => 0.01);
+  const anvil = STATION_BY_ID.get('camp_anvil')!;
+  p.bag[0] = { id: 'raw_perch', qty: 2 };
+  place(anvil.x + 1, anvil.z);
+  world.handle(c, { t: 'craft', recipe: 'cooked_perch', count: 1, station: anvil.id });
+  assert.equal(last('job'), undefined);
+  const fire = STATION_BY_ID.get('camp_fire')!;
+  place(fire.x + 1.2, fire.z);
+  world.handle(c, { t: 'craft', recipe: 'cooked_perch', count: 2, station: fire.id });
+  advance(2500); world.step(); advance(2500); world.step();
+  assert.equal(countItem(p.bag, 'burnt_fish'), 2); // rand 0.01 < 40% burn chance
 });
 
-test('a rucksack in the back slot adds bag slots; it can’t come off while those slots are full', () => {
-  const { world, c, p, place } = m1();
+test('fishing: cast, wait for a bite, reel in', () => {
+  const { world, c, p, place, last, advance } = game();
+  p.equip.rod = { id: 'basic_rod', qty: 1 };
+  world.recompute(p);
+  // Stand on the shore, cast into deep water.
+  let sx = LAKE.x, sz = LAKE.z;
+  for (let d = 0; d < 60; d += 0.5) { if (h(LAKE.x + d, LAKE.z) > 0.4) { sx = LAKE.x + d; break; } }
+  place(sx, sz);
+  let cx = sx - 6; while (!isFishable(cx, sz)) cx -= 1;
+  world.handle(c, { t: 'cast', x: cx, z: sz });
+  assert.equal((last('fish') as any).state, 'cast');
+  world.handle(c, { t: 'reel', ok: true }); // too early: scares the fish
+  assert.equal((last('fish') as any).state, 'lost');
+  world.handle(c, { t: 'cast', x: cx, z: sz });
+  advance(20_000); world.step();
+  assert.equal((last('fish') as any).state, 'bite');
+  advance(3000);
+  world.handle(c, { t: 'reel', ok: true });
+  assert.equal((last('fish') as any).state, 'caught');
+  assert.ok(countItem(p.bag, 'raw_perch') >= 1);
+});
+
+test('combat: kill a wolf, get XP and loot on the ground; wolves fight back', () => {
+  const { world, c, p, place, last, advance } = game(() => 0.3);
+  p.equip.mainHand = { id: 'stone_sword', qty: 1 };
+  world.recompute(p);
+  const wolf = [...world.mobs.values()].find((m) => m.def.kind === 'wolf')!;
+  place(wolf.x + 1.5, wolf.z);
+  for (let i = 0; i < 40 && !wolf.dead; i++) {
+    world.handle(c, { t: 'attack', target: wolf.id, special: false });
+    advance(1700); world.step();
+    place(wolf.x + 1.2, wolf.z);
+  }
+  assert.ok(wolf.dead);
+  assert.equal(p.xp.combat, MOBS.wolf.xp);
+  assert.ok(c.inbox.some((m) => m.t === 'hit' && m.to === p.state.id), 'the wolf hit back');
+  assert.ok(last('ground')?.add?.length);
+});
+
+test('dying knocks you out; respawn at camp, weakened', () => {
+  const { world, c, p } = game();
+  world.kill(p, 'a test');
+  assert.ok(p.dead);
+  world.handle(c, { t: 'mine', node: 'camp-0' }); // ignored while dead
+  world.handle(c, { t: 'respawn' });
+  assert.ok(!p.dead && p.hp > 0);
+  assert.ok(Math.hypot(p.state.x, p.state.z) < 6);
+  assert.ok(p.buffs.some((b) => b.name === 'Weakened'));
+});
+
+test('a fire staff burns and Ignite needs burning targets', () => {
+  const { world, c, p, place, advance } = game(() => 0.9);
+  p.equip.mainHand = { id: 'birch_fire_staff', qty: 1 };
+  world.recompute(p);
+  const wolf = [...world.mobs.values()].find((m) => m.def.kind === 'wolf')!;
+  place(wolf.x + 8, wolf.z);
+  world.handle(c, { t: 'attack', target: wolf.id, special: true });
+  assert.match((c.inbox.filter((m) => m.t === 'notice').at(-1) as any).text, /burning/);
+  world.handle(c, { t: 'attack', target: wolf.id, special: false });
+  advance(500); world.step();
+  assert.equal(wolf.burn?.stacks, 1);
+});
+
+test('quests: accept, deliver, reward, then locked until the reset', () => {
+  const { world, c, p, at, last } = game();
+  const q = QUEST_BY_ID.get('mats_stone')!;
+  at('mats');
+  world.handle(c, { t: 'quest', quest: q.id, op: 'accept' });
+  p.bag[0] = { id: 'stone', qty: 10 };
+  world.handle(c, { t: 'quest', quest: q.id, op: 'turnin' });
+  assert.equal(p.gold, 15 + q.reward.gold);
+  assert.ok((p.xp.mining ?? 0) >= q.reward.xp[1]);
+  world.handle(c, { t: 'quest', quest: q.id, op: 'accept' });
+  assert.match(last('notice')!.text, /resets/);
+});
+
+test('the inn: rent one room, extend it, store items', () => {
+  const { world, c, p, at, last } = game();
+  p.gold = 200;
+  at('hilde');
+  world.handle(c, { t: 'rent', weeks: 1 });
+  assert.equal(p.lease?.room, 0);
+  assert.equal(p.gold, 200 - INN.pricePerWeek);
+  world.handle(c, { t: 'rent', weeks: 1 });
+  assert.equal(p.lease?.room, 0, 'extending keeps the same room');
+  world.handle(c, { t: 'rent', weeks: 4 });
+  world.handle(c, { t: 'rent', weeks: 1 });
+  assert.match(last('notice')!.text, /at most 4/);
+  p.bag[0] = { id: 'iron_bar', qty: 5 };
+  world.handle(c, { t: 'storage', op: 'put', index: 0, qty: 5 });
+  assert.equal(countItem(p.storage, 'iron_bar'), 5);
+  assert.deepEqual(last('rooms')!.taken[0], 'Tester');
+});
+
+test('talents need levels; the root needs 3 ranks first', () => {
+  const { world, c, p, last } = game();
+  world.handle(c, { t: 'talent', tree: 'mining', node: 'prospector' });
+  assert.match(last('notice')!.text, /level up/);
+  p.xp.mining = xpForLevel(6);
+  for (let i = 0; i < 3; i++) world.handle(c, { t: 'talent', tree: 'mining', node: 'prospector' });
+  world.handle(c, { t: 'talent', tree: 'mining', node: 'steady_swing' });
+  assert.deepEqual(p.talents.mining, { prospector: 3, steady_swing: 1 });
+  assert.ok(p.stats.scoped.mining.miningSpeed > p.stats.all.miningSpeed);
+});
+
+test('the cave: walk into the entrance to travel', () => {
+  const { world, c, p, place } = game();
+  place(CAVE_ENTRANCE.x, CAVE_ENTRANCE.z + 1);
+  world.handle(c, { t: 'travel', to: 'cave' });
+  assert.ok(Math.hypot(p.state.x - CAVE_START.x, p.state.z - CAVE_START.z) < 0.1);
+});
+
+test('imbuing turns a plain staff into a fire staff for a gem and gold', () => {
+  const { world, c, p, at } = game();
   p.gold = 100;
-  place(TRADING_POST.x + 1, TRADING_POST.z);
-  world.handle(c, { t: 'buy', item: 'small_rucksack' });
-  world.handle(c, { t: 'equip', index: p.bag.findIndex((s) => s?.id === 'small_rucksack') });
-  assert.equal(p.bag.length, 20);
-  p.bag = p.bag.map(() => ({ id: 'stone', qty: 1 }));
-  world.handle(c, { t: 'unequip', slot: 'back' });
-  assert.equal(p.equip.back, 'small_rucksack');
-  p.bag = p.bag.map((s, i) => (i < 5 ? s : null));
-  world.handle(c, { t: 'unequip', slot: 'back' });
-  assert.equal(p.equip.back, undefined);
-  assert.equal(p.bag.length, 16);
-  assert.equal(countItem(p.bag, 'small_rucksack'), 1);
+  p.bag[0] = { id: 'birch_staff', qty: 1, r: 1, fx: [['magicDmg', 0.05]] };
+  p.bag[1] = { id: 'quartz', qty: 1 };
+  at('ragna');
+  world.handle(c, { t: 'imbue', index: 0, element: 'fire' });
+  assert.equal(p.bag[0]?.id, 'birch_fire_staff');
+  assert.equal(p.bag[0]?.r, 1);
+  assert.equal(p.gold, 75);
 });
 
-test('selling pays the item’s value; worthless items are refused', () => {
-  const { world, c, p, place, last } = m1();
-  place(TRADING_POST.x + 1, TRADING_POST.z);
-  p.bag[0] = { id: 'sapphire', qty: 3 };
-  p.bag[1] = { id: 'stone', qty: 4 };
-  world.handle(c, { t: 'sell', index: 0, qty: 2 });
-  assert.equal(p.gold, 15 + 2 * ITEMS.sapphire.sellValue);
-  assert.equal(p.bag[0]?.qty, 1);
-  world.handle(c, { t: 'sell', index: 1, qty: 4 });
-  assert.match(last('notice')!.text, /interested/);
+test('two-handers take the shield off', () => {
+  const { world, c, p } = game();
+  p.equip.offHand = { id: 'stone_kite_shield', qty: 1 };
+  p.bag[0] = { id: 'stone_longsword', qty: 1 };
+  world.handle(c, { t: 'equip', index: 0 });
+  assert.equal(p.equip.mainHand?.id, 'stone_longsword');
+  assert.equal(p.equip.offHand, undefined);
+  assert.equal(countItem(p.bag, 'stone_kite_shield'), 1);
 });
 
-test('bag, equipment, gold and XP are saved and loaded', async () => {
+test('everything is saved and loaded', async () => {
   const store = new MemoryStore();
   const world = new World({ build: 'test', store });
   const c = fakeClient();
   world.connect(c);
-  await world.handle(c, { t: 'hello', name: 'Saver', color: 0, proto: PROTOCOL_VERSION, build: defaultBuild(), token: 'dev:s1' });
-  const id = (c.inbox.find((m) => m.t === 'welcome') as any).id;
-  const p = world.inspect(id)!;
-  p.bag[3] = { id: 'iron_bar', qty: 7 }; p.equip.tool = 'iron_pickaxe'; p.gold = 42; p.xp.mining = 1234;
+  await world.handle(c, { t: 'hello', name: 'Saver', color: 0, proto: PROTOCOL_VERSION, build: { ...defaultBuild(), race: 'ogre' }, token: 'dev:s1' });
+  const p = world.inspect((c.inbox.find((m) => m.t === 'welcome') as any).id)!;
+  p.bag[3] = { id: 'iron_bar', qty: 7 }; p.equip.pickaxe = { id: 'iron_pickaxe', qty: 1, r: 2, fx: [['luck', 4]] }; p.gold = 42; p.xp.mining = xpForLevel(5);
+  p.talents = { mining: { prospector: 3 } }; p.quests = { mats_stone: { done: 'x' } }; p.storage[0] = { id: 'quartz', qty: 2 };
   world.disconnect(c);
   await new Promise((r) => setTimeout(r, 0));
   const c2 = fakeClient();
   world.connect(c2);
   await world.handle(c2, { t: 'hello', name: 'Saver', color: 0, proto: PROTOCOL_VERSION, build: defaultBuild(), token: 'dev:s1' });
-  const inv = c2.inbox.find((m) => m.t === 'inv') as Extract<ServerMsg, { t: 'inv' }>;
-  assert.equal(countItem(inv.bag, 'iron_bar'), 7);
-  assert.equal(inv.equip.tool, 'iron_pickaxe');
-  assert.equal(inv.gold, 42);
-  assert.equal((c2.inbox.find((m) => m.t === 'skills') as any).xp.mining, 1234);
+  const q = world.inspect((c2.inbox.find((m) => m.t === 'welcome') as any).id)!;
+  assert.equal(q.build.race, 'ogre');
+  assert.equal(countItem(q.bag, 'iron_bar'), 7);
+  assert.deepEqual(q.equip.pickaxe, { id: 'iron_pickaxe', qty: 1, r: 2, fx: [['luck', 4]] });
+  assert.equal(q.gold, 42);
+  assert.deepEqual(q.talents, { mining: { prospector: 3 } });
+  assert.equal(q.quests.mats_stone.done, 'x');
+  assert.equal(countItem(q.storage, 'quartz'), 2);
 });
 
-test('depleted veins come back after 45 min – 2 h, and nobody is told when', () => {
-  const { world, c, p, place, last, advance } = m1();
-  p.equip.tool = 'stone_pickaxe';
-  const vein = VEIN_BY_ID.get('camp-3')!;
-  place(vein.x + 1.5, vein.z);
-  for (let i = 0; i < 10 && !world.veins.get(vein.id)?.until; i++) { advance(3000); world.handle(c, { t: 'mine', node: vein.id }); }
-  assert.deepEqual(last('nodes')!.depleted, [[vein.id, 1]]);
-  advance(44 * 60 * 1000); world.step();
-  assert.deepEqual(last('nodes')!.depleted, [[vein.id, 1]]); // still the depletion message
-  advance(76 * 60 * 1000 + 1000); world.step();
-  assert.deepEqual(last('nodes')!.depleted, [[vein.id, 0]]);
-});
-
-test('the chosen face is shared with other players', () => {
-  const { world } = setup();
-  const c = fakeClient();
-  world.connect(c);
-  world.handle(c, { t: 'hello', name: 'Faces', color: 2, proto: PROTOCOL_VERSION, build: { ...defaultBuild(), face: 3 } });
-  const roster = c.inbox.find((m) => m.t === 'roster') as Extract<ServerMsg, { t: 'roster' }>;
-  assert.equal(roster.players[0].face, 3);
-  const bad = fakeClient();
-  world.connect(bad);
-  world.handle(bad, { t: 'hello', name: 'Bad', color: 2, proto: PROTOCOL_VERSION, build: { ...defaultBuild(), face: 9 } });
-  assert.equal(bad.inbox[0].t, 'reject');
-});
+void ITEMS;

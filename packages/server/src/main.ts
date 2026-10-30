@@ -29,6 +29,7 @@ const store: CharacterStore | undefined = SUPABASE_URL && SUPABASE_PUBLISHABLE_K
 /** Guests are allowed unless REQUIRE_LOGIN=true (recommended once everyone has an account). */
 const requireLogin = !!store && process.env.REQUIRE_LOGIN === 'true';
 const world = new World({ build: BUILD, log, store, requireLogin });
+void world.loadLeases().catch((e) => log('could not load inn leases', e));
 const statics = serveStatic(CLIENT_DIST);
 
 const server = createServer((req, res) => {

@@ -140,9 +140,9 @@ export function rollEffects(d: ItemDef, rarity: Rarity, rand: () => number): Eff
   const out: Effect[] = [];
   const n = Math.min(RARITY[rarity].effects, pool.length);
   const scale = (1 + 0.25 * ((d.tier ?? 1) - 1)) * RARITY[rarity].mult;
-  while (out.length < n) {
-    const e = pool[Math.floor(rand() * pool.length)];
-    if (out.some(([k]) => k === e.key)) continue;
+  for (let i = 0; i < n; i++) {
+    // Draw without replacement, so a poor random source can never loop.
+    const e = pool.splice(Math.min(pool.length - 1, Math.floor(rand() * pool.length)), 1)[0];
     const v = (e.min + rand() * (e.max - e.min)) * scale;
     out.push([e.key, e.flat ? Math.max(1, Math.round(v)) : Math.round(v * 1000) / 1000]);
   }

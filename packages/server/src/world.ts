@@ -1,53 +1,24 @@
 /**
- * The authoritative world. Owns every player's accepted position, bag, equipment, gold and skills,
- * the state of every ore vein, and crafting queues. It never touches sockets directly: each player
- * has a `send` function, so tests can drive the world without a network.
- *
- * Everything a client asks for (mine this vein, craft this, buy that) is a request; the server
- * checks distance, levels, tools, cooldowns and bag space, rolls any random drops itself, and
- * replies with the new state.
+ * The authoritative world. Owns every player's position, bag, gear, gold, skills, talents, quests
+ * and inn room; every node, mob and item on the ground. Clients only ever *ask*; the server checks
+ * distance, levels, tools, cooldowns and space, rolls every random thing, and replies with state.
+ * It never touches sockets: each player has a `send` function, so tests drive it without a network.
  */
 import {
-  CHUNK_SIZE, AOI_CHUNKS, MAX_CHAT_LEN, MAX_NAME_LEN, PLAYER_COLORS, PROTOCOL_VERSION, TICK_HZ,
-  ITEMS, RECIPE_BY_ID, START_GOLD, STATIONS, TRADING_POST, USE_RANGE, MINE_RANGE, VEIN_BY_ID, VEIN_TYPES, VEINS,
-  addItem, bagCapacity, faceOf, checkStep, countItem, derive, emptyBag, heightAt, levelFromXp, maxSpeed, r2, r3,
-  removeItem, resizeBag, roomFor, swingSeconds, validateBuild,
-  type Bag, type CharacterBuild, type ClientMsg, type Equipment, type PlayerState, type ServerMsg, type SkillId, type Slot,
+  AOI_CHUNKS, CAVE_ENTRANCE, CAVE_EXIT, CAVE_EXIT_OUT, CAVE_START, CHUNK_SIZE, IMBUE, INN, ITEMS, MAX_CHAT_LEN, MAX_NAME_LEN,
+  NPC_BY_ID, PLAYER_COLORS, PROTOCOL_VERSION, QUEST_BY_ID, RECIPE_BY_ID, START_GOLD, STATION_BY_ID, TICK_HZ, USE_RANGE,
+  addStack, burnChance, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
+  questAvailable, r2, r3, recipeAt, removeItem, resizeBag, respecCost, rollCraftRarity, rollEffects, rollsRarity,
+  validateBuild, xpMult, COMBAT_TREES, TALENT_TREE,
+  type Buff, type ClientMsg, type HoldSlot, type MobKind, type PlayerState, type ServerMsg, type SkillId, type Slot,
+  type Stack, type TreeId,
 } from '@kontor/shared';
+import { STORAGE_SLOTS, type CharacterStore, type StoredCharacter } from './persistence.js';
+import { cast, gather, reel, stepFishing, stopFishing } from './gather.js';
+import { attack, createMobs, mobState, stepMobs } from './combat.js';
+import type { Client, Ground, Lease, Mob, NodeState, ServerPlayer } from './types.js';
 
-import type { CharacterStore, StoredCharacter } from './persistence.js';
-
-export interface Client {
-  send(msg: ServerMsg): void;
-  close(reason: string): void;
-}
-
-interface CraftJob { recipe: string; total: number; done: number; nextAt: number }
-
-interface ServerPlayer {
-  state: PlayerState;
-  client: Client;
-  /** Last position the server accepted, and when. Every new step is checked against it. */
-  lastValid: { x: number; y: number; z: number; at: number };
-  lastSeq: number;
-  strikes: number;
-  lastChatAt: number;
-  actUntil: number;
-  build: CharacterBuild;
-  /** Fastest this character may move, from perks (e.g. Pack Mule −10%, Small Frame +10%). */
-  speedCap: number;
-  /** Account id when logged in; null for guests (nothing is saved). */
-  userId: string | null;
-  savedAt: number;
-  /** Bag, equipment, gold and skill XP — the things worth saving. */
-  bag: Bag;
-  equip: Equipment;
-  gold: number;
-  xp: Partial<Record<SkillId, number>>;
-  dirty: boolean;
-  lastMineAt: number;
-  job: CraftJob | null;
-}
+export type { Client } from './types.js';
 
 export interface WorldOptions {
   build: string;
@@ -61,61 +32,92 @@ export interface WorldOptions {
   random?: () => number;
 }
 
-type Joining = Pick<StoredCharacter, 'name' | 'color' | 'build' | 'pos'> & Partial<Pick<StoredCharacter, 'bag' | 'equip' | 'gold' | 'xp'>> & { userId: string | null };
+type Joining = Omit<StoredCharacter, 'userId'> & { userId: string | null };
+
+const RESPAWN = { x: 0, z: 3 };
+const GROUND_SECONDS = 300;
 
 let nextId = 1;
+let nextGround = 1;
 
 export class World {
   readonly players = new Map<string, ServerPlayer>();
-  /** Veins being mined or depleted: swings left, and when a depleted vein comes back. */
-  readonly veins = new Map<string, { left: number; until: number }>();
+  /** Veins and trees being used or depleted, by id. */
+  readonly nodes = new Map<string, NodeState>();
+  readonly mobs: Map<string, Mob>;
+  readonly ground = new Map<number, Ground>();
+  /** Inn rooms: who holds each (by user id or, for guests, player id) and until when. */
+  readonly rooms: ({ key: string; name: string; until: number } | null)[] = Array.from({ length: INN.rooms }, () => null);
   private pending = new Map<Client, true>();
+  private timers: { at: number; fn: () => void }[] = [];
   tick = 0;
-  private readonly now: () => number;
+  readonly now: () => number;
   private readonly log: (...a: unknown[]) => void;
-  private readonly rand: () => number;
+  private readonly random: () => number;
 
   constructor(private readonly opts: WorldOptions) {
     this.now = opts.now ?? Date.now;
     this.log = opts.log ?? (() => {});
-    this.rand = opts.random ?? Math.random;
+    this.random = opts.random ?? Math.random;
+    this.mobs = createMobs(this);
   }
 
-  /** A socket connected; it becomes a player after a valid hello. */
-  connect(client: Client): void {
-    this.pending.set(client, true);
+  rand(): number { return this.random(); }
+
+  /** Load who rents which inn room (offline players keep theirs). */
+  async loadLeases(): Promise<void> {
+    if (!this.opts.store) return;
+    for (const l of await this.opts.store.leases()) if (l.lease.until > this.now()) this.rooms[l.lease.room] = { key: l.userId, name: l.name, until: l.lease.until };
   }
+
+  connect(client: Client): void { this.pending.set(client, true); }
 
   disconnect(client: Client): void {
     this.pending.delete(client);
     for (const [id, p] of this.players) {
-      if (p.client === client) {
-        this.players.delete(id);
-        void this.save(p);
-        this.broadcast({ t: 'leave', id });
-        this.broadcast({ t: 'system', text: `${p.state.name} logged out` });
-        this.broadcastRoster();
-        this.log(`leave ${p.state.name} (${id}); online ${this.players.size}`);
-      }
+      if (p.client !== client) continue;
+      this.players.delete(id);
+      void this.save(p);
+      this.broadcast({ t: 'leave', id });
+      this.broadcast({ t: 'system', text: `${p.state.name} logged out` });
+      this.broadcastRoster();
+      this.log(`leave ${p.state.name} (${id}); online ${this.players.size}`);
     }
   }
 
-  /** Returns a promise only for hello with a store (login + database lookups); everything else is synchronous. */
+  /** Returns a promise only for hello with a store; everything else is synchronous. */
   handle(client: Client, msg: ClientMsg): void | Promise<void> {
     if (msg.t === 'ping') return client.send({ t: 'pong', at: msg.at });
     if (msg.t === 'hello') return this.hello(client, msg);
     const p = this.byClient(client);
-    if (!p) return; // inputs before hello are ignored
+    if (!p) return;
+    if (p.dead && msg.t !== 'respawn' && msg.t !== 'input' && msg.t !== 'chat') return;
     switch (msg.t) {
       case 'input': return this.input(p, msg);
       case 'chat': return this.chat(p, msg.text);
-      case 'mine': return this.mine(p, msg.node);
-      case 'craft': return this.craft(p, msg.recipe, msg.count);
+      case 'mine': return gather(this, p, 'mine', msg.node);
+      case 'chop': return gather(this, p, 'chop', msg.node);
+      case 'cast': return cast(this, p, msg.x, msg.z);
+      case 'reel': return reel(this, p, msg.ok);
+      case 'craft': return this.craft(p, msg.recipe, msg.count, msg.station);
       case 'cancelCraft': p.job = null; return this.sendJob(p);
       case 'equip': return this.equipFromBag(p, msg.index);
       case 'unequip': return this.unequip(p, msg.slot);
-      case 'buy': return this.buy(p, msg.item);
-      case 'sell': return this.sell(p, msg.index, msg.qty);
+      case 'hold': return this.hold(p, msg.slot);
+      case 'buy': return this.buy(p, msg.npc, msg.item);
+      case 'sell': return this.sell(p, msg.npc, msg.index, msg.qty);
+      case 'drop': return this.drop(p, msg.index, msg.qty);
+      case 'pickup': return this.pickup(p, msg.id);
+      case 'attack': return attack(this, p, msg.target, msg.special);
+      case 'eat': return this.eat(p, msg.index);
+      case 'talent': return this.learn(p, msg.tree, msg.node);
+      case 'respec': return this.respec(p, msg.tree);
+      case 'rent': return this.rent(p, msg.weeks);
+      case 'storage': return this.storageMove(p, msg.op, msg.index, msg.qty);
+      case 'quest': return this.quest(p, msg.quest, msg.op);
+      case 'imbue': return this.imbue(p, msg.index, msg.element);
+      case 'travel': return this.travel(p, msg.to);
+      case 'respawn': return this.respawn(p);
     }
   }
 
@@ -127,16 +129,19 @@ export class World {
   // ---------------------------------------------------------------- joining
 
   private hello(client: Client, msg: Extract<ClientMsg, { t: 'hello' }>): void | Promise<void> {
-    if (!this.pending.has(client)) return; // only one hello per connection
+    if (!this.pending.has(client)) return;
     const reject = (reason: string) => { client.send({ t: 'reject', reason }); client.close(reason.split(':')[0]); };
     if (msg.proto !== PROTOCOL_VERSION) return reject('outdated_client');
     this.pending.delete(client);
     const store = this.opts.store;
+    const fresh = (build: Extract<ClientMsg, { t: 'hello' }>['build'], userId: string | null): Joining => ({
+      userId, name: sanitizeName(msg.name), color: Math.abs(Math.floor(msg.color)) % PLAYER_COLORS.length, build, pos: null, gold: START_GOLD,
+      bag: emptyBag(computeStats(build, {}, {}, {}).bagSlots), equip: {}, xp: {}, talents: {}, respecs: 0, quests: {}, lease: null, storage: emptyBag(STORAGE_SLOTS),
+    });
     if (!store || (!msg.token && !this.opts.requireLogin)) {
-      // Guest: nothing is saved.
       const bad = validateBuild(msg.build);
       if (bad) return reject(`invalid_character:${bad}`);
-      this.join(client, { name: sanitizeName(msg.name), color: msg.color, build: msg.build, pos: null, userId: null }, false);
+      this.join(client, fresh(msg.build, null), false);
       return;
     }
     return (async () => {
@@ -145,57 +150,56 @@ export class World {
       let saved = await store.load(userId);
       const isNew = !saved;
       if (!saved) {
-        // First login: the character from the creator becomes the saved one.
         const bad = validateBuild(msg.build);
         if (bad) return reject(`invalid_character:${bad}`);
-        const build = msg.build;
-        saved = {
-          userId, name: sanitizeName(msg.name), color: Math.abs(Math.floor(msg.color)) % PLAYER_COLORS.length, build, pos: null,
-          gold: START_GOLD, bag: emptyBag(bagCapacity(derive(build).bagBonus, {})), equip: {}, xp: {},
-        };
+        saved = { ...fresh(msg.build, userId), userId };
         await store.create(saved);
       }
-      // Same account in a second tab or on another computer: the newest session wins.
       for (const p of this.players.values()) {
         if (p.userId === userId) { p.client.send({ t: 'system', text: 'You logged in somewhere else.' }); p.client.close('replaced'); this.disconnect(p.client); }
       }
-      this.join(client, { ...saved, userId }, !isNew);
+      this.join(client, saved, !isNew);
     })().catch((e) => { this.log('login failed', e); reject('server_error'); });
   }
 
   private join(client: Client, c: Joining, wasSaved: boolean): void {
-    const build = c.build;
     const id = `p${nextId++}`;
-    const name = c.name;
-    const color = Math.abs(Math.floor(c.color)) % PLAYER_COLORS.length;
-    let x: number, z: number, yaw: number;
-    if (c.pos && checkStep(c.pos, c.pos, 0.1).ok) {
-      x = c.pos.x; z = c.pos.z; yaw = c.pos.yaw; // back where you logged out
-    } else {
-      // Spawn in the camp clearing, spread out a little so players don't stack.
-      const a = Math.random() * Math.PI * 2, d = 2 + Math.random() * 4;
-      x = Math.cos(a) * d; z = Math.sin(a) * d; yaw = -a + Math.PI / 2;
-    }
-    const y = heightAt(x, z);
-    const equip = c.equip ?? {};
-    const cap = bagCapacity(derive(build).bagBonus, equip);
-    const bag = resizeBag(c.bag ?? [], cap) ?? (c.bag ?? emptyBag(cap)); // never lose items if rules changed
-    const state: PlayerState = { id, name, color, race: build.race, face: faceOf(build), x: r2(x), y: r2(y), z: r2(z), yaw: r3(yaw), pitch: 0, spd: 0, gear: gearOf(equip) };
     const now = this.now();
+    let x: number, z: number, yaw: number;
+    if (c.pos && checkStep(c.pos, c.pos, 0.1).ok) { x = c.pos.x; z = c.pos.z; yaw = c.pos.yaw; }
+    else { const a = this.rand() * Math.PI * 2, d = 2 + this.rand() * 4; x = Math.cos(a) * d; z = Math.sin(a) * d; yaw = -a + Math.PI / 2; }
+    const y = groundAt(x, z);
+    const stats = computeStats(c.build, c.equip, c.talents, c.xp);
+    const bag = resizeBag(c.bag, stats.bagSlots) ?? c.bag;
+    const state: PlayerState = { id, name: c.name, color: c.color, race: c.build.race, face: faceOf(c.build), x: r2(x), y: r2(y), z: r2(z), yaw: r3(yaw), pitch: 0, spd: 0 };
     const p: ServerPlayer = {
-      state, client, lastValid: { x, y, z, at: now }, lastSeq: -1, strikes: 0, lastChatAt: 0, actUntil: 0,
-      build, speedCap: maxSpeed(1, derive(build).speedBonus), userId: c.userId, savedAt: now,
-      bag, equip, gold: c.gold ?? START_GOLD, xp: c.xp ?? {}, dirty: false, lastMineAt: 0, job: null,
+      state, client, lastValid: { x, y, z, at: now }, lastSeq: -1, strikes: 0, lastChatAt: 0, actUntil: 0, act: undefined,
+      build: c.build, userId: c.userId, savedAt: now, dirty: false,
+      bag, equip: c.equip, gold: c.gold, xp: c.xp, talents: c.talents, respecs: c.respecs, quests: c.quests, lease: c.lease, storage: c.storage,
+      held: c.equip.mainHand ? 'mainHand' : c.equip.pickaxe ? 'pickaxe' : 'mainHand', stats, buffs: [], hp: stats.maxHp, lastHurtAt: 0, dead: false,
+      lastGatherAt: 0, job: null, nextAttackAt: 0, nextSpecialAt: 0, fishing: null,
     };
+    // A guest's or expired lease doesn't hold a room.
+    if (p.lease && p.lease.until > now && !this.rooms[p.lease.room]) this.rooms[p.lease.room] = { key: this.roomKey(p), name: p.state.name, until: p.lease.until };
+    this.refreshGear(p, false);
     this.players.set(id, p);
-    client.send({ t: 'welcome', id, build: this.opts.build, proto: PROTOCOL_VERSION, tickHz: TICK_HZ, you: state, character: { name, color, build }, saved: wasSaved });
+    client.send({ t: 'welcome', id, build: this.opts.build, proto: PROTOCOL_VERSION, tickHz: TICK_HZ, you: state, character: { name: c.name, color: c.color, build: c.build }, saved: wasSaved });
     this.sendInv(p);
     client.send({ t: 'skills', xp: p.xp });
-    client.send({ t: 'nodes', depleted: this.depletedList(now) });
-    if (!wasSaved && !p.equip.tool) client.send({ t: 'notice', kind: 'info', text: 'Welcome! Buy your first pickaxe at the trading post by the camp (press E there).' });
-    this.broadcast({ t: 'system', text: `${name} logged in` });
+    client.send({ t: 'talents', alloc: p.talents, respecs: p.respecs });
+    client.send({ t: 'quests', state: p.quests });
+    this.sendLease(p);
+    client.send({ t: 'rooms', taken: this.roomNames() });
+    this.sendHp(p);
+    const dep: [string, 0 | 1][] = [];
+    for (const [nid, st] of this.nodes) if (st.until > now) dep.push([nid, 1]);
+    client.send({ t: 'nodes', depleted: dep });
+    for (const [nid, st] of this.nodes) if (st.until <= now && st.left > 0 && st.left < st.total) client.send({ t: 'node', id: nid, left: st.left, total: st.total });
+    client.send({ t: 'ground', add: [...this.ground.values()].map(groundView) });
+    if (!wasSaved && !p.equip.pickaxe) client.send({ t: 'notice', kind: 'info', text: 'Welcome! Ingrid at the trading post sells your first pickaxe, hatchet and fishing rod.' });
+    this.broadcast({ t: 'system', text: `${c.name} logged in` });
     this.broadcastRoster();
-    this.log(`join ${name} (${id}); online ${this.players.size}`);
+    this.log(`join ${c.name} (${id}); online ${this.players.size}`);
   }
 
   private broadcastRoster(): void {
@@ -203,15 +207,129 @@ export class World {
     this.broadcast({ t: 'roster', players });
   }
 
+  // ---------------------------------------------------------------- helpers used by systems
+
+  notice(p: ServerPlayer, text: string, kind: 'error' | 'info' | 'rare' = 'info'): void { p.client.send({ t: 'notice', text, kind }); }
+
+  /** Put a stack in the bag; returns how many did not fit. */
+  give(p: ServerPlayer, st: Stack): number { p.dirty = true; return addStack(p.bag, st); }
+
+  /** Give if possible, otherwise drop at the player's feet (owned by them). */
+  giveOrDrop(p: ServerPlayer, st: Stack): void {
+    const left = this.give(p, { ...st });
+    if (left > 0) { this.spawnGround({ ...st, qty: left }, p.state.x, p.state.z, p.state.id, GROUND_SECONDS); this.notice(p, 'Bag full — dropped at your feet.', 'info'); }
+  }
+
+  /** Add XP (with multipliers); returns the XP actually given. Level-ups recompute stats. */
+  addXp(p: ServerPlayer, skill: SkillId, base: number): number {
+    const amount = Math.max(1, Math.round(base * xpMult(p.stats, skill)));
+    const before = levelOf(p.xp, skill);
+    p.xp[skill] = (p.xp[skill] ?? 0) + amount;
+    const after = levelOf(p.xp, skill);
+    p.client.send({ t: 'skills', xp: p.xp });
+    if (after > before) {
+      const name = skill === 'combat' ? 'Player level' : skill[0].toUpperCase() + skill.slice(1);
+      this.notice(p, `${name} ${after}! +${after - before} talent point${after - before > 1 ? 's' : ''} (T).`, 'info');
+      if (after % 5 === 0) this.broadcast({ t: 'notice', kind: 'rare', text: `${p.state.name} reached ${name} ${after}.` });
+      this.recompute(p);
+    }
+    p.dirty = true;
+    return amount;
+  }
+
+  /** Recompute stats after gear, talents, levels or buffs change. */
+  recompute(p: ServerPlayer): void {
+    const now = this.now();
+    p.buffs = p.buffs.filter((b) => b.until > now);
+    const before = p.stats.maxHp;
+    p.stats = computeStats(p.build, p.equip, p.talents, p.xp, p.buffs, now);
+    if (p.stats.maxHp > before) p.hp += p.stats.maxHp - before;
+    p.hp = Math.min(p.hp, p.stats.maxHp);
+    this.sendHp(p);
+  }
+
+  /** Visible gear changed (equip, held item). */
+  refreshGear(p: ServerPlayer, recompute = true): void {
+    if (!p.equip[p.held]) p.held = p.equip.mainHand ? 'mainHand' : (['pickaxe', 'hatchet', 'rod'] as HoldSlot[]).find((s) => p.equip[s]) ?? 'mainHand';
+    const e = p.equip;
+    p.state.gear = { h: e[p.held]?.id, s: e.shoulders?.id, b: e.back?.id, hd: e.head?.id, c: e.chest?.id, l: e.legs?.id, o: p.held === 'mainHand' ? e.offHand?.id : undefined };
+    if (recompute) this.recompute(p);
+  }
+
+  sendInv(p: ServerPlayer): void { p.client.send({ t: 'inv', bag: p.bag, equip: p.equip, gold: p.gold, held: p.held }); }
+  sendHp(p: ServerPlayer): void { p.state.hp = Math.ceil(p.hp); p.state.mhp = p.stats.maxHp; p.client.send({ t: 'hp', hp: Math.max(0, Math.ceil(p.hp * 10) / 10), max: p.stats.maxHp }); }
+  private sendLease(p: ServerPlayer): void { p.client.send({ t: 'lease', room: p.lease && p.lease.until > this.now() ? p.lease.room : null, until: p.lease?.until ?? null, storage: p.storage }); }
+  private sendJob(p: ServerPlayer): void {
+    const j = p.job;
+    p.client.send(j ? { t: 'job', recipe: j.recipe, done: j.done, total: j.total, seconds: Math.max(0, (j.nextAt - this.now()) / 1000) } : { t: 'job', recipe: null, done: 0, total: 0, seconds: 0 });
+  }
+
+  /** Run fn at a later server time (projectile flight). */
+  later(at: number, fn: () => void): void { this.timers.push({ at, fn }); }
+
+  broadcast(msg: ServerMsg): void { for (const p of this.players.values()) p.client.send(msg); }
+
+  /** Send to players whose area of interest includes this point. */
+  broadcastNear(pos: { x: number; z: number }, msg: ServerMsg): void {
+    const cx = chunkOf(pos.x), cz = chunkOf(pos.z);
+    for (const p of this.players.values()) {
+      if (Math.abs(chunkOf(p.state.x) - cx) <= AOI_CHUNKS + 1 && Math.abs(chunkOf(p.state.z) - cz) <= AOI_CHUNKS + 1) p.client.send(msg);
+    }
+  }
+
+  spawnGround(item: Stack, x: number, z: number, owner: string | undefined, seconds: number): void {
+    const now = this.now();
+    const g: Ground = { id: nextGround++, item, x: r2(x), y: r2(groundAt(x, z)), z: r2(z), owner, ownedFor: owner ? 60 : 0, expires: now + seconds * 1000, ownedUntil: owner ? now + 60_000 : 0 };
+    this.ground.set(g.id, g);
+    this.broadcast({ t: 'ground', add: [groundView(g)] });
+  }
+
+  kill(p: ServerPlayer, by: string): void {
+    p.hp = 0;
+    p.dead = true;
+    p.job = null;
+    stopFishing(this, p, 'cancel');
+    this.sendHp(p);
+    p.client.send({ t: 'dead', by });
+    this.broadcast({ t: 'system', text: `${p.state.name} was knocked out by ${by}.` });
+    for (const m of this.mobs.values()) if (m.target === p.state.id) { m.target = null; m.returning = true; }
+  }
+
+  private respawn(p: ServerPlayer): void {
+    if (!p.dead) return;
+    p.dead = false;
+    p.buffs = p.buffs.filter((b) => b.name !== 'Weakened');
+    p.buffs.push({ name: 'Weakened', stats: { allDmg: -0.2, moveSpeed: -0.2 }, until: this.now() + 120_000 });
+    this.recompute(p);
+    p.hp = Math.round(p.stats.maxHp * 0.6);
+    this.teleport(p, RESPAWN.x + (this.rand() - 0.5) * 3, RESPAWN.z + (this.rand() - 0.5) * 3);
+    p.client.send({ t: 'buffs', list: p.buffs });
+    this.sendHp(p);
+    this.notice(p, 'You come to at camp. Weakened for 2 minutes (−20% damage and speed).', 'info');
+  }
+
+  private teleport(p: ServerPlayer, x: number, z: number): void {
+    const y = groundAt(x, z);
+    Object.assign(p.state, { x: r2(x), y: r2(y), z: r2(z) });
+    p.lastValid = { x, y, z, at: this.now() };
+    stopFishing(this, p, 'cancel');
+    p.client.send({ t: 'correct', seq: p.lastSeq, x: r2(x), y: r2(y), z: r2(z), reason: 'teleport' });
+  }
+
+  private near(p: ServerPlayer, place: { x: number; z: number }, extra = 0): boolean {
+    return Math.hypot(p.state.x - place.x, p.state.z - place.z) <= USE_RANGE + extra;
+  }
+
   // ---------------------------------------------------------------- movement & chat
 
   private input(p: ServerPlayer, msg: Extract<ClientMsg, { t: 'input' }>): void {
-    if (msg.seq <= p.lastSeq) return; // stale or replayed packet
+    if (msg.seq <= p.lastSeq) return;
     p.lastSeq = msg.seq;
     const now = this.now();
+    if (p.dead) return;
     const dt = (now - p.lastValid.at) / 1000;
     const next = { x: msg.x, y: msg.y, z: msg.z };
-    const check = checkStep(p.lastValid, next, dt, p.speedCap);
+    const check = checkStep(p.lastValid, next, dt, p.stats.speedCap);
     if (!check.ok) {
       p.strikes++;
       const lv = p.lastValid;
@@ -228,271 +346,447 @@ export class World {
     s.yaw = r3(msg.yaw);
     s.pitch = r3(Math.max(-1.55, Math.min(1.55, msg.pitch)));
     s.spd = r2(s.spd * 0.4 + spd * 0.6);
-    if (msg.act === 'swing') p.actUntil = now + 450;
+    if (msg.act && msg.act !== 'fish') { p.act = msg.act; p.actUntil = now + 450; }
   }
 
   private chat(p: ServerPlayer, raw: string): void {
     const now = this.now();
-    if (now - p.lastChatAt < 700) return; // simple flood guard
+    if (now - p.lastChatAt < 700) return;
     const text = raw.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, MAX_CHAT_LEN);
     if (!text) return;
     p.lastChatAt = now;
     this.broadcast({ t: 'chat', from: p.state.id, name: p.state.name, text, at: now });
   }
 
-  // ---------------------------------------------------------------- mining
-
-  private mine(p: ServerPlayer, nodeId: string): void {
-    const vein = VEIN_BY_ID.get(nodeId);
-    if (!vein) return;
-    const type = VEIN_TYPES[vein.type];
-    const now = this.now();
-    const err = (text: string) => p.client.send({ t: 'notice', kind: 'error', text });
-    if (Math.hypot(p.state.x - vein.x, p.state.z - vein.z) > MINE_RANGE + vein.r + 0.5 || Math.abs(p.state.y - vein.y) > 3) return err('Too far away.');
-    const tool = p.equip.tool ? ITEMS[p.equip.tool] : null;
-    if (!tool?.toolPower) return err('You need a pickaxe. The trading post at camp sells one.');
-    if (tool.toolPower < type.power) return err(`You need a stronger pickaxe for ${type.name.toLowerCase()}s.`);
-    const mining = levelFromXp(p.xp.mining ?? 0);
-    if (mining < type.level) return err(`${type.name}s need Mining ${type.level} (you have ${mining}).`);
-    // Swing cooldown, with a little slack for network jitter.
-    const swing = swingSeconds(tool.swingSec ?? 2.6, mining, derive(p.build).miningSpeed) * 1000;
-    if (now - p.lastMineAt < swing * 0.8) return;
-    const st = this.veins.get(nodeId) ?? { left: 0, until: 0 };
-    if (st.until > now) return err('This vein is depleted.');
-    if (roomFor(p.bag, type.item) < 1) return err('Your bag is full.');
-    p.lastMineAt = now;
-    p.actUntil = now + 450;
-    if (st.left <= 0) st.left = type.swings[0] + Math.floor(this.rand() * (type.swings[1] - type.swings[0] + 1));
-    st.left--;
-    addItem(p.bag, type.item, 1);
-    this.addXp(p, 'mining', type.xp);
-    p.client.send({ t: 'gain', skill: 'mining', xp: type.xp, item: type.item, qty: 1 });
-    if (this.rand() < type.gem.chance && roomFor(p.bag, type.gem.item) > 0) {
-      addItem(p.bag, type.gem.item, 1);
-      p.client.send({ t: 'gain', item: type.gem.item, qty: 1, rare: true });
-      this.broadcast({ t: 'notice', kind: 'rare', text: `${p.state.name} found ${ITEMS[type.gem.item].name}!` });
-    }
-    if (st.left <= 0) {
-      // Shared depletion: empty for everyone until it respawns.
-      const [lo, hi] = type.respawnSec;
-      st.until = now + (lo + this.rand() * (hi - lo)) * 1000;
-      this.broadcast({ t: 'nodes', depleted: [[nodeId, 1]] });
-    }
-    this.veins.set(nodeId, st);
-    p.dirty = true;
-    this.sendInv(p);
-  }
-
-  private depletedList(now: number): [string, 0 | 1][] {
-    const out: [string, 0 | 1][] = [];
-    for (const [id, st] of this.veins) if (st.until > now) out.push([id, 1]);
-    return out;
-  }
-
-  private addXp(p: ServerPlayer, skill: SkillId, amount: number): void {
-    const before = levelFromXp(p.xp[skill] ?? 0);
-    p.xp[skill] = (p.xp[skill] ?? 0) + amount;
-    const after = levelFromXp(p.xp[skill]!);
-    p.client.send({ t: 'skills', xp: p.xp });
-    if (after > before) {
-      const name = skill[0].toUpperCase() + skill.slice(1);
-      p.client.send({ t: 'notice', kind: 'info', text: `${name} level ${after}!` });
-      if (after % 5 === 0) this.broadcast({ t: 'notice', kind: 'rare', text: `${p.state.name} reached ${name} ${after}.` });
-    }
-  }
-
   // ---------------------------------------------------------------- crafting
 
-  private near(p: ServerPlayer, place: { x: number; z: number }, extra = 0): boolean {
-    return Math.hypot(p.state.x - place.x, p.state.z - place.z) <= USE_RANGE + extra;
-  }
-
-  private craft(p: ServerPlayer, recipeId: string, count: number): void {
+  private craft(p: ServerPlayer, recipeId: string, count: number, stationId: string): void {
     const r = RECIPE_BY_ID.get(recipeId);
-    if (!r) return;
-    const err = (text: string) => p.client.send({ t: 'notice', kind: 'error', text });
-    if (!this.near(p, STATIONS[r.station])) return err(`Stand next to the ${STATIONS[r.station].name.toLowerCase()}.`);
-    const lvl = levelFromXp(p.xp.smithing ?? 0);
-    if (lvl < r.level) return err(`Needs Smithing ${r.level} (you have ${lvl}).`);
-    if (!r.inputs.every((i) => countItem(p.bag, i.item) >= i.qty)) return err('You don’t have the materials.');
-    p.job = { recipe: r.id, total: count, done: 0, nextAt: this.now() + r.seconds * 1000 };
+    const st = STATION_BY_ID.get(stationId);
+    if (!r || !st) return;
+    if (!recipeAt(r, st.kind)) return;
+    if (!this.near(p, st)) return this.notice(p, `Stand next to the ${st.name.toLowerCase()}.`, 'error');
+    const lvl = levelOf(p.xp, r.skill);
+    if (lvl < r.level) return this.notice(p, `Needs ${r.skill[0].toUpperCase()}${r.skill.slice(1)} ${r.level} (you have ${lvl}).`, 'error');
+    if (!r.inputs.every((i) => countItem(p.bag, i.item) >= i.qty)) return this.notice(p, 'You don’t have the materials.', 'error');
+    const speed = 1 + Math.max(0, (p.stats.scoped as any)[r.skill]?.craftSpeed ?? 0);
+    const seconds = r.seconds / speed;
+    p.job = { recipe: r.id, station: st.id, total: count, done: 0, nextAt: this.now() + seconds * 1000, seconds };
+    stopFishing(this, p, 'cancel');
     this.sendJob(p);
   }
 
-  /** Make the next item of a queued job, if it's due. */
   private stepCraft(p: ServerPlayer, now: number): void {
     const job = p.job;
     if (!job || now < job.nextAt) return;
     const r = RECIPE_BY_ID.get(job.recipe)!;
-    const stop = (text: string) => { p.job = null; this.sendJob(p); p.client.send({ t: 'notice', kind: 'info', text }); };
-    if (!this.near(p, STATIONS[r.station], 1.5)) return stop(`You walked away from the ${STATIONS[r.station].name.toLowerCase()}.`);
+    const st = STATION_BY_ID.get(job.station)!;
+    const stop = (text: string) => { p.job = null; this.sendJob(p); this.notice(p, text); };
+    if (!this.near(p, st, 1.5)) return stop(`You walked away from the ${st.name.toLowerCase()}.`);
     if (!r.inputs.every((i) => countItem(p.bag, i.item) >= i.qty)) return stop(`Out of materials after ${job.done}.`);
     const trial = p.bag.map((s) => (s ? { ...s } : null));
     for (const i of r.inputs) removeItem(trial, i.item, i.qty);
-    if (addItem(trial, r.output.item, r.output.qty) > 0) return stop('Your bag is full.');
+    const sc = (p.stats.scoped as any)[r.skill] ?? p.stats.all;
+    let out: Stack = { id: r.output.item, qty: r.output.qty };
+    if (r.burns && this.rand() < burnChance(levelOf(p.xp, 'cooking'), r.level, st.kind === 'stove', sc.burnChance)) out = { id: 'burnt_fish', qty: 1 };
+    else if (rollsRarity(r)) {
+      const rar = rollCraftRarity(sc.luck, () => this.rand());
+      if (rar) { out.r = rar; out.fx = rollEffects(ITEMS[out.id], rar, () => this.rand()); }
+    }
+    if (addStack(trial, out) > 0) return stop('Your bag is full.');
     p.bag = trial;
-    p.actUntil = now + 450;
-    this.addXp(p, 'smithing', r.xp);
-    p.client.send({ t: 'gain', skill: 'smithing', xp: r.xp, item: r.output.item, qty: r.output.qty });
+    p.act = 'swing'; p.actUntil = now + 450;
+    const xp = this.addXp(p, r.skill, out.id === 'burnt_fish' ? Math.ceil(r.xp / 4) : r.xp);
+    p.client.send({ t: 'gain', skill: r.skill, xp, item: out.id, qty: out.qty, r: out.r, rare: (out.r ?? 0) >= 2 });
+    if ((out.r ?? 0) >= 2) this.broadcast({ t: 'notice', kind: 'rare', text: `${p.state.name} crafted a ${['', '', 'rare', 'epic'][out.r!]} ${ITEMS[out.id].name}!` });
     job.done++;
     p.dirty = true;
     this.sendInv(p);
     if (job.done >= job.total) { p.job = null; this.sendJob(p); return; }
-    job.nextAt = now + r.seconds * 1000;
+    job.nextAt = now + job.seconds * 1000;
     this.sendJob(p);
   }
 
-  private sendJob(p: ServerPlayer): void {
-    const j = p.job;
-    p.client.send(j
-      ? { t: 'job', recipe: j.recipe, done: j.done, total: j.total, seconds: Math.max(0, (j.nextAt - this.now()) / 1000) }
-      : { t: 'job', recipe: null, done: 0, total: 0, seconds: 0 });
-  }
-
-  // ---------------------------------------------------------------- equipment & trading
-
-  private capacity(p: ServerPlayer, equip = p.equip): number {
-    return bagCapacity(derive(p.build).bagBonus, equip);
-  }
+  // ---------------------------------------------------------------- bag and gear
 
   private equipFromBag(p: ServerPlayer, index: number): void {
     const s = p.bag[index];
     if (!s) return;
     const def = ITEMS[s.id];
     if (!def?.slot) return;
-    const err = (text: string) => p.client.send({ t: 'notice', kind: 'error', text });
-    const nextEquip: Equipment = { ...p.equip, [def.slot]: s.id };
+    const err = (text: string) => this.notice(p, text, 'error');
     const bag = p.bag.map((x) => (x ? { ...x } : null));
-    bag[index] = p.equip[def.slot] ? { id: p.equip[def.slot]!, qty: 1 } : null; // swap with what was worn
-    const resized = resizeBag(bag, this.capacity(p, nextEquip));
+    const equip = { ...p.equip };
+    const back: Stack[] = [];
+    // Ammo stacks onto worn ammo of the same kind.
+    if (def.slot === 'ammo' && equip.ammo && equip.ammo.id === s.id) {
+      equip.ammo = { ...equip.ammo, qty: equip.ammo.qty + s.qty };
+      bag[index] = null;
+    } else {
+      if (equip[def.slot]) back.push(equip[def.slot]!);
+      equip[def.slot] = { ...s };
+      bag[index] = null;
+      // Two-handed weapons and shields don't mix.
+      if (def.slot === 'mainHand' && def.twoHanded && equip.offHand) { back.push(equip.offHand); delete equip.offHand; }
+      if (def.slot === 'offHand' && equip.mainHand && ITEMS[equip.mainHand.id]?.twoHanded) return err('You can’t use a shield with a two-handed weapon.');
+    }
+    for (const b of back) if (addStack(bag, b) > 0) return err('No room in your bag for what you’re taking off.');
+    const resized = resizeBag(bag, computeStats(p.build, equip, p.talents, p.xp).bagSlots);
     if (!resized) return err('Empty a few bag slots first — the smaller bag can’t hold everything.');
     p.bag = resized;
-    p.equip = nextEquip;
+    p.equip = equip;
+    if (def.slot === 'mainHand' || def.slot === 'pickaxe' || def.slot === 'hatchet' || def.slot === 'rod') p.held = def.slot as HoldSlot;
     this.afterEquip(p);
   }
 
   private unequip(p: ServerPlayer, slot: Slot): void {
-    const id = p.equip[slot];
-    if (!id) return;
-    const nextEquip: Equipment = { ...p.equip };
-    delete nextEquip[slot];
-    const resized = resizeBag(p.bag, this.capacity(p, nextEquip));
-    if (!resized || addItem(resized, id, 1) > 0) return p.client.send({ t: 'notice', kind: 'error', text: 'No room in your bag.' });
+    const st = p.equip[slot];
+    if (!st) return;
+    const equip = { ...p.equip };
+    delete equip[slot];
+    const resized = resizeBag(p.bag, computeStats(p.build, equip, p.talents, p.xp).bagSlots);
+    if (!resized || addStack(resized, { ...st }) > 0) return this.notice(p, 'No room in your bag.', 'error');
     p.bag = resized;
-    p.equip = nextEquip;
+    p.equip = equip;
     this.afterEquip(p);
   }
 
   private afterEquip(p: ServerPlayer): void {
-    p.state.gear = gearOf(p.equip);
+    p.dirty = true;
+    p.nextAttackAt = Math.max(p.nextAttackAt, this.now() + 400);
+    this.refreshGear(p);
+    this.sendInv(p);
+  }
+
+  private hold(p: ServerPlayer, slot: HoldSlot): void {
+    if (!p.equip[slot] && slot !== 'mainHand') return;
+    p.held = slot;
+    if (slot !== 'rod') stopFishing(this, p, 'cancel');
+    this.refreshGear(p, false);
+    this.sendInv(p);
+  }
+
+  private drop(p: ServerPlayer, index: number, qty: number): void {
+    const s = p.bag[index];
+    if (!s) return;
+    const n = Math.min(qty, s.qty);
+    const dropped: Stack = { ...s, qty: n };
+    s.qty -= n;
+    if (s.qty <= 0) p.bag[index] = null;
+    const a = this.rand() * 6.28;
+    this.spawnGround(dropped, p.state.x + Math.cos(a) * 0.7, p.state.z + Math.sin(a) * 0.7, undefined, GROUND_SECONDS);
     p.dirty = true;
     this.sendInv(p);
   }
 
-  private buy(p: ServerPlayer, itemId: string): void {
-    const def = ITEMS[itemId];
-    const err = (text: string) => p.client.send({ t: 'notice', kind: 'error', text });
-    if (!def?.buyPrice || !TRADING_POST.sells.includes(itemId)) return;
-    if (!this.near(p, TRADING_POST)) return err('Stand at the trading post to buy.');
-    if (p.gold < def.buyPrice) return err(`Not enough gold (${def.buyPrice} needed).`);
-    if (roomFor(p.bag, itemId) < 1) return err('Your bag is full.');
-    p.gold -= def.buyPrice;
-    addItem(p.bag, itemId, 1);
+  private pickup(p: ServerPlayer, id: number): void {
+    const g = this.ground.get(id);
+    if (!g) return;
+    const now = this.now();
+    if (Math.hypot(g.x - p.state.x, g.z - p.state.z) > 3 || Math.abs(g.y - p.state.y) > 3) return this.notice(p, 'Too far away.', 'error');
+    if (g.owner && g.owner !== p.state.id && now < g.ownedUntil) return this.notice(p, `That’s someone else’s loot for another ${Math.ceil((g.ownedUntil - now) / 1000)} s.`, 'error');
+    if (g.item.id === 'coins') {
+      p.gold += g.item.qty;
+      p.client.send({ t: 'gain', item: 'coins', qty: g.item.qty });
+    } else {
+      const left = this.give(p, { ...g.item });
+      if (left === g.item.qty) return this.notice(p, 'Your bag is full.', 'error');
+      p.client.send({ t: 'gain', item: g.item.id, qty: g.item.qty - left, r: g.item.r, rare: (g.item.r ?? 0) >= 2 });
+      if (left > 0) { g.item = { ...g.item, qty: left }; this.broadcast({ t: 'ground', remove: [g.id], add: [groundView(g)] }); this.sendInv(p); return; }
+    }
+    this.ground.delete(id);
+    this.broadcast({ t: 'ground', remove: [id] });
     p.dirty = true;
+    this.sendInv(p);
+  }
+
+  private eat(p: ServerPlayer, index: number): void {
+    const s = p.bag[index];
+    const food = s ? ITEMS[s.id]?.food : undefined;
+    if (!s || !food) return;
+    if (p.hp >= p.stats.maxHp && !food.buff) return this.notice(p, 'You’re not hungry.', 'info');
+    s.qty--;
+    if (s.qty <= 0) p.bag[index] = null;
+    p.hp = Math.min(p.stats.maxHp, p.hp + food.heal);
+    if (food.buff) {
+      // One food buff at a time; eating again replaces it.
+      p.buffs = p.buffs.filter((b) => !b.name.startsWith('Well fed'));
+      p.buffs.push({ name: food.buff.name, stats: food.buff.stats, until: this.now() + food.buff.sec * 1000 });
+      this.recompute(p);
+      p.client.send({ t: 'buffs', list: p.buffs });
+    }
+    p.client.send({ t: 'hit', to: p.state.id, dmg: food.heal, kind: 'heal' });
+    p.dirty = true;
+    this.sendHp(p);
+    this.sendInv(p);
+  }
+
+  // ---------------------------------------------------------------- shops and the imbuer
+
+  private npcNear(p: ServerPlayer, npcId: string) {
+    const n = NPC_BY_ID.get(npcId);
+    return n && this.near(p, n, 1) ? n : null;
+  }
+
+  private buy(p: ServerPlayer, npcId: string, itemId: string): void {
+    const n = this.npcNear(p, npcId);
+    const def = ITEMS[itemId];
+    if (!n || !n.sells?.includes(itemId) || !def?.buyPrice) return this.notice(p, 'Stand by the trader to buy.', 'error');
+    if (p.gold < def.buyPrice) return this.notice(p, `Not enough gold (${def.buyPrice} needed).`, 'error');
+    if (this.give(p, { id: itemId, qty: 1 }) > 0) return this.notice(p, 'Your bag is full.', 'error');
+    p.gold -= def.buyPrice;
     p.client.send({ t: 'gain', item: itemId, qty: 1 });
     this.sendInv(p);
   }
 
-  private sell(p: ServerPlayer, index: number, qty: number): void {
+  private sell(p: ServerPlayer, npcId: string, index: number, qty: number): void {
+    const n = this.npcNear(p, npcId);
     const s = p.bag[index];
+    if (!n || !n.roles.includes('shop')) return this.notice(p, 'Stand by the trader to sell.', 'error');
     if (!s) return;
     const def = ITEMS[s.id];
-    const err = (text: string) => p.client.send({ t: 'notice', kind: 'error', text });
-    if (!this.near(p, TRADING_POST)) return err('Stand at the trading post to sell.');
-    if (!def || def.sellValue <= 0) return err('The trader isn’t interested in that.');
-    const n = Math.min(qty, s.qty);
-    s.qty -= n;
+    if (!def || def.sellValue <= 0) return this.notice(p, 'The trader isn’t interested in that.', 'error');
+    const k = Math.min(qty, s.qty);
+    const each = Math.max(1, Math.round(def.sellValue * (1 + (s.r ?? 0) * 0.5) * (1 + p.stats.all.sell)));
+    s.qty -= k;
     if (s.qty <= 0) p.bag[index] = null;
-    p.gold += n * def.sellValue;
+    p.gold += k * each;
     p.dirty = true;
     this.sendInv(p);
   }
 
-  private sendInv(p: ServerPlayer): void {
-    p.client.send({ t: 'inv', bag: p.bag, equip: p.equip, gold: p.gold });
+  private imbue(p: ServerPlayer, index: number, element: 'fire' | 'frost'): void {
+    const n = [...NPC_BY_ID.values()].find((x) => x.roles.includes('imbuer') && this.near(p, x, 1));
+    if (!n) return this.notice(p, 'Bring your staff to Ragna the Imbuer in Bjørkvik.', 'error');
+    const s = p.bag[index];
+    const rule = s ? IMBUE[s.id] : undefined;
+    if (!s || !rule) return this.notice(p, 'Ragna can only imbue plain birch or pine staffs.', 'error');
+    if (countItem(p.bag, rule.gem) < 1) return this.notice(p, `You need a ${ITEMS[rule.gem].name}.`, 'error');
+    if (p.gold < rule.gold) return this.notice(p, `It costs ${rule.gold} gold.`, 'error');
+    removeItem(p.bag, rule.gem, 1);
+    p.gold -= rule.gold;
+    s.id = element === 'fire' ? rule.fire : rule.frost; // rarity and rolled effects carry over
+    p.client.send({ t: 'gain', item: s.id, qty: 1, r: s.r, rare: true });
+    this.notice(p, `Ragna hums, and your staff crackles with ${element}.`, 'info');
+    p.dirty = true;
+    this.sendInv(p);
+  }
+
+  // ---------------------------------------------------------------- talents
+
+  private learn(p: ServerPlayer, tree: TreeId, node: string): void {
+    if (!TALENT_TREE[tree]) return;
+    const why = canLearn(p.talents, p.xp, tree, node);
+    if (why) return this.notice(p, why, 'error');
+    (p.talents[tree] ??= {})[node] = (p.talents[tree]![node] ?? 0) + 1;
+    p.dirty = true;
+    this.recompute(p);
+    p.client.send({ t: 'talents', alloc: p.talents, respecs: p.respecs });
+  }
+
+  private respec(p: ServerPlayer, tree: TreeId): void {
+    if (!TALENT_TREE[tree] || !Object.keys(p.talents[tree] ?? {}).length) return;
+    const cost = respecCost(p.respecs);
+    if (p.gold < cost) return this.notice(p, `Resetting a tree costs ${cost} gold.`, 'error');
+    p.gold -= cost;
+    p.respecs++;
+    delete p.talents[tree];
+    p.dirty = true;
+    this.recompute(p);
+    this.sendInv(p);
+    p.client.send({ t: 'talents', alloc: p.talents, respecs: p.respecs });
+    this.notice(p, `${TALENT_TREE[tree].name} talents reset for ${cost} gold. Next reset: ${respecCost(p.respecs)} gold.`);
+  }
+
+  // ---------------------------------------------------------------- quests
+
+  private quest(p: ServerPlayer, id: string, op: 'accept' | 'turnin' | 'abandon'): void {
+    const q = QUEST_BY_ID.get(id);
+    if (!q) return;
+    const st = (p.quests[id] ??= {});
+    const now = this.now();
+    if (op === 'abandon') { st.active = undefined; st.progress = undefined; }
+    else {
+      if (!this.npcNear(p, q.npc)) return this.notice(p, `Talk to ${NPC_BY_ID.get(q.npc)?.name} for that.`, 'error');
+      if (op === 'accept') {
+        if (!questAvailable(q, p.quests, now)) return this.notice(p, 'Done for now — this one resets later.', 'error');
+        st.active = true; st.progress = 0;
+      } else {
+        if (!st.active) return;
+        if ('item' in q.need) {
+          if (!removeItem(p.bag, q.need.item, q.need.qty)) return this.notice(p, `You need ${q.need.qty} × ${ITEMS[q.need.item].name}.`, 'error');
+        } else if ((st.progress ?? 0) < q.need.qty) return this.notice(p, `${st.progress ?? 0} of ${q.need.qty} so far.`, 'error');
+        st.active = undefined; st.progress = undefined; st.done = periodKey(q.period, now);
+        p.gold += q.reward.gold;
+        const xp = this.addXp(p, q.reward.xp[0], q.reward.xp[1]);
+        p.client.send({ t: 'gain', skill: q.reward.xp[0], xp, item: 'coins', qty: q.reward.gold });
+        this.notice(p, `Quest complete: ${q.name}.`, 'info');
+        this.sendInv(p);
+      }
+    }
+    p.dirty = true;
+    p.client.send({ t: 'quests', state: p.quests });
+  }
+
+  questKill(p: ServerPlayer, kind: MobKind): void {
+    let changed = false;
+    for (const [id, st] of Object.entries(p.quests)) {
+      const q = QUEST_BY_ID.get(id);
+      if (!q || !st.active || !('kill' in q.need) || q.need.kill !== kind) continue;
+      st.progress = Math.min(q.need.qty, (st.progress ?? 0) + 1);
+      changed = true;
+    }
+    if (changed) { p.dirty = true; p.client.send({ t: 'quests', state: p.quests }); }
+  }
+
+  // ---------------------------------------------------------------- the inn
+
+  private roomKey(p: ServerPlayer): string { return p.userId ?? `guest:${p.state.id}`; }
+  private roomNames(): (string | null)[] { const now = this.now(); return this.rooms.map((r) => (r && r.until > now ? r.name : null)); }
+
+  /**
+   * Rent (or extend) a room. One home at a time: a new lease replaces the old one and your stored
+   * items go with you (they belong to the character, not the room). Up to 4 weeks paid ahead.
+   * Coming back after a lease ran out with items still in storage costs 20% extra (reclaim fee).
+   */
+  private rent(p: ServerPlayer, weeks: number): void {
+    const inn = [...NPC_BY_ID.values()].find((n) => n.roles.includes('inn'));
+    if (!inn || !this.near(p, inn, 1)) return this.notice(p, 'Talk to Hilde at Bjørkvik Lodge to rent a room.', 'error');
+    const now = this.now(), WEEK = 7 * 86400_000;
+    const key = this.roomKey(p);
+    let room = p.lease && p.lease.until > now && this.rooms[p.lease.room]?.key === key ? p.lease.room : -1;
+    const start = room >= 0 ? p.lease!.until : now;
+    const until = Math.min(start + weeks * WEEK, now + INN.maxWeeks * WEEK);
+    const paidWeeks = Math.round((until - start) / WEEK);
+    if (paidWeeks <= 0) return this.notice(p, `You can pay at most ${INN.maxWeeks} weeks ahead.`, 'error');
+    const reclaim = room < 0 && p.storage.some(Boolean) && p.lease ? 1.2 : 1;
+    const cost = Math.ceil(paidWeeks * INN.pricePerWeek * reclaim);
+    if (p.gold < cost) return this.notice(p, `That’s ${cost} gold.`, 'error');
+    if (room < 0) {
+      room = this.rooms.findIndex((r) => !r || r.until <= now);
+      if (room < 0) return this.notice(p, 'All eight rooms are taken. Try again when a lease runs out.', 'error');
+    }
+    p.gold -= cost;
+    p.lease = { room, until };
+    this.rooms[room] = { key, name: p.state.name, until };
+    p.dirty = true;
+    this.sendInv(p);
+    this.sendLease(p);
+    this.broadcast({ t: 'rooms', taken: this.roomNames() });
+    this.notice(p, `Room ${room + 1} is yours until ${new Date(until).toLocaleDateString('en-GB', { timeZone: 'Europe/Oslo', day: 'numeric', month: 'short' })}. Your chest is by its door.`);
+  }
+
+  private storageMove(p: ServerPlayer, op: 'put' | 'take', index: number, qty: number): void {
+    const now = this.now();
+    if (!p.lease || p.lease.until <= now) return this.notice(p, 'Rent a room at the lodge to use a storage chest.', 'error');
+    const inn = [...NPC_BY_ID.values()].find((n) => n.roles.includes('inn'))!;
+    if (!this.near(p, { x: INN.x, z: INN.z + INN.d / 2 }, INN.w / 2) && !this.near(p, inn, 1)) return this.notice(p, 'Your chest is at Bjørkvik Lodge.', 'error');
+    const [from, to] = op === 'put' ? [p.bag, p.storage] : [p.storage, p.bag];
+    const s = from[index];
+    if (!s) return;
+    const k = Math.min(qty, s.qty);
+    const left = addStack(to, { ...s, qty: k });
+    const moved = k - left;
+    if (moved <= 0) return this.notice(p, op === 'put' ? 'Your chest is full.' : 'Your bag is full.', 'error');
+    s.qty -= moved;
+    if (s.qty <= 0) from[index] = null;
+    p.dirty = true;
+    this.sendInv(p);
+    this.sendLease(p);
+  }
+
+  // ---------------------------------------------------------------- the cave
+
+  private travel(p: ServerPlayer, to: 'cave' | 'out'): void {
+    if (to === 'cave') {
+      if (Math.hypot(p.state.x - CAVE_ENTRANCE.x, p.state.z - CAVE_ENTRANCE.z) > CAVE_ENTRANCE.r + 3) return this.notice(p, 'Walk into the mine entrance.', 'error');
+      this.teleport(p, CAVE_START.x, CAVE_START.z);
+      this.notice(p, 'The Old Mine. It’s cold, and something is breathing down here.');
+    } else {
+      if (Math.hypot(p.state.x - CAVE_EXIT.x, p.state.z - CAVE_EXIT.z) > CAVE_EXIT.r + 3) return;
+      this.teleport(p, CAVE_EXIT_OUT.x, CAVE_EXIT_OUT.z);
+    }
+    p.job = null;
   }
 
   // ---------------------------------------------------------------- tick
 
-  /** Called TICK_HZ times a second. Crafting, vein respawns, and snapshots inside each area of interest. */
+  /** Called TICK_HZ times a second. */
   step(): void {
     this.tick++;
     const now = this.now();
+    const dt = 1 / TICK_HZ;
+    const due = this.timers.filter((t) => t.at <= now);
+    if (due.length) { this.timers = this.timers.filter((t) => t.at > now); for (const t of due) t.fn(); }
+    stepMobs(this, dt, now);
     const list = [...this.players.values()];
     for (const p of list) {
-      // Players who stopped sending input are idle, not moving.
       if (now - p.lastValid.at > 400) p.state.spd = r2(p.state.spd * 0.5);
       this.stepCraft(p, now);
-      p.state.act = now < p.actUntil ? 'swing' : undefined;
+      stepFishing(this, p, now);
+      if (p.buffs.some((b) => b.until <= now)) { this.recompute(p); p.client.send({ t: 'buffs', list: p.buffs }); }
+      // Out of combat for 8 s: regenerate (1 HP/s + regen stat per 10 s).
+      if (!p.dead && p.hp < p.stats.maxHp && now - p.lastHurtAt > 8000 && this.tick % TICK_HZ === 0) {
+        p.hp = Math.min(p.stats.maxHp, p.hp + 1 + p.stats.all.regen / 10 + p.stats.maxHp * 0.01);
+        this.sendHp(p);
+      }
+      p.state.act = now < p.actUntil ? p.act : undefined;
     }
+    // Nodes come back; ground items expire.
     const restored: [string, 0 | 1][] = [];
-    for (const [id, st] of this.veins) if (st.until && st.until <= now) { this.veins.delete(id); restored.push([id, 0]); }
+    for (const [id, st] of this.nodes) if (st.until && st.until <= now) { this.nodes.delete(id); restored.push([id, 0]); }
     if (restored.length) this.broadcast({ t: 'nodes', depleted: restored });
+    const gone: number[] = [];
+    for (const [id, g] of this.ground) if (g.expires <= now) { this.ground.delete(id); gone.push(id); }
+    if (gone.length) this.broadcast({ t: 'ground', remove: gone });
 
     for (const viewer of list) {
       const vcx = chunkOf(viewer.state.x), vcz = chunkOf(viewer.state.z);
-      const visible: PlayerState[] = [];
-      for (const other of list) {
-        if (other === viewer) continue;
-        if (Math.abs(chunkOf(other.state.x) - vcx) <= AOI_CHUNKS && Math.abs(chunkOf(other.state.z) - vcz) <= AOI_CHUNKS) {
-          visible.push(other.state);
-        }
-      }
-      viewer.client.send({ t: 'snap', tick: this.tick, at: now, players: visible });
+      const inAoi = (x: number, z: number) => Math.abs(chunkOf(x) - vcx) <= AOI_CHUNKS && Math.abs(chunkOf(z) - vcz) <= AOI_CHUNKS;
+      const players = list.filter((o) => o !== viewer && inAoi(o.state.x, o.state.z)).map((o) => o.state);
+      const mobs = [...this.mobs.values()].filter((m) => inAoi(m.x, m.z)).map((m) => mobState(m, now));
+      viewer.client.send({ t: 'snap', tick: this.tick, at: now, players, mobs });
     }
-  }
-
-  broadcast(msg: ServerMsg): void {
-    for (const p of this.players.values()) p.client.send(msg);
   }
 
   // ---------------------------------------------------------------- saving
 
-  /** Persist one player (logged-in players only). Errors are logged, never thrown. */
   async save(p: ServerPlayer): Promise<void> {
     if (!p.userId || !this.opts.store) return;
     p.savedAt = this.now();
     p.dirty = false;
     const s = p.state;
     try {
-      await this.opts.store.save(p.userId, { pos: { x: s.x, y: s.y, z: s.z, yaw: s.yaw }, bag: p.bag, equip: p.equip, gold: p.gold, xp: p.xp });
+      await this.opts.store.save(p.userId, {
+        pos: { x: s.x, y: s.y, z: s.z, yaw: s.yaw }, bag: p.bag, equip: p.equip, gold: p.gold, xp: p.xp,
+        talents: p.talents, respecs: p.respecs, quests: p.quests, lease: p.lease, storage: p.storage,
+      });
     } catch (e) { this.log('save failed', p.userId, e); }
   }
 
-  /** Save everyone who moved or changed since their last save. Called every 30 s and on shutdown. */
   async saveAll(): Promise<void> {
     await Promise.all([...this.players.values()].filter((p) => p.dirty || p.lastValid.at > p.savedAt).map((p) => this.save(p)));
   }
 
-  /** On shutdown: tell everyone so clients show "server restarting" instead of an error. */
   async shutdown(): Promise<void> {
     this.broadcast({ t: 'system', text: 'Server restarting — you will reconnect in a moment.' });
     await this.saveAll();
   }
 
-  /** Test helper: a player's server-side state by id. */
   inspect(id: string): ServerPlayer | undefined { return this.players.get(id); }
 }
 
-export const chunkOf = (v: number) => Math.floor(v / CHUNK_SIZE);
-
-function gearOf(e: Equipment): PlayerState['gear'] {
-  return { t: e.tool, m: e.mainHand, s: e.shoulders, b: e.back };
+function groundView(g: Ground) {
+  return { id: g.id, item: g.item, x: g.x, y: g.y, z: g.z, owner: g.owner, ownedFor: Math.max(0, Math.ceil((g.ownedUntil - Date.now()) / 1000)) };
 }
+
+export const chunkOf = (v: number) => Math.floor(v / CHUNK_SIZE);
 
 export function sanitizeName(raw: string): string {
   const s = raw.replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, MAX_NAME_LEN);
   return s || 'Adventurer';
 }
 
-export { VEINS };
+// Re-exported for tests.
+export type { Buff, Lease };
+export { COMBAT_TREES };
