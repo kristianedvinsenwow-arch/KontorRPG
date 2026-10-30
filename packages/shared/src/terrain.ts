@@ -41,6 +41,9 @@ function fbm(x: number, z: number, octaves = 4): number {
   return sum / norm; // 0..1
 }
 
+/** Bjørkvik, the first settlement: inn, campfire, workbench, a few villagers. */
+export const VILLAGE = { x: -28, z: 38, r: 15, h: 2.0 };
+
 /** Where the spike's lake sits (south-west of spawn). */
 export const LAKE = { x: -62, z: 58, r: 34, depth: 7 };
 
@@ -53,6 +56,10 @@ export function heightAt(x: number, z: number): number {
   // Flat clearing around spawn (future camp / waystone).
   const dSpawn = Math.hypot(x, z);
   h = h + (2.2 - h) * (1 - smooth(14, 30, dSpawn));
+
+  // Flat ground for Bjørkvik, the lakeside village.
+  const dVillage = Math.hypot(x - VILLAGE.x, z - VILLAGE.z);
+  h = h + (VILLAGE.h - h) * (1 - smooth(VILLAGE.r, VILLAGE.r + 12, dVillage));
 
   // Lake basin.
   const dLake = Math.hypot(x - LAKE.x, z - LAKE.z);

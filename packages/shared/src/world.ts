@@ -1,37 +1,43 @@
 /**
- * World content that client and server must agree on: ore veins, the camp's crafting stations and
- * the trading post, and the recipes made there. Veins are generated deterministically from the
- * terrain, so every client builds the same ones and the server can validate by id.
+ * World content client and server must agree on: ore veins, trees, crafting stations, NPCs and
+ * shops, the inn, and recipes. Everything is generated deterministically, so ids match everywhere
+ * and the server can validate requests by id.
  */
 import { CHUNK_SIZE, SPIKE_CHUNKS, WATER_LEVEL } from './constants.js';
-import { heightAt, mulberry32 } from './terrain.js';
+import { heightAt, mulberry32, VILLAGE, LAKE } from './terrain.js';
+import { CAVE, CAVE_ENTRANCE, caveFloor, caveRoomCentre } from './cave.js';
+import { ARMOUR_PIECES, ITEMS } from './items.js';
+import type { SkillId } from './skills.js';
 
-// ------------------------------------------------------------------ ore veins
+// ------------------------------------------------------------------ resource nodes
 
-export type VeinType = 'stone' | 'iron';
+export type VeinType = 'stone' | 'iron' | 'silver';
 
-export interface VeinTypeDef {
+export interface NodeTypeDef {
   name: string;
   item: string;
+  skill: 'mining' | 'woodcutting';
   level: number;
   power: number;
   xp: number;
-  /** A depleted vein comes back after a random time in this range (seconds). Players aren't told when. */
+  /** A depleted node comes back after a random time in this range (seconds). Nobody is told when. */
   respawnSec: [number, number];
-  swings: [number, number];
-  gem: { item: string; chance: number };
+  /** How many hits it takes to use it up. */
+  hits: [number, number];
+  gem?: { item: string; chance: number };
 }
 
-export const VEIN_TYPES: Record<VeinType, VeinTypeDef> = {
-  stone: { name: 'Stone vein', item: 'stone', level: 1, power: 1, xp: 8, respawnSec: [45 * 60, 120 * 60], swings: [4, 7], gem: { item: 'quartz', chance: 1 / 300 } },
-  iron: { name: 'Iron vein', item: 'iron_ore', level: 8, power: 1, xp: 20, respawnSec: [45 * 60, 120 * 60], swings: [3, 6], gem: { item: 'sapphire', chance: 1 / 250 } },
+export const VEIN_TYPES: Record<VeinType, NodeTypeDef> = {
+  stone: { name: 'Stone vein', item: 'stone', skill: 'mining', level: 1, power: 1, xp: 8, respawnSec: [45 * 60, 120 * 60], hits: [4, 7], gem: { item: 'quartz', chance: 1 / 150 } },
+  iron: { name: 'Iron vein', item: 'iron_ore', skill: 'mining', level: 8, power: 1, xp: 20, respawnSec: [45 * 60, 120 * 60], hits: [3, 6], gem: { item: 'sapphire', chance: 1 / 200 } },
+  silver: { name: 'Silver vein', item: 'silver_ore', skill: 'mining', level: 18, power: 2, xp: 45, respawnSec: [45 * 60, 120 * 60], hits: [3, 5], gem: { item: 'garnet', chance: 1 / 150 } },
 };
 
 export interface Vein { id: string; type: VeinType; x: number; y: number; z: number; r: number }
 
-/** How close you must stand to mine (metres, horizontal). */
+/** How close you must stand to mine or chop (metres, horizontal, from the node's edge). */
 export const MINE_RANGE = 3.4;
-/** How close you must stand to use a station or the trading post. */
+/** How close you must stand to use a station, NPC or door. */
 export const USE_RANGE = 4;
 
 function slopeY(x: number, z: number): number {
@@ -40,78 +46,234 @@ function slopeY(x: number, z: number): number {
   return (2 * e) / Math.hypot(dx, 2 * e, dz);
 }
 
+/** Places nothing should be built over (buildings, paths, the cave mouth). */
+export function keepClear(x: number, z: number): boolean {
+  return Math.hypot(x, z) < 18 || Math.hypot(x - VILLAGE.x, z - VILLAGE.z) < VILLAGE.r + 4 || Math.hypot(x - CAVE_ENTRANCE.x, z - CAVE_ENTRANCE.z) < 7;
+}
+
+/** Hotspots of several veins near the hills; a few lone veins elsewhere. */
+export const MINING_SPOTS = [
+  { name: 'Camp quarry', x: 26, z: -22 },
+  { name: 'Grey Ridge', x: 86, z: -14 },
+  { name: 'Hollow Hill', x: -84, z: -78 },
+  { name: 'North Scree', x: 30, z: 94 },
+];
+
 function generateVeins(): Vein[] {
   const out: Vein[] = [];
-  const far = (x: number, z: number) => out.every((v) => Math.hypot(v.x - x, v.z - z) > 3.5);
-  const add = (type: VeinType, x: number, z: number, id: string) => {
-    const y = heightAt(x, z);
-    if (y < WATER_LEVEL + 0.6 || slopeY(x, z) < 0.6 || !far(x, z)) return false;
-    out.push({ id, type, x, y, z, r: type === 'iron' ? 1.0 : 1.1 });
+  const far = (x: number, z: number) => out.every((v) => Math.hypot(v.x - x, v.z - z) > 3.6);
+  const add = (type: VeinType, x: number, z: number, id: string, cave = false) => {
+    const y = cave ? caveFloor(x, z) : heightAt(x, z);
+    if (!cave && (y < WATER_LEVEL + 0.6 || slopeY(x, z) < 0.6 || keepClear(x, z))) return false;
+    if (!far(x, z)) return false;
+    out.push({ id, type, x, y, z, r: type === 'stone' ? 1.1 : 1.0 });
     return true;
   };
-  // A starter cluster of stone veins a short walk north-east of camp.
+  // Starter quarry a short walk north-east of camp: stone only.
   const rngC = mulberry32(4242);
-  for (let i = 0, made = 0; i < 40 && made < 6; i++) {
+  for (let i = 0, made = 0; i < 60 && made < 5; i++) {
     const a = rngC() * Math.PI * 2, d = rngC() * 7;
     if (add('stone', 26 + Math.cos(a) * d, -22 + Math.sin(a) * d, `camp-${made}`)) made++;
   }
-  // Everywhere else: stone in the lowlands and hills, iron up on the higher ground.
+  // Hotspots: three stone and three iron each.
+  MINING_SPOTS.slice(1).forEach((h, hi) => {
+    const rng = mulberry32(7000 + hi);
+    let s = 0, f = 0;
+    for (let i = 0; i < 80 && (s < 3 || f < 3); i++) {
+      const a = rng() * Math.PI * 2, d = 2 + rng() * 9;
+      const type: VeinType = s < 3 ? 'stone' : 'iron';
+      if (add(type, h.x + Math.cos(a) * d, h.z + Math.sin(a) * d, `h${hi}-${s + f}`)) type === 'stone' ? s++ : f++;
+    }
+  });
+  // A few lone veins scattered around.
   const half = SPIKE_CHUNKS / 2;
   for (let cz = -half; cz < half; cz++) for (let cx = -half; cx < half; cx++) {
     const rng = mulberry32((cx * 92821) ^ (cz * 68917) ^ 0xa11);
-    let stone = 0, iron = 0;
-    for (let i = 0; i < 14; i++) {
-      const x = cx * CHUNK_SIZE + 4 + rng() * (CHUNK_SIZE - 8), z = cz * CHUNK_SIZE + 4 + rng() * (CHUNK_SIZE - 8);
-      if (Math.hypot(x, z) < 20) continue;
+    if (rng() > 0.45) continue;
+    for (let i = 0; i < 10; i++) {
+      const x = cx * CHUNK_SIZE + 6 + rng() * (CHUNK_SIZE - 12), z = cz * CHUNK_SIZE + 6 + rng() * (CHUNK_SIZE - 12);
+      if (keepClear(x, z)) continue;
       const h = heightAt(x, z);
-      if (h > 8.5 && h < 18 && iron < 2 && Math.hypot(x, z) > 40) { if (add('iron', x, z, `${cx},${cz},${i}`)) iron++; }
-      else if (h > 1.2 && h < 12 && stone < 2) { if (add('stone', x, z, `${cx},${cz},${i}`)) stone++; }
+      if (add(h > 8.5 && rng() < 0.5 ? 'iron' : 'stone', x, z, `s${cx},${cz}`)) break;
     }
   }
+  // The Old Mine: silver in the galleries, a little iron on the way.
+  const gal = caveRoomCentre(1), roost = caveRoomCentre(2);
+  [[gal.x - 5, gal.z - 3], [gal.x + 5, gal.z - 4], [gal.x - 2, gal.z + 5.5], [gal.x + 6, gal.z + 3], [roost.x + 3, roost.z - 3], [roost.x - 3.5, roost.z + 2]]
+    .forEach(([x, z], i) => add('silver', x, z, `c-s${i}`, true));
+  [[CAVE.x + 1.6, CAVE.z - 10], [CAVE.x + 7, CAVE.z - 26]].forEach(([x, z], i) => add('iron', x, z, `c-i${i}`, true));
   return out;
 }
 
 export const VEINS: Vein[] = generateVeins();
 export const VEIN_BY_ID: Map<string, Vein> = new Map(VEINS.map((v) => [v.id, v]));
 
-/** Seconds per pickaxe swing: tool speed, then −1% per Mining level, then speed bonuses (Hardrock, DEX). */
-export function swingSeconds(toolSwingSec: number, miningLevel: number, speedBonus: number): number {
-  return (toolSwingSec * (1 - 0.01 * (miningLevel - 1))) / (1 + Math.max(0, speedBonus));
+// ------------------------------------------------------------------ trees
+
+export type TreeKind = 'birch' | 'pine';
+export const TREE_TYPES: Record<TreeKind, NodeTypeDef> = {
+  birch: { name: 'Birch', item: 'birch_log', skill: 'woodcutting', level: 1, power: 1, xp: 10, respawnSec: [20 * 60, 60 * 60], hits: [3, 6] },
+  pine: { name: 'Pine', item: 'pine_log', skill: 'woodcutting', level: 10, power: 1, xp: 24, respawnSec: [20 * 60, 60 * 60], hits: [4, 8] },
+};
+
+export interface Tree { id: string; kind: TreeKind; x: number; y: number; z: number; s: number; ry: number; tint: number }
+
+/** Every tree in the world, per chunk. All of them can be felled. */
+export function treesInChunk(cx: number, cz: number): Tree[] {
+  const rng = mulberry32((cx * 73856093) ^ (cz * 19349663) ^ 0x7a3e);
+  const out: Tree[] = [];
+  for (let i = 0; i < 60; i++) {
+    const x = cx * CHUNK_SIZE + rng() * CHUNK_SIZE, z = cz * CHUNK_SIZE + rng() * CHUNK_SIZE;
+    const roll = rng(), ry = rng() * Math.PI * 2, s0 = rng(), tint = 0.85 + rng() * 0.3;
+    const y = heightAt(x, z);
+    const lim = (SPIKE_CHUNKS * CHUNK_SIZE) / 2 - 3;
+    if (Math.abs(x) > lim || Math.abs(z) > lim) continue;
+    if (y < WATER_LEVEL + 0.6 || y > 16 || keepClear(x, z) || slopeY(x, z) < 0.8) continue;
+    if (VEINS.some((v) => Math.abs(v.x - x) < 3.2 && Math.abs(v.z - z) < 3.2)) continue;
+    if (roll > 0.62) continue;
+    const near = Math.hypot(x, z) < 75;
+    const kind: TreeKind = (near ? roll < 0.38 : roll < 0.2) ? 'birch' : 'pine';
+    out.push({ id: `t${cx},${cz},${i}`, kind, x, y, z, s: kind === 'birch' ? 0.8 + s0 * 0.5 : 0.75 + s0 * 0.65, ry, tint });
+  }
+  return out;
 }
 
-// ------------------------------------------------------------------ camp: stations and the trading post
+const _trees = new Map<string, Tree>();
+{
+  const half = SPIKE_CHUNKS / 2;
+  for (let cz = -half; cz < half; cz++) for (let cx = -half; cx < half; cx++) for (const t of treesInChunk(cx, cz)) _trees.set(t.id, t);
+}
+export const TREE_BY_ID: Map<string, Tree> = _trees;
 
-export type StationId = 'furnace' | 'anvil';
-export interface Place { name: string; x: number; z: number; r: number }
+/** Seconds per swing: tool speed, −1% per level, then speed bonuses. */
+export function swingSeconds(toolSwingSec: number, level: number, speedBonus: number): number {
+  return (toolSwingSec * (1 - 0.01 * (level - 1))) / (1 + Math.max(0, speedBonus));
+}
 
-export const STATIONS: Record<StationId, Place> = {
-  furnace: { name: 'Furnace', x: 6.5, z: -8, r: 1.2 },
-  anvil: { name: 'Anvil', x: 10.5, z: -4, r: 0.8 },
+// ------------------------------------------------------------------ fishing
+
+/** Fish in the lake by level; weights are relative. Rare fish roll separately. */
+export const FISH_TABLE: { item: string; level: number; xp: number; weight: number; difficulty: number }[] = [
+  { item: 'raw_perch', level: 1, xp: 10, weight: 50, difficulty: 0.25 },
+  { item: 'raw_trout', level: 5, xp: 18, weight: 30, difficulty: 0.4 },
+  { item: 'raw_char', level: 12, xp: 30, weight: 20, difficulty: 0.55 },
+  { item: 'raw_pike', level: 18, xp: 45, weight: 14, difficulty: 0.7 },
+  { item: 'old_boot', level: 1, xp: 2, weight: 4, difficulty: 0.1 },
+];
+export const RARE_FISH = { item: 'golden_perch', chance: 1 / 120, xp: 80, difficulty: 0.8 };
+/** You must stand within this of the water's edge, and cast at most this far. */
+export const CAST_RANGE = 14;
+/** A point is fishable if it's lake water deep enough. */
+export const isFishable = (x: number, z: number) => heightAt(x, z) < WATER_LEVEL - 0.4 && Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r;
+
+// ------------------------------------------------------------------ places: stations, NPCs, inn
+
+export type StationKind = 'furnace' | 'anvil' | 'workbench' | 'campfire' | 'stove';
+export interface Station { id: string; kind: StationKind; name: string; x: number; z: number; r: number }
+const V = VILLAGE;
+
+export const STATIONS: Station[] = [
+  { id: 'camp_furnace', kind: 'furnace', name: 'Furnace', x: 6.5, z: -8, r: 1.2 },
+  { id: 'camp_anvil', kind: 'anvil', name: 'Anvil', x: 10.5, z: -4, r: 0.8 },
+  { id: 'camp_bench', kind: 'workbench', name: 'Workbench', x: 9, z: 4, r: 1 },
+  { id: 'camp_fire', kind: 'campfire', name: 'Campfire', x: -3, z: 6, r: 0.9 },
+  { id: 'village_fire', kind: 'campfire', name: 'Campfire', x: V.x + 1, z: V.z + 7, r: 0.9 },
+  { id: 'inn_stove', kind: 'stove', name: 'Inn stove', x: V.x + 9.5, z: V.z - 4, r: 0.8 },
+  { id: 'village_bench', kind: 'workbench', name: 'Workbench', x: V.x - 9, z: V.z + 3, r: 1 },
+];
+export const STATION_BY_ID: Map<string, Station> = new Map(STATIONS.map((s) => [s.id, s]));
+export const STATION_LABEL: Record<StationKind, string> = { furnace: 'Furnace', anvil: 'Anvil', workbench: 'Workbench', campfire: 'Campfire', stove: 'Stove' };
+
+export type NpcRole = 'shop' | 'quests' | 'inn' | 'imbuer';
+export interface Npc { id: string; name: string; title: string; x: number; z: number; face: number; color: number; race: 'human' | 'dwarf' | 'gnome' | 'ogre'; roles: NpcRole[]; sells?: string[] }
+
+export const NPCS: Npc[] = [
+  { id: 'ingrid', name: 'Ingrid', title: 'Trader', x: -9, z: -7, face: 2, color: 5, race: 'human', roles: ['shop'],
+    sells: ['stone_pickaxe', 'stone_hatchet', 'basic_rod', 'small_rucksack', 'leather_backpack', ...ARMOUR_PIECES.filter((p) => p.slot !== 'offHand').flatMap((p) => [`leather_${p.piece}`, `cloth_${p.piece}`])] },
+  { id: 'mats', name: 'Mats', title: 'Miner', x: 20, z: -15, face: 3, color: 3, race: 'dwarf', roles: ['quests'] },
+  { id: 'sigrid', name: 'Sigrid', title: 'Smith', x: 13, z: -6.5, face: 1, color: 0, race: 'human', roles: ['quests'] },
+  { id: 'hilde', name: 'Hilde', title: 'Innkeeper', x: V.x, z: V.z - 3.2, face: 0, color: 6, race: 'human', roles: ['inn', 'quests'] },
+  { id: 'frida', name: 'Frida', title: 'Fisher', x: V.x - 8, z: V.z + 7, face: 4, color: 1, race: 'human', roles: ['quests'] },
+  { id: 'halvard', name: 'Halvard', title: 'Hunter', x: V.x + 12, z: V.z + 2, face: 3, color: 2, race: 'ogre', roles: ['quests'] },
+  { id: 'tor', name: 'Tor', title: 'Woodcutter', x: V.x + 6, z: V.z + 11, face: 0, color: 7, race: 'human', roles: ['quests'] },
+  { id: 'ragna', name: 'Ragna', title: 'Imbuer', x: V.x - 4, z: V.z + 11, face: 4, color: 4, race: 'gnome', roles: ['imbuer'] },
+];
+export const NPC_BY_ID: Map<string, Npc> = new Map(NPCS.map((n) => [n.id, n]));
+
+/** The lodge: a long building with 8 numbered doors facing the village green. */
+export const INN = {
+  name: 'Bjørkvik Lodge', x: V.x, z: V.z - 7.5, w: 22, d: 6,
+  rooms: 8, pricePerWeek: 25, maxWeeks: 4,
+};
+/** Door n (0–7) of the lodge, on its front (+z) wall. */
+export const innDoor = (n: number) => ({ x: INN.x - INN.w / 2 + 1.6 + n * ((INN.w - 3.2) / 7), z: INN.z + INN.d / 2 + 0.2 });
+
+/** Staffs the Imbuer can enchant: staff → gem + gold. */
+export const IMBUE: Record<string, { gem: string; gold: number; fire: string; frost: string }> = {
+  birch_staff: { gem: 'quartz', gold: 25, fire: 'birch_fire_staff', frost: 'birch_frost_staff' },
+  pine_staff: { gem: 'sapphire', gold: 75, fire: 'pine_fire_staff', frost: 'pine_frost_staff' },
 };
 
-export const TRADING_POST: Place & { sells: string[] } = {
-  name: 'Mofjell Trading Post', x: -9, z: -7, r: 1.6,
-  sells: ['stone_pickaxe', 'small_rucksack', 'leather_backpack'],
-};
+// ------------------------------------------------------------------ recipes
 
 export interface Recipe {
   id: string;
-  station: StationId;
+  skill: SkillId;
+  station: StationKind | StationKind[];
   level: number;
   inputs: { item: string; qty: number }[];
   output: { item: string; qty: number };
   xp: number;
   seconds: number;
+  /** Cooking: can burn into burnt_fish. */
+  burns?: boolean;
 }
 
-/** Every recipe above stone needs a lower-tier part too (design doc §6, cross-tier recipes). */
-export const RECIPES: Recipe[] = [
-  { id: 'shaped_stone', station: 'anvil', level: 1, inputs: [{ item: 'stone', qty: 2 }], output: { item: 'shaped_stone', qty: 1 }, xp: 6, seconds: 1.6 },
-  { id: 'stone_sword', station: 'anvil', level: 2, inputs: [{ item: 'shaped_stone', qty: 4 }], output: { item: 'stone_sword', qty: 1 }, xp: 30, seconds: 3 },
-  { id: 'stone_pauldrons', station: 'anvil', level: 4, inputs: [{ item: 'shaped_stone', qty: 6 }], output: { item: 'stone_pauldrons', qty: 1 }, xp: 45, seconds: 3.5 },
-  { id: 'iron_bar', station: 'furnace', level: 8, inputs: [{ item: 'iron_ore', qty: 2 }], output: { item: 'iron_bar', qty: 1 }, xp: 15, seconds: 2 },
-  { id: 'iron_pickaxe', station: 'anvil', level: 10, inputs: [{ item: 'iron_bar', qty: 4 }, { item: 'shaped_stone', qty: 1 }], output: { item: 'iron_pickaxe', qty: 1 }, xp: 100, seconds: 4 },
-  { id: 'iron_sword', station: 'anvil', level: 10, inputs: [{ item: 'iron_bar', qty: 4 }, { item: 'shaped_stone', qty: 1 }], output: { item: 'iron_sword', qty: 1 }, xp: 100, seconds: 4 },
-  { id: 'iron_pauldrons', station: 'anvil', level: 12, inputs: [{ item: 'iron_bar', qty: 6 }, { item: 'shaped_stone', qty: 2 }], output: { item: 'iron_pauldrons', qty: 1 }, xp: 150, seconds: 5 },
+const R: Recipe[] = [
+  // smithing: materials
+  { id: 'shaped_stone', skill: 'smithing', station: 'anvil', level: 1, inputs: [{ item: 'stone', qty: 2 }], output: { item: 'shaped_stone', qty: 1 }, xp: 6, seconds: 1.6 },
+  { id: 'iron_bar', skill: 'smithing', station: 'furnace', level: 8, inputs: [{ item: 'iron_ore', qty: 2 }], output: { item: 'iron_bar', qty: 1 }, xp: 15, seconds: 2 },
+  { id: 'silver_bar', skill: 'smithing', station: 'furnace', level: 18, inputs: [{ item: 'silver_ore', qty: 2 }], output: { item: 'silver_bar', qty: 1 }, xp: 30, seconds: 2.4 },
+  { id: 'stone_arrowheads', skill: 'smithing', station: 'anvil', level: 1, inputs: [{ item: 'shaped_stone', qty: 1 }], output: { item: 'stone_arrowheads', qty: 15 }, xp: 8, seconds: 2 },
+  { id: 'iron_arrowheads', skill: 'smithing', station: 'anvil', level: 9, inputs: [{ item: 'iron_bar', qty: 1 }], output: { item: 'iron_arrowheads', qty: 15 }, xp: 18, seconds: 2 },
+  // smithing: weapons and tools
+  { id: 'stone_sword', skill: 'smithing', station: 'anvil', level: 2, inputs: [{ item: 'shaped_stone', qty: 4 }], output: { item: 'stone_sword', qty: 1 }, xp: 30, seconds: 3 },
+  { id: 'stone_longsword', skill: 'smithing', station: 'anvil', level: 5, inputs: [{ item: 'shaped_stone', qty: 8 }], output: { item: 'stone_longsword', qty: 1 }, xp: 60, seconds: 4 },
+  { id: 'stone_battleaxe', skill: 'smithing', station: 'anvil', level: 6, inputs: [{ item: 'shaped_stone', qty: 8 }, { item: 'birch_log', qty: 1 }], output: { item: 'stone_battleaxe', qty: 1 }, xp: 65, seconds: 4 },
+  { id: 'iron_pickaxe', skill: 'smithing', station: 'anvil', level: 10, inputs: [{ item: 'iron_bar', qty: 4 }, { item: 'shaped_stone', qty: 1 }], output: { item: 'iron_pickaxe', qty: 1 }, xp: 100, seconds: 4 },
+  { id: 'iron_hatchet', skill: 'smithing', station: 'anvil', level: 11, inputs: [{ item: 'iron_bar', qty: 4 }, { item: 'birch_log', qty: 1 }], output: { item: 'iron_hatchet', qty: 1 }, xp: 100, seconds: 4 },
+  { id: 'iron_sword', skill: 'smithing', station: 'anvil', level: 10, inputs: [{ item: 'iron_bar', qty: 4 }, { item: 'shaped_stone', qty: 1 }], output: { item: 'iron_sword', qty: 1 }, xp: 100, seconds: 4 },
+  { id: 'iron_longsword', skill: 'smithing', station: 'anvil', level: 14, inputs: [{ item: 'iron_bar', qty: 8 }, { item: 'shaped_stone', qty: 2 }], output: { item: 'iron_longsword', qty: 1 }, xp: 190, seconds: 5 },
+  { id: 'iron_battleaxe', skill: 'smithing', station: 'anvil', level: 15, inputs: [{ item: 'iron_bar', qty: 8 }, { item: 'pine_log', qty: 1 }], output: { item: 'iron_battleaxe', qty: 1 }, xp: 200, seconds: 5 },
+  // carpentry
+  { id: 'arrow_shaft', skill: 'carpentry', station: 'workbench', level: 1, inputs: [{ item: 'birch_log', qty: 1 }], output: { item: 'arrow_shaft', qty: 15 }, xp: 6, seconds: 2 },
+  { id: 'stone_arrow', skill: 'carpentry', station: 'workbench', level: 1, inputs: [{ item: 'arrow_shaft', qty: 15 }, { item: 'stone_arrowheads', qty: 15 }], output: { item: 'stone_arrow', qty: 15 }, xp: 10, seconds: 2.5 },
+  { id: 'iron_arrow', skill: 'carpentry', station: 'workbench', level: 10, inputs: [{ item: 'arrow_shaft', qty: 15 }, { item: 'iron_arrowheads', qty: 15 }], output: { item: 'iron_arrow', qty: 15 }, xp: 20, seconds: 2.5 },
+  { id: 'birch_shortbow', skill: 'carpentry', station: 'workbench', level: 2, inputs: [{ item: 'birch_log', qty: 3 }], output: { item: 'birch_shortbow', qty: 1 }, xp: 30, seconds: 3 },
+  { id: 'birch_staff', skill: 'carpentry', station: 'workbench', level: 4, inputs: [{ item: 'birch_log', qty: 4 }], output: { item: 'birch_staff', qty: 1 }, xp: 40, seconds: 3.5 },
+  { id: 'birch_rod', skill: 'carpentry', station: 'workbench', level: 6, inputs: [{ item: 'birch_log', qty: 3 }], output: { item: 'birch_rod', qty: 1 }, xp: 45, seconds: 3 },
+  { id: 'pine_longbow', skill: 'carpentry', station: 'workbench', level: 12, inputs: [{ item: 'pine_log', qty: 3 }, { item: 'birch_log', qty: 1 }], output: { item: 'pine_longbow', qty: 1 }, xp: 110, seconds: 4 },
+  { id: 'pine_staff', skill: 'carpentry', station: 'workbench', level: 14, inputs: [{ item: 'pine_log', qty: 4 }], output: { item: 'pine_staff', qty: 1 }, xp: 120, seconds: 4 },
+  { id: 'pine_rod', skill: 'carpentry', station: 'workbench', level: 16, inputs: [{ item: 'pine_log', qty: 3 }, { item: 'iron_bar', qty: 1 }], output: { item: 'pine_rod', qty: 1 }, xp: 130, seconds: 4 },
+  // cooking
+  { id: 'cooked_perch', skill: 'cooking', station: ['campfire', 'stove'], level: 1, inputs: [{ item: 'raw_perch', qty: 1 }], output: { item: 'cooked_perch', qty: 1 }, xp: 8, seconds: 2, burns: true },
+  { id: 'cooked_trout', skill: 'cooking', station: ['campfire', 'stove'], level: 5, inputs: [{ item: 'raw_trout', qty: 1 }], output: { item: 'cooked_trout', qty: 1 }, xp: 15, seconds: 2.2, burns: true },
+  { id: 'cooked_char', skill: 'cooking', station: ['campfire', 'stove'], level: 12, inputs: [{ item: 'raw_char', qty: 1 }], output: { item: 'cooked_char', qty: 1 }, xp: 25, seconds: 2.5, burns: true },
+  { id: 'cooked_pike', skill: 'cooking', station: ['campfire', 'stove'], level: 18, inputs: [{ item: 'raw_pike', qty: 1 }], output: { item: 'cooked_pike', qty: 1 }, xp: 38, seconds: 2.8, burns: true },
 ];
+// Metal armour: stone uses shaped stone, iron uses bars (+ a little shaped stone), counts from the design doc.
+for (const p of ARMOUR_PIECES) {
+  const lvl = { helm: 3, pauldrons: 4, breastplate: 7, greaves: 5, gauntlets: 2, boots: 2, kite_shield: 6 }[p.piece] ?? 3;
+  R.push({ id: `stone_${p.piece}`, skill: 'smithing', station: 'anvil', level: lvl, inputs: [{ item: 'shaped_stone', qty: p.bars }], output: { item: `stone_${p.piece}`, qty: 1 }, xp: p.bars * 8, seconds: 2 + p.bars * 0.2 });
+  R.push({ id: `iron_${p.piece}`, skill: 'smithing', station: 'anvil', level: lvl + 9, inputs: [{ item: 'iron_bar', qty: p.bars }, { item: 'shaped_stone', qty: Math.ceil(p.bars / 6) }], output: { item: `iron_${p.piece}`, qty: 1 }, xp: p.bars * 25, seconds: 3 + p.bars * 0.2 });
+}
+export const RECIPES: Recipe[] = R;
 export const RECIPE_BY_ID: Map<string, Recipe> = new Map(RECIPES.map((r) => [r.id, r]));
+export const recipeAt = (r: Recipe, k: StationKind) => (Array.isArray(r.station) ? r.station.includes(k) : r.station === k);
+/** Gear (weapons, armour, tools) rolls a rarity when crafted. */
+export const rollsRarity = (r: Recipe) => !!ITEMS[r.output.item]?.slot && ITEMS[r.output.item]?.kind !== 'ammo';
+
+/** Burn chance for cooking: 40% at the recipe's level, −3% per level above, min 2%; stoves −5%. */
+export function burnChance(level: number, recipeLevel: number, stove: boolean, bonus: number): number {
+  return Math.max(0.02, 0.4 - 0.03 * (level - recipeLevel) - (stove ? 0.05 : 0) - bonus);
+}

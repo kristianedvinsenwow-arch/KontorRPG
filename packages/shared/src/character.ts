@@ -4,7 +4,9 @@
  * and the server can reject a hand-edited character.
  */
 
-export type Race = 'human' | 'dwarf' | 'gnome';
+import type { Stats } from './stats.js';
+
+export type Race = 'human' | 'dwarf' | 'gnome' | 'ogre';
 export type AttrKey = 'str' | 'dex' | 'int' | 'sta';
 export type Attrs = Record<AttrKey, number>;
 
@@ -13,11 +15,23 @@ export type Attrs = Record<AttrKey, number>;
  * the body stockier, `head` enlarges the head, `scale` sizes the whole figure. `eye` is the
  * first-person camera height in metres; `height` is the approximate standing height.
  */
-export interface RaceDef { name: string; blurb: string; scale: number; legs: number; width: number; head: number; eye: number; height: number }
+export interface RaceDef {
+  name: string; blurb: string; scale: number; legs: number; width: number; head: number; eye: number; height: number;
+  /** How round the belly is (0 = flat). */
+  belly: number;
+  /** Racial bonuses: one for combat, one for skilling. */
+  bonus: Partial<Stats>;
+  perks: [string, string];
+}
 export const RACES: Record<Race, RaceDef> = {
-  human: { name: 'Human', blurb: 'The standard adventurer. About 1.85 m.', scale: 1, legs: 1, width: 1, head: 1, eye: 1.62, height: 1.85 },
-  dwarf: { name: 'Dwarf', blurb: 'Thick, broad and bearded on short legs. About 1.3 m.', scale: 0.88, legs: 0.55, width: 1.38, head: 1.1, eye: 1.16, height: 1.3 },
-  gnome: { name: 'Gnome', blurb: 'Even smaller: tiny legs and a big head. About 0.95 m.', scale: 0.66, legs: 0.48, width: 1.05, head: 1.22, eye: 0.84, height: 0.95 },
+  human: { name: 'Human', blurb: 'The standard adventurer. About 1.85 m.', scale: 1, legs: 1, width: 1, head: 1, eye: 1.62, height: 1.85, belly: 0,
+    bonus: { rangedDmg: 0.1, fishSpeed: 0.1, rareFish: 0.1 }, perks: ['+10% ranged damage', '+10% bite speed and rare catches'] },
+  dwarf: { name: 'Dwarf', blurb: 'Round, broad and bearded on short legs. About 1.3 m.', scale: 0.88, legs: 0.55, width: 1.38, head: 1.1, eye: 1.16, height: 1.3, belly: 1,
+    bonus: { armour: 2, physRed: 0.05, miningSpeed: 0.1 }, perks: ['+2 armour and 5% physical damage reduction', '+10% mining speed'] },
+  gnome: { name: 'Gnome', blurb: 'Even smaller: tiny legs and a big head. About 0.95 m.', scale: 0.66, legs: 0.48, width: 1.05, head: 1.22, eye: 0.84, height: 0.95, belly: 0,
+    bonus: { magicDmg: 0.1, luck: 5 }, perks: ['+10% magic damage', '+5 luck (gems, double yields, better crafts)'] },
+  ogre: { name: 'Ogre', blurb: 'Huge, fat and round. About 2.2 m.', scale: 1.16, legs: 0.95, width: 1.6, head: 0.95, eye: 1.98, height: 2.2, belly: 1.4,
+    bonus: { meleeDmg: 0.15, moveSpeed: -0.15, woodSpeed: 0.15 }, perks: ['+15% melee damage, but −15% move speed', '+15% woodcutting speed'] },
 };
 
 export const ATTRS: { key: AttrKey; short: string; name: string; desc: string }[] = [
@@ -147,7 +161,7 @@ export function freePoints(a: Attrs): number {
 export function validateBuild(b: unknown): string | null {
   if (!b || typeof b !== 'object') return 'missing';
   const c = b as CharacterBuild;
-  if (!(c.race in RACES)) return 'race';
+  if (!c.race || !Object.prototype.hasOwnProperty.call(RACES, c.race)) return 'race';
   if (!c.attrs || typeof c.attrs !== 'object') return 'attrs';
   for (const { key } of ATTRS) {
     const v = c.attrs[key];
@@ -192,11 +206,11 @@ export function derive(b: CharacterBuild): Derived {
     attrs: a,
     maxHp: Math.round((10 + 3 * a.sta) * (1 + (m.hpPct ?? 0))) + (m.hpFlat ?? 0),
     bagBonus: (a.str >= 8 ? 1 : 0) + (a.str >= 10 ? 1 : 0) + (m.bagSlots ?? 0),
-    miningSpeed: (m.miningSpeedPct ?? 0) + 0.01 * (a.dex - 5),
-    speedBonus: m.speedPct ?? 0,
-    meleePct: pct(0.02 * (a.str - 5) + dmg + (m.meleePct ?? 0)),
-    rangedPct: pct(0.02 * (a.dex - 5) + dmg),
-    spellPct: pct(0.02 * (a.int - 5) + dmg + (m.spellPct ?? 0)),
+    miningSpeed: (m.miningSpeedPct ?? 0) + 0.01 * (a.dex - 5) + (RACES[b.race]?.bonus.miningSpeed ?? 0),
+    speedBonus: (m.speedPct ?? 0) + (RACES[b.race]?.bonus.moveSpeed ?? 0),
+    meleePct: pct(0.02 * (a.str - 5) + dmg + (m.meleePct ?? 0) + (RACES[b.race]?.bonus.meleeDmg ?? 0)),
+    rangedPct: pct(0.02 * (a.dex - 5) + dmg + (RACES[b.race]?.bonus.rangedDmg ?? 0)),
+    spellPct: pct(0.02 * (a.int - 5) + dmg + (m.spellPct ?? 0) + (RACES[b.race]?.bonus.magicDmg ?? 0)),
     critPct: Math.round((5 + 0.5 * (a.dex - 5)) * (m.critMult ?? 1) * 10) / 10,
     mana: 10 + 5 * a.int,
     gatherPct: a.dex - 5,

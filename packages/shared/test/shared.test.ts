@@ -85,8 +85,9 @@ test('clock perks use the agreed hours', () => {
   assert.equal(clockXpMult('overtime', 9), 0.95);
 });
 
-test('three races, from tallest to smallest', () => {
-  assert.deepEqual(Object.keys(RACES), ['human', 'dwarf', 'gnome']);
+test('four races; ogres are the biggest, gnomes the smallest', () => {
+  assert.deepEqual(Object.keys(RACES), ['human', 'dwarf', 'gnome', 'ogre']);
+  assert.ok(RACES.ogre.height > RACES.human.height && RACES.ogre.belly > RACES.dwarf.belly);
   assert.ok(RACES.human.height > RACES.dwarf.height && RACES.dwarf.height > RACES.gnome.height);
   assert.ok(RACES.dwarf.width > RACES.human.width);
 });
@@ -95,7 +96,7 @@ import { EQUIP_SLOTS, BARS_PER_ITEM } from '../src/index.js';
 
 test('shoulders are an equipment slot and full armour costs 48 bars', () => {
   assert.ok(EQUIP_SLOTS.some((s) => s.slot === 'shoulders'));
-  const armour = ['helmet', 'shoulders', 'chestplate', 'legs', 'gloves', 'boots'].reduce((n, k) => n + BARS_PER_ITEM[k], 0);
+  const armour = ['helm', 'pauldrons', 'breastplate', 'greaves', 'gauntlets', 'boots'].reduce((n, k) => n + BARS_PER_ITEM[k], 0);
   assert.equal(armour, 48);
 });
 
@@ -131,16 +132,19 @@ test('XP curve: 10 × L² per level', () => {
 });
 
 test('veins exist, are on land, and include a starter cluster near camp', () => {
-  assert.ok(VEINS.filter((v) => v.type === 'stone').length >= 15);
-  assert.ok(VEINS.filter((v) => v.type === 'iron').length >= 6);
+  const over = VEINS.filter((v) => !v.id.startsWith('c-'));
+  assert.ok(over.filter((v) => v.type === 'stone').length >= 10);
+  assert.ok(over.filter((v) => v.type === 'iron').length >= 6);
+  assert.ok(over.length < 45, `fewer veins than M1 (${over.length})`);
   assert.ok(VEINS.some((v) => v.id.startsWith('camp-')));
-  for (const v of VEINS) assert.ok(v.y > 0.5);
-  for (const t of Object.values(VEIN_TYPES)) assert.ok(ITEMS[t.item] && ITEMS[t.gem.item]);
+  assert.ok(VEINS.some((v) => v.type === 'silver'));
+  for (const v of over) assert.ok(v.y > 0.5);
+  for (const t of Object.values(VEIN_TYPES)) assert.ok(ITEMS[t.item] && ITEMS[t.gem!.item]);
 });
 
 test('every recipe uses real items; iron recipes need a lower-tier part', () => {
   for (const r of RECIPES) for (const i of [...r.inputs, r.output]) assert.ok(ITEMS[i.item], i.item);
-  for (const r of RECIPES.filter((x) => x.id.startsWith('iron_') && x.id !== 'iron_bar')) assert.ok(r.inputs.some((i) => i.item === 'shaped_stone'));
+  for (const r of RECIPES.filter((x) => x.id.startsWith('iron_') && x.skill === 'smithing' && ITEMS[x.output.item].slot)) assert.ok(r.inputs.length >= 2, r.id);
 });
 
 test('swings get faster with level and Hardrock', () => {
@@ -152,4 +156,68 @@ test('stored bags are sanitised', () => {
   const bag = sanitiseBag([{ id: 'stone', qty: 3 }, { id: 'nope', qty: 1 }, { id: 'quartz', qty: -2 }], 16);
   assert.equal(countItem(bag, 'stone'), 3);
   assert.equal(bag.filter(Boolean).length, 1);
+});
+
+import { rollCraftRarity, rollEffects, itemStats, computeStats, defaultBuild, canLearn, sanitiseTalents, periodKey, caveClearance, CAVE_START, walkable, outgoing, incoming, emptyStats, TREE_BY_ID, isFishable, LAKE } from '../src/index.js';
+
+test('crafted gear rolls rarity; luck raises the odds; effects come from the right groups', () => {
+  let seed = 1;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const count = (luck: number) => { let n = 0; for (let i = 0; i < 20000; i++) if (rollCraftRarity(luck, rand) > 0) n++; return n / 20000; };
+  const base = count(0), lucky = count(25);
+  assert.ok(base > 0.1 && base < 0.17, String(base));
+  assert.ok(lucky > base * 1.3);
+  const fx = rollEffects(ITEMS.iron_pickaxe, 3, rand);
+  assert.equal(fx.length, 3);
+  for (const [k] of fx) assert.ok(['miningSpeed', 'gemChance', 'luck', 'doubleYield', 'skillXp'].includes(k), k);
+});
+
+test('metal armour slows a little and lets magic in; leather speeds up', () => {
+  const metal = itemStats({ id: 'iron_breastplate', qty: 1 });
+  assert.ok((metal.moveSpeed ?? 0) < 0 && (metal.magicTaken ?? 0) > 0 && (metal.armour ?? 0) > 0);
+  assert.ok((itemStats({ id: 'leather_breastplate', qty: 1 }).moveSpeed ?? 0) > 0);
+  assert.ok((itemStats({ id: 'cloth_breastplate', qty: 1 }).ward ?? 0) > (itemStats({ id: 'cloth_breastplate', qty: 1 }).armour ?? 0));
+});
+
+test('racial bonuses reach the stats; a pickaxe only helps mining', () => {
+  const ogre = computeStats({ ...defaultBuild(), race: 'ogre' }, {}, {}, {});
+  assert.ok(ogre.all.meleeDmg >= 0.15 && ogre.speedCap < computeStats(defaultBuild(), {}, {}, {}).speedCap);
+  const p = computeStats(defaultBuild(), { pickaxe: { id: 'iron_pickaxe', qty: 1, r: 1, fx: [['luck', 5]] } }, {}, {});
+  assert.equal(p.scoped.mining.luck - p.all.luck, 5);
+  assert.equal(p.scoped.fishing.luck, p.all.luck);
+});
+
+test('talents: root needs 3 ranks before its children, points come from levels', () => {
+  const xp = { mining: xpForLevel(6) };
+  const a: any = {};
+  assert.ok(canLearn(a, xp, 'mining', 'steady_swing'));
+  for (let i = 0; i < 3; i++) { assert.equal(canLearn(a, xp, 'mining', 'prospector'), null); (a.mining ??= {}).prospector = i + 1; }
+  assert.equal(canLearn(a, xp, 'mining', 'steady_swing'), null);
+  assert.deepEqual(sanitiseTalents({ mining: { prospector: 3, steady_swing: 3 } }, xp).mining, { prospector: 3, steady_swing: 2 });
+});
+
+test('quest periods reset daily, Mon/Thu and weekly (Oslo time)', () => {
+  const mon = Date.UTC(2026, 10, 2, 10), thu = Date.UTC(2026, 10, 5, 10);
+  assert.notEqual(periodKey('daily', mon), periodKey('daily', mon + 86400000));
+  assert.notEqual(periodKey('twice-weekly', mon), periodKey('twice-weekly', thu));
+  assert.equal(periodKey('weekly', mon), periodKey('weekly', thu));
+});
+
+test('the cave is walkable inside and walled outside', () => {
+  assert.ok(caveClearance(CAVE_START.x, CAVE_START.z) > 1);
+  assert.ok(walkable(CAVE_START.x, CAVE_START.z));
+  assert.ok(!walkable(CAVE_START.x + 40, CAVE_START.z));
+});
+
+test('combat maths: armour reduces, specials multiply', () => {
+  const s = emptyStats();
+  const hit = outgoing({ id: 'iron_sword', qty: 1 }, undefined, s, 1);
+  assert.ok(Math.abs(outgoing({ id: 'iron_sword', qty: 1 }, undefined, s, 2.5) - hit * 2.5) < 1e-9);
+  assert.ok(incoming(10, false, { ...s, armour: 20 }) === 5);
+  assert.ok(incoming(10, true, { ...s, magicTaken: 0.1 }) > 10);
+});
+
+test('trees exist and the lake is fishable', () => {
+  assert.ok(TREE_BY_ID.size > 100);
+  assert.ok(isFishable(LAKE.x, LAKE.z));
 });

@@ -1,16 +1,22 @@
-/** Skill levels (design doc §4): XP to the next level = 10 × L², cap 60. */
+/**
+ * Skills (design doc §4): XP to the next level = 10 × L², cap 60. Every level above 1 gives one
+ * talent point in that skill's tree. Combat has no skill of its own: kills give player-level XP, and
+ * each player level gives a talent point to spend in the melee, ranged, magic or defence trees.
+ */
 
-export type SkillId = 'mining' | 'smithing' | 'fishing' | 'cooking' | 'woodcutting' | 'fletching' | 'melee' | 'ranged' | 'magic' | 'defence';
+export type SkillId = 'mining' | 'smithing' | 'woodcutting' | 'carpentry' | 'fishing' | 'cooking' | 'combat';
 
 export const SKILLS: { id: SkillId; name: string; live: boolean; blurb: string }[] = [
-  { id: 'mining', name: 'Mining', live: true, blurb: 'Mine stone and iron veins. Higher levels swing faster and open new veins.' },
-  { id: 'smithing', name: 'Smithing', live: true, blurb: 'Shape stone, smelt bars at the furnace and smith gear at the anvil.' },
-  { id: 'fishing', name: 'Fishing', live: false, blurb: 'Coming soon: fish anywhere, frenzies and the docks.' },
-  { id: 'cooking', name: 'Cooking', live: false, blurb: 'Coming soon: food buffs.' },
-  { id: 'woodcutting', name: 'Woodcutting', live: false, blurb: 'Coming soon.' },
-  { id: 'melee', name: 'Melee', live: false, blurb: 'Coming soon: combat.' },
-  { id: 'defence', name: 'Defence', live: false, blurb: 'Coming soon: combat.' },
+  { id: 'combat', name: 'Player level', live: true, blurb: 'From fighting. Each level gives a talent point for melee, ranged, magic or defence, and +3 max HP.' },
+  { id: 'mining', name: 'Mining', live: true, blurb: 'Stone, iron and (in the cave) silver. Higher levels swing faster.' },
+  { id: 'smithing', name: 'Smithing', live: true, blurb: 'Furnace and anvil: bars, weapons, metal armour, arrowheads.' },
+  { id: 'woodcutting', name: 'Woodcutting', live: true, blurb: 'Fell birch and pine with a hatchet.' },
+  { id: 'carpentry', name: 'Carpentry', live: true, blurb: 'Workbench: bows, staffs, rods, arrow shafts and arrows.' },
+  { id: 'fishing', name: 'Fishing', live: true, blurb: 'Cast at the lake, then keep the fish in the bar.' },
+  { id: 'cooking', name: 'Cooking', live: true, blurb: 'Campfires and the inn stove. Food heals and gives buffs.' },
 ];
+
+export const COMING_SKILLS = ['Herbalism', 'Alchemy', 'Hunting', 'Leatherworking', 'Tailoring', 'Enchanting'];
 
 export const MAX_LEVEL = 60;
 
@@ -39,3 +45,6 @@ export function levelProgress(xp: number): number {
   const a = xpForLevel(l), b = xpForLevel(l + 1);
   return (xp - a) / (b - a);
 }
+
+export type SkillXp = Partial<Record<SkillId, number>>;
+export const levelOf = (xp: SkillXp, s: SkillId) => levelFromXp(xp[s] ?? 0);
