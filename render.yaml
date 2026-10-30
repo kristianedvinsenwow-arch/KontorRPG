@@ -4,8 +4,8 @@ services:
   - type: web
     name: kontor-rpg
     runtime: node
-    # Free is fine for the M0 spike (it sleeps after 15 idle minutes and has no persistent disk).
-    # Switch to "starter" and add the disk below once the game stores characters (M1).
+    # Characters are stored in Supabase, so no disk is needed. Free sleeps after 15 idle
+    # minutes; "starter" stays awake.
     plan: free
     buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
     startCommand: pnpm start
@@ -24,7 +24,3 @@ services:
         sync: false # Supabase dashboard → Project Settings → API Keys → Secret keys
       - key: REQUIRE_LOGIN
         value: "false" # set to "true" once everyone has logged in once
-    # disk:
-    #   name: kontor-data
-    #   mountPath: /var/data
-    #   sizeGB: 1
