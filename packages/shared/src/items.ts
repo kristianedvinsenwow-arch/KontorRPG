@@ -10,14 +10,14 @@ import { addStats, emptyStats, type StatKey, type Stats } from './stats.js';
 
 export type Slot =
   | 'head' | 'shoulders' | 'chest' | 'legs' | 'hands' | 'feet' | 'back'
-  | 'mainHand' | 'offHand' | 'ring' | 'neck' | 'pickaxe' | 'hatchet' | 'rod' | 'ammo';
+  | 'mainHand' | 'offHand' | 'ring' | 'neck' | 'pickaxe' | 'hatchet' | 'rod' | 'knife' | 'ammo';
 
 export type ItemKind = 'ore' | 'gem' | 'material' | 'bar' | 'log' | 'ammo' | 'fish' | 'food' | 'junk' | 'tool' | 'weapon' | 'armour' | 'bag' | 'coins' | 'trinket';
 export type WeaponClass = 'sword' | 'longsword' | 'battleaxe' | 'bow' | 'staff' | 'fireStaff' | 'frostStaff';
 export type ArmourType = 'cloth' | 'leather' | 'metal';
-export type ToolKind = 'pickaxe' | 'hatchet' | 'rod';
+export type ToolKind = 'pickaxe' | 'hatchet' | 'rod' | 'knife';
 /** Visual material for models and icons. */
-export type Look = 'stone' | 'iron' | 'silver' | 'birch' | 'pine' | 'leather' | 'cloth' | 'bone';
+export type Look = 'stone' | 'iron' | 'silver' | 'birch' | 'pine' | 'leather' | 'goblin' | 'cloth' | 'bone';
 
 export interface ItemDef {
   id: string;
@@ -52,6 +52,8 @@ export interface ItemDef {
   /** What the trading post pays (0 = it won't buy it). */
   sellValue: number;
   buyPrice?: number;
+  /** Skinning knives: chance a skinning attempt ruins the hide, and uses before it breaks. */
+  knife?: { fail: number; uses: number };
   /** Only ever exists at this rarity (boss uniques). */
   fixedRarity?: Rarity;
   blurb: string;
@@ -127,6 +129,7 @@ export function effectGroups(d: ItemDef): EffectGroup[] {
   if (d.tool === 'pickaxe') return ['mining'];
   if (d.tool === 'hatchet') return ['woodcutting'];
   if (d.tool === 'rod') return ['fishing'];
+  if (d.tool === 'knife') return []; // knives get better by rarity alone: more pelts, more uses
   if (d.armourType) return ['general', d.armourType];
   if (d.weapon) return ['general', d.weapon === 'bow' ? 'leather' : d.weapon.endsWith('taff') || d.weapon === 'staff' ? 'cloth' : 'metal'];
   if (d.slot) return ['general'];
@@ -190,7 +193,10 @@ add({ id: 'golden_perch', name: 'Golden perch', kind: 'fish', stack: 5, tier: 2,
 
 // mob drops
 add({ id: 'coins', name: 'Coins', kind: 'coins', stack: 9999, sellValue: 0, blurb: 'Picked up straight into your purse.' });
-add({ id: 'wolf_pelt', name: 'Wolf pelt', kind: 'material', stack: 10, sellValue: 3, blurb: 'Leatherworking will use these. For now, the trader buys them.' });
+add({ id: 'wolf_pelt', name: 'Wolf pelt', kind: 'material', stack: 10, look: 'leather', sellValue: 2, blurb: 'Skinned from a wolf. Tan it into leather at a tanning rack.' });
+add({ id: 'goblin_skin', name: 'Goblin skin', kind: 'material', stack: 10, look: 'goblin', sellValue: 3, blurb: 'Tough, greenish hide from goblins. Tan it at a tanning rack.' });
+add({ id: 'leather', name: 'Leather', kind: 'material', stack: 10, tier: 1, look: 'leather', sellValue: 3, blurb: 'Tanned wolf pelt. Leather armour is made from it.' });
+add({ id: 'goblin_leather', name: 'Goblin leather', kind: 'material', stack: 10, tier: 2, look: 'goblin', sellValue: 6, blurb: 'Tanned goblin skin. Tougher than wolf leather.' });
 add({ id: 'goblin_trinket', name: 'Goblin trinket', kind: 'junk', stack: 10, sellValue: 4, blurb: 'Shiny junk goblins hoard.' });
 add({ id: 'bat_wing', name: 'Bat wing', kind: 'material', stack: 10, sellValue: 1, blurb: 'Leathery. Alchemy will want these.' });
 add({ id: 'troll_tooth', name: 'Troll tooth', kind: 'trinket', stack: 5, sellValue: 25, blurb: 'Proof you beat Old Knut.' });
@@ -200,6 +206,8 @@ add({ id: 'stone_pickaxe', name: 'Stone pickaxe', kind: 'tool', stack: 1, tier: 
 add({ id: 'iron_pickaxe', name: 'Iron pickaxe', kind: 'tool', stack: 1, tier: 2, look: 'iron', slot: 'pickaxe', tool: 'pickaxe', power: 2, swingSec: 1.9, sellValue: 6, blurb: 'Faster, and strong enough for silver.' });
 add({ id: 'stone_hatchet', name: 'Stone hatchet', kind: 'tool', stack: 1, tier: 1, look: 'stone', slot: 'hatchet', tool: 'hatchet', power: 1, swingSec: 2.4, sellValue: 2, buyPrice: 10, blurb: 'Fells birch and pine.' });
 add({ id: 'iron_hatchet', name: 'Iron hatchet', kind: 'tool', stack: 1, tier: 2, look: 'iron', slot: 'hatchet', tool: 'hatchet', power: 2, swingSec: 1.8, sellValue: 6, blurb: 'Bites deeper; fells trees a third faster.' });
+add({ id: 'stone_skinning_knife', name: 'Stone skinning knife', kind: 'tool', stack: 1, tier: 1, look: 'stone', slot: 'knife', tool: 'knife', power: 1, knife: { fail: 0.35, uses: 12 }, sellValue: 1, blurb: 'Wear it to skin wolves and goblins (E on the body). Wears out; repair it at an anvil.' });
+add({ id: 'iron_skinning_knife', name: 'Iron skinning knife', kind: 'tool', stack: 1, tier: 2, look: 'iron', slot: 'knife', tool: 'knife', power: 2, knife: { fail: 0.18, uses: 25 }, sellValue: 4, blurb: 'Ruins far fewer hides and lasts twice as long. Repair it at an anvil.' });
 add({ id: 'basic_rod', name: 'Basic fishing rod', kind: 'tool', stack: 1, tier: 1, look: 'birch', slot: 'rod', tool: 'rod', power: 1, sellValue: 2, buyPrice: 10, blurb: 'A stick, a line and hope.' });
 add({ id: 'birch_rod', name: 'Birch fishing rod', kind: 'tool', stack: 1, tier: 1, look: 'birch', slot: 'rod', tool: 'rod', power: 1, mods: { fishEase: 0.1 }, sellValue: 4, blurb: 'Springy birch: a bigger catch bar.' });
 add({ id: 'pine_rod', name: 'Pine fishing rod', kind: 'tool', stack: 1, tier: 2, look: 'pine', slot: 'rod', tool: 'rod', power: 2, mods: { fishEase: 0.2, fishSpeed: 0.1 }, sellValue: 10, blurb: 'Lands the big ones: pike and char bite sooner.' });
@@ -242,7 +250,8 @@ for (const p of ARMOUR_PIECES) {
     blurb: p.slot === 'offHand' ? 'Metal shield: lets you block (see block chance). One-handed weapons only.' : 'Metal armour: strong vs physical damage, a little slower, and magic hurts a bit more.',
   }));
   if (p.slot === 'offHand') continue;
-  add({ id: `leather_${p.piece}`, name: `Leather ${p.name.leather}`, kind: 'armour', stack: 1, tier: 1, look: 'leather', slot: p.slot, armourType: 'leather', armour: p.leather[0], ward: p.leather[1], sellValue: 2, buyPrice: 8 + p.bars, blurb: 'Leather armour: medium protection vs both, and a little faster.' });
+  add({ id: `leather_${p.piece}`, name: `Leather ${p.name.leather}`, kind: 'armour', stack: 1, tier: 1, look: 'leather', slot: p.slot, armourType: 'leather', armour: p.leather[0], ward: p.leather[1], sellValue: 2, blurb: 'Leather armour: medium protection vs both, and a little faster. Made at a tanning rack.' });
+  add({ id: `goblinhide_${p.piece}`, name: `Goblinhide ${p.name.leather}`, kind: 'armour', stack: 1, tier: 2, look: 'goblin', slot: p.slot, armourType: 'leather', armour: Math.max(1, Math.round(p.leather[0] * 1.8)), ward: Math.round(p.leather[1] * 1.8), sellValue: 5, blurb: 'Goblin-skin leather armour: tier 2 leather. Made at a tanning rack.' });
   add({ id: `cloth_${p.piece}`, name: `Cloth ${p.name.cloth}`, kind: 'armour', stack: 1, tier: 1, look: 'cloth', slot: p.slot, armourType: 'cloth', armour: p.cloth[0], ward: p.cloth[1], sellValue: 2, buyPrice: 6 + p.bars, blurb: 'Cloth armour: strong vs magic, little vs blades.' });
 }
 
@@ -273,6 +282,7 @@ export const EQUIP_SLOTS: { slot: Slot; label: string }[] = [
   { slot: 'pickaxe', label: 'Pickaxe' },
   { slot: 'hatchet', label: 'Hatchet' },
   { slot: 'rod', label: 'Rod' },
+  { slot: 'knife', label: 'Skinning knife' },
 ];
 
 export const KIND_LABEL: Record<ItemKind, string> = {
@@ -283,11 +293,11 @@ export const KIND_LABEL: Record<ItemKind, string> = {
 // ------------------------------------------------------------------ stacks, bag and equipment
 
 /** A stack in the bag or a worn item. Gear with a rarity or effects is unique and never stacks. */
-export interface Stack { id: string; qty: number; r?: Rarity; fx?: Effect[] }
+export interface Stack { id: string; qty: number; r?: Rarity; fx?: Effect[]; /** Uses left (skinning knives). */ d?: number }
 export type Bag = (Stack | null)[];
 export type Equipment = Partial<Record<Slot, Stack>>;
 
-export const isPlain = (s: Stack) => !s.r && !s.fx?.length;
+export const isPlain = (s: Stack) => !s.r && !s.fx?.length && s.d == null;
 export const canMerge = (a: Stack, b: Stack) => a.id === b.id && isPlain(a) && isPlain(b);
 export const stackMax = (s: Stack) => (isPlain(s) ? ITEMS[s.id]?.stack ?? 1 : 1);
 
@@ -352,6 +362,7 @@ function cleanStack(s: any): Stack | null {
   if (!Number.isInteger(s.qty) || s.qty <= 0) return null;
   const out: Stack = { id: s.id, qty: s.qty };
   if (Number.isInteger(s.r) && s.r > 0 && s.r <= 4) out.r = s.r;
+  if (Number.isInteger(s.d) && s.d >= 0) out.d = s.d;
   if (Array.isArray(s.fx)) {
     const fx = s.fx.filter((e: any) => Array.isArray(e) && typeof e[0] === 'string' && Number.isFinite(e[1]) && EFFECTS.some((x) => x.key === e[0]));
     if (fx.length) out.fx = fx;
@@ -408,3 +419,10 @@ export function weaponHit(s: Stack | undefined): number {
 }
 
 export const BARS_PER_ITEM: Record<string, number> = Object.fromEntries(ARMOUR_PIECES.map((p) => [p.piece, p.bars]));
+
+/** Most uses a skinning knife can have (tier, then +30% per rarity step). */
+export const knifeUses = (s: Pick<Stack, 'id' | 'r'>) => Math.round((ITEMS[s.id]?.knife?.uses ?? 0) * (1 + 0.3 * (s.r ?? 0)));
+/** Extra pelt chance from a knife's rarity: +10% per step. */
+export const knifeBonus = (s: Pick<Stack, 'r'>) => 0.1 * (s.r ?? 0);
+/** What a repair at the anvil costs. */
+export const knifeRepair = (id: string) => (ITEMS[id]?.tier === 2 ? { item: 'iron_bar', qty: 1 } : { item: 'shaped_stone', qty: 1 });

@@ -35,7 +35,7 @@ export interface PlayerState {
 /** Status flags on mobs. */
 export const ST_BURN = 1, ST_SLOW = 2, ST_FROZEN = 4, ST_DEAD = 8, ST_ANGRY = 16;
 
-export interface MobState { id: string; k: MobKind; x: number; y: number; z: number; yaw: number; hp: number; mhp: number; st: number; bs?: number; act?: 'atk' | 'slam' }
+export interface MobState { id: string; k: MobKind; x: number; y: number; z: number; yaw: number; hp: number; mhp: number; st: number; bs?: number; act?: 'atk' | 'slam'; /** A body that can still be skinned. */ sk?: 1 }
 
 export interface GroundItem { id: number; item: Stack; x: number; y: number; z: number; owner?: string; ownedFor?: number }
 
@@ -70,7 +70,9 @@ export type ClientMsg =
   | { t: 'quest'; quest: string; op: 'accept' | 'turnin' | 'abandon' }
   | { t: 'imbue'; index: number; element: 'fire' | 'frost' }
   | { t: 'travel'; to: 'cave' | 'out' }
-  | { t: 'respawn' };
+  | { t: 'respawn' }
+  | { t: 'skin'; target: string }
+  | { t: 'repair'; slot: Slot };
 
 // ---------- server → client ----------
 export type ServerMsg =
@@ -160,6 +162,8 @@ export function decodeClient(raw: string): ClientMsg | null {
     case 'imbue': return num(m.index) && (m.element === 'fire' || m.element === 'frost') ? { t: 'imbue', index: int(m.index), element: m.element } : null;
     case 'travel': return m.to === 'cave' || m.to === 'out' ? { t: 'travel', to: m.to } : null;
     case 'respawn': return { t: 'respawn' };
+    case 'skin': return str(m.target) ? { t: 'skin', target: m.target } : null;
+    case 'repair': return str(m.slot, 12) ? { t: 'repair', slot: m.slot as Slot } : null;
     default: return null;
   }
 }

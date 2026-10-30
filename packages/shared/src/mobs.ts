@@ -30,6 +30,8 @@ export interface MobDef {
   drops: Drop[];
   respawnSec: [number, number];
   boss?: boolean;
+  /** Can be skinned (with a skinning knife) for this, during the 30 s the body stays. */
+  skin?: { item: string; qty: [number, number] };
   /** Boss slam: every n seconds, hit everyone within r metres for mult × damage. */
   slam?: { every: number; r: number; mult: number };
   scale: number;
@@ -38,13 +40,13 @@ export interface MobDef {
 
 export const MOBS: Record<MobKind, MobDef> = {
   wolf: { kind: 'wolf', name: 'Grey wolf', level: 2, hp: 30, dmg: 2.5, interval: 2, range: 1.8, speed: 4.2, aggro: 7, armour: 2, ward: 2, xp: 25, gold: [0, 2],
-    drops: [{ item: 'wolf_pelt', chance: 0.6, qty: [1, 1] }], respawnSec: [60, 120], scale: 1 },
+    drops: [], skin: { item: 'wolf_pelt', qty: [1, 2] }, respawnSec: [60, 120], scale: 1 },
   goblin: { kind: 'goblin', name: 'Goblin scout', level: 4, hp: 45, dmg: 4, interval: 1.8, range: 1.8, speed: 3.8, aggro: 10, armour: 4, ward: 2, xp: 40, gold: [1, 4],
-    drops: [{ item: 'goblin_trinket', chance: 0.4, qty: [1, 1] }, { item: 'stone_arrowheads', chance: 0.2, qty: [5, 10] }, { gear: 1, chance: 0.06 }], respawnSec: [90, 150], scale: 1 },
+    drops: [{ item: 'goblin_trinket', chance: 0.4, qty: [1, 1] }, { item: 'stone_arrowheads', chance: 0.2, qty: [5, 10] }, { gear: 1, chance: 0.06 }], skin: { item: 'goblin_skin', qty: [1, 1] }, respawnSec: [90, 150], scale: 1 },
   bat: { kind: 'bat', name: 'Cave bat', level: 5, hp: 25, dmg: 3, interval: 1.2, range: 1.6, speed: 5.5, aggro: 12, armour: 1, ward: 3, xp: 30, gold: [0, 1],
     drops: [{ item: 'bat_wing', chance: 0.5, qty: [1, 2] }], respawnSec: [60, 120], scale: 1, flying: true },
   cave_goblin: { kind: 'cave_goblin', name: 'Cave goblin', level: 7, hp: 70, dmg: 6, interval: 1.8, range: 1.9, speed: 3.8, aggro: 10, armour: 8, ward: 3, xp: 70, gold: [3, 8],
-    drops: [{ item: 'goblin_trinket', chance: 0.5, qty: [1, 2] }, { item: 'iron_arrowheads', chance: 0.15, qty: [5, 10] }, { gear: 1, chance: 0.06 }, { gear: 2, chance: 0.03 }], respawnSec: [120, 200], scale: 1.1 },
+    drops: [{ item: 'goblin_trinket', chance: 0.5, qty: [1, 2] }, { item: 'iron_arrowheads', chance: 0.15, qty: [5, 10] }, { gear: 1, chance: 0.06 }, { gear: 2, chance: 0.03 }], skin: { item: 'goblin_skin', qty: [1, 2] }, respawnSec: [120, 200], scale: 1.1 },
   cave_shaman: { kind: 'cave_shaman', name: 'Goblin shaman', level: 8, hp: 55, dmg: 7, interval: 2.2, range: 14, speed: 3.4, aggro: 14, armour: 3, ward: 8, magic: true, xp: 85, gold: [4, 10],
     drops: [{ item: 'quartz', chance: 0.1, qty: [1, 1] }, { gear: 2, chance: 0.05 }], respawnSec: [150, 240], scale: 1 },
   troll: { kind: 'troll', name: 'Old Knut', level: 12, hp: 600, dmg: 14, interval: 2.6, range: 3.6, speed: 3.2, aggro: 12, armour: 15, ward: 5, xp: 800, gold: [40, 80],
@@ -82,3 +84,5 @@ function spawns(): Spawn[] {
   return out;
 }
 export const SPAWNS: Spawn[] = spawns();
+/** How long a skinnable body stays after death. */
+export const CORPSE_SEC = 30;

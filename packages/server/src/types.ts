@@ -79,6 +79,9 @@ export interface Mob {
   act: 'atk' | 'slam' | undefined;
   actUntil: number;
   wander: { x: number; z: number; at: number };
+  /** Skinnable body: until when it stays, and whether someone has skinned it. */
+  corpseUntil: number;
+  skinned: boolean;
 }
 
 export interface Ground extends GroundItem { expires: number; ownedUntil: number }

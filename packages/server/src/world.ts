@@ -7,7 +7,7 @@
 import {
   AOI_CHUNKS, CAVE_ENTRANCE, CAVE_EXIT, CAVE_EXIT_OUT, CAVE_START, CHUNK_SIZE, IMBUE, INN, ITEMS, MAX_CHAT_LEN, MAX_NAME_LEN,
   NPC_BY_ID, PLAYER_COLORS, PROTOCOL_VERSION, QUEST_BY_ID, RECIPE_BY_ID, START_GOLD, STATION_BY_ID, TICK_HZ, USE_RANGE,
-  addStack, burnChance, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
+  addStack, burnChance, knifeRepair, knifeUses, STATIONS, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
   questAvailable, r2, r3, recipeAt, removeItem, resizeBag, respecCost, rollCraftRarity, rollEffects, rollsRarity,
   validateBuild, xpMult, COMBAT_TREES, TALENT_TREE,
   type Buff, type ClientMsg, type HoldSlot, type MobKind, type PlayerState, type ServerMsg, type SkillId, type Slot,
@@ -15,7 +15,7 @@ import {
 } from '@kontor/shared';
 import { STORAGE_SLOTS, type CharacterStore, type StoredCharacter } from './persistence.js';
 import { cast, gather, reel, stepFishing, stopFishing } from './gather.js';
-import { attack, createMobs, mobState, stepMobs } from './combat.js';
+import { attack, createMobs, mobState, skin, stepMobs } from './combat.js';
 import type { Client, Ground, Lease, Mob, NodeState, ServerPlayer } from './types.js';
 
 export type { Client } from './types.js';
@@ -118,6 +118,8 @@ export class World {
       case 'imbue': return this.imbue(p, msg.index, msg.element);
       case 'travel': return this.travel(p, msg.to);
       case 'respawn': return this.respawn(p);
+      case 'skin': return skin(this, p, msg.target);
+      case 'repair': return this.repair(p, msg.slot);
     }
   }
 
@@ -393,6 +395,7 @@ export class World {
       const rar = rollCraftRarity(sc.luck, () => this.rand());
       if (rar) { out.r = rar; out.fx = rollEffects(ITEMS[out.id], rar, () => this.rand()); }
     }
+    if (ITEMS[out.id]?.knife) out.d = knifeUses(out);
     if (addStack(trial, out) > 0) return stop('Your bag is full.');
     p.bag = trial;
     p.act = 'swing'; p.actUntil = now + 450;
@@ -455,6 +458,22 @@ export class World {
     p.dirty = true;
     p.nextAttackAt = Math.max(p.nextAttackAt, this.now() + 400);
     this.refreshGear(p);
+    this.sendInv(p);
+  }
+
+  /** Repair a worn knife (equipped or in the bag) at an anvil for a shaped stone or an iron bar. */
+  private repair(p: ServerPlayer, slot: Slot | string): void {
+    const anvil = STATIONS.find((s) => s.kind === 'anvil' && this.near(p, s));
+    if (!anvil) return this.notice(p, 'Repairs are done at an anvil.', 'error');
+    const st = slot === 'knife' ? p.equip.knife : p.bag[Number(slot)] ?? undefined;
+    if (!st || !ITEMS[st.id]?.knife) return;
+    const max = knifeUses(st);
+    if ((st.d ?? 0) >= max) return this.notice(p, 'It doesn’t need repairing.', 'info');
+    const cost = knifeRepair(st.id);
+    if (!removeItem(p.bag, cost.item, cost.qty)) return this.notice(p, `Repairing needs ${cost.qty} × ${ITEMS[cost.item].name}.`, 'error');
+    st.d = max;
+    this.notice(p, `Repaired: ${max} uses.`, 'info');
+    p.dirty = true;
     this.sendInv(p);
   }
 

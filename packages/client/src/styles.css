@@ -376,3 +376,7 @@ select:focus { border-color: var(--amber); outline: none; }
 .quest.active { border-color: var(--amber); }
 .inn .ract { flex-wrap: wrap; }
 .ware .btn { min-width: 64px; }
+#fishgame.grace { border-color: rgba(242, 162, 58, .7); }
+#fishgame .hint b { color: var(--amber); }
+.tag.mob.corpse .hpbar, .tag.mob.corpse .status { display: none; }
+.tag.mob.corpse small::after { content: ' · skin with E'; color: var(--amber); }

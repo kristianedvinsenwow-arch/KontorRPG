@@ -42,7 +42,7 @@ function fbm(x: number, z: number, octaves = 4): number {
 }
 
 /** Bjørkvik, the first settlement: inn, campfire, workbench, a few villagers. */
-export const VILLAGE = { x: -28, z: 38, r: 15, h: 2.0 };
+export const VILLAGE = { x: -28, z: 38, r: 21, h: 2.0 };
 
 /** Where the spike's lake sits (south-west of spawn). */
 export const LAKE = { x: -62, z: 58, r: 34, depth: 7 };
@@ -70,6 +70,26 @@ export function heightAt(x: number, z: number): number {
   h += smooth(WORLD_HALF - 40, WORLD_HALF - 4, edge) * 26;
 
   return h;
+}
+
+/**
+ * Bjørkvik's fishing pier: a timber deck running from the shore out into the lake, on the line from
+ * the village to the lake's middle. It's walkable ground (see groundAt) and you fish off its end.
+ */
+export const PIER = (() => {
+  const dx = LAKE.x - VILLAGE.x, dz = LAKE.z - VILLAGE.z, len = Math.hypot(dx, dz);
+  const ux = dx / len, uz = dz / len;
+  let d = 0;
+  while (d < len && heightAt(VILLAGE.x + ux * d, VILLAGE.z + uz * d) > 0.45) d += 0.5;
+  const sx = VILLAGE.x + ux * (d - 3), sz = VILLAGE.z + uz * (d - 3);
+  return { x: sx, z: sz, ux, uz, length: 17, width: 2.8, deck: 0.75 };
+})();
+
+/** Deck height if (x, z) is on the pier, else null. */
+export function pierDeck(x: number, z: number): number | null {
+  const px = x - PIER.x, pz = z - PIER.z;
+  const along = px * PIER.ux + pz * PIER.uz, side = -px * PIER.uz + pz * PIER.ux;
+  return along >= 0 && along <= PIER.length && Math.abs(side) <= PIER.width / 2 ? PIER.deck : null;
 }
 
 /** Small deterministic random generator for placing props per chunk. */

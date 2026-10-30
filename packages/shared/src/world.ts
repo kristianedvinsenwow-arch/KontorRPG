@@ -4,8 +4,8 @@
  * and the server can validate requests by id.
  */
 import { CHUNK_SIZE, SPIKE_CHUNKS, WATER_LEVEL } from './constants.js';
-import { heightAt, mulberry32, VILLAGE, LAKE } from './terrain.js';
-import { CAVE, CAVE_ENTRANCE, caveFloor, caveRoomCentre } from './cave.js';
+import { heightAt, mulberry32, VILLAGE, LAKE, PIER } from './terrain.js';
+import { CAVE, CAVE_ENTRANCE, caveClearance, caveFloor, caveRoomCentre } from './cave.js';
 import { ARMOUR_PIECES, ITEMS } from './items.js';
 import type { SkillId } from './skills.js';
 
@@ -48,7 +48,10 @@ function slopeY(x: number, z: number): number {
 
 /** Places nothing should be built over (buildings, paths, the cave mouth). */
 export function keepClear(x: number, z: number): boolean {
-  return Math.hypot(x, z) < 18 || Math.hypot(x - VILLAGE.x, z - VILLAGE.z) < VILLAGE.r + 4 || Math.hypot(x - CAVE_ENTRANCE.x, z - CAVE_ENTRANCE.z) < 7;
+  if (Math.hypot(x, z) < 18 || Math.hypot(x - VILLAGE.x, z - VILLAGE.z) < VILLAGE.r + 7 || Math.hypot(x - CAVE_ENTRANCE.x, z - CAVE_ENTRANCE.z) < 8) return true;
+  // The pier and a strip of shore around it.
+  const px = x - PIER.x, pz = z - PIER.z, along = px * PIER.ux + pz * PIER.uz, side = -px * PIER.uz + pz * PIER.ux;
+  return along > -4 && along < PIER.length + 2 && Math.abs(side) < 4;
 }
 
 /** Hotspots of several veins near the hills; a few lone veins elsewhere. */
@@ -64,7 +67,15 @@ function generateVeins(): Vein[] {
   const far = (x: number, z: number) => out.every((v) => Math.hypot(v.x - x, v.z - z) > 3.6);
   const add = (type: VeinType, x: number, z: number, id: string, cave = false) => {
     const y = cave ? caveFloor(x, z) : heightAt(x, z);
-    if (!cave && (y < WATER_LEVEL + 0.6 || slopeY(x, z) < 0.6 || keepClear(x, z))) return false;
+    const r = type === 'stone' ? 1.1 : 1.0;
+    // Inside the mine: well clear of the walls, so the rock isn't buried in one.
+    if (cave && caveClearance(x, z) < r + 0.8) return false;
+    if (!cave) {
+      if (y < WATER_LEVEL + 0.6 || slopeY(x, z) < 0.75 || keepClear(x, z)) return false;
+      // Fairly level footprint, so the rock sits on the ground instead of sinking into a slope.
+      const hs = [[1.3, 0], [-1.3, 0], [0, 1.3], [0, -1.3]].map(([dx, dz]) => heightAt(x + dx, z + dz));
+      if (Math.max(...hs) - Math.min(...hs) > 0.9) return false;
+    }
     if (!far(x, z)) return false;
     out.push({ id, type, x, y, z, r: type === 'stone' ? 1.1 : 1.0 });
     return true;
@@ -168,7 +179,7 @@ export const isFishable = (x: number, z: number) => heightAt(x, z) < WATER_LEVEL
 
 // ------------------------------------------------------------------ places: stations, NPCs, inn
 
-export type StationKind = 'furnace' | 'anvil' | 'workbench' | 'campfire' | 'stove';
+export type StationKind = 'furnace' | 'anvil' | 'workbench' | 'campfire' | 'stove' | 'tanning';
 export interface Station { id: string; kind: StationKind; name: string; x: number; z: number; r: number }
 const V = VILLAGE;
 
@@ -179,21 +190,23 @@ export const STATIONS: Station[] = [
   { id: 'camp_fire', kind: 'campfire', name: 'Campfire', x: -3, z: 6, r: 0.9 },
   { id: 'village_fire', kind: 'campfire', name: 'Campfire', x: V.x + 1, z: V.z + 7, r: 0.9 },
   { id: 'inn_stove', kind: 'stove', name: 'Inn stove', x: V.x + 9.5, z: V.z - 4, r: 0.8 },
-  { id: 'village_bench', kind: 'workbench', name: 'Workbench', x: V.x - 9, z: V.z + 3, r: 1 },
+  { id: 'village_bench', kind: 'workbench', name: 'Workbench', x: V.x - 8, z: V.z - 1, r: 1 },
+  { id: 'camp_tanning', kind: 'tanning', name: 'Tanning rack', x: -4, z: -12.5, r: 1 },
+  { id: 'village_tanning', kind: 'tanning', name: 'Tanning rack', x: V.x + 13, z: V.z + 6, r: 1 },
 ];
 export const STATION_BY_ID: Map<string, Station> = new Map(STATIONS.map((s) => [s.id, s]));
-export const STATION_LABEL: Record<StationKind, string> = { furnace: 'Furnace', anvil: 'Anvil', workbench: 'Workbench', campfire: 'Campfire', stove: 'Stove' };
+export const STATION_LABEL: Record<StationKind, string> = { furnace: 'Furnace', anvil: 'Anvil', workbench: 'Workbench', campfire: 'Campfire', stove: 'Stove', tanning: 'Tanning rack' };
 
 export type NpcRole = 'shop' | 'quests' | 'inn' | 'imbuer';
 export interface Npc { id: string; name: string; title: string; x: number; z: number; face: number; color: number; race: 'human' | 'dwarf' | 'gnome' | 'ogre'; roles: NpcRole[]; sells?: string[] }
 
 export const NPCS: Npc[] = [
   { id: 'ingrid', name: 'Ingrid', title: 'Trader', x: -9, z: -7, face: 2, color: 5, race: 'human', roles: ['shop'],
-    sells: ['stone_pickaxe', 'stone_hatchet', 'basic_rod', 'small_rucksack', 'leather_backpack', ...ARMOUR_PIECES.filter((p) => p.slot !== 'offHand').flatMap((p) => [`leather_${p.piece}`, `cloth_${p.piece}`])] },
+    sells: ['stone_pickaxe', 'stone_hatchet', 'basic_rod', 'small_rucksack', 'leather_backpack', ...ARMOUR_PIECES.filter((p) => p.slot !== 'offHand').map((p) => `cloth_${p.piece}`)] },
   { id: 'mats', name: 'Mats', title: 'Miner', x: 20, z: -15, face: 3, color: 3, race: 'dwarf', roles: ['quests'] },
   { id: 'sigrid', name: 'Sigrid', title: 'Smith', x: 13, z: -6.5, face: 1, color: 0, race: 'human', roles: ['quests'] },
   { id: 'hilde', name: 'Hilde', title: 'Innkeeper', x: V.x, z: V.z - 3.2, face: 0, color: 6, race: 'human', roles: ['inn', 'quests'] },
-  { id: 'frida', name: 'Frida', title: 'Fisher', x: V.x - 8, z: V.z + 7, face: 4, color: 1, race: 'human', roles: ['quests'] },
+  { id: 'frida', name: 'Frida', title: 'Fisher', x: PIER.x - PIER.uz * 2.4 - PIER.ux * 1.5, z: PIER.z + PIER.ux * 2.4 - PIER.uz * 1.5, face: 4, color: 1, race: 'human', roles: ['quests'] },
   { id: 'halvard', name: 'Halvard', title: 'Hunter', x: V.x + 12, z: V.z + 2, face: 3, color: 2, race: 'ogre', roles: ['quests'] },
   { id: 'tor', name: 'Tor', title: 'Woodcutter', x: V.x + 6, z: V.z + 11, face: 0, color: 7, race: 'human', roles: ['quests'] },
   { id: 'ragna', name: 'Ragna', title: 'Imbuer', x: V.x - 4, z: V.z + 11, face: 4, color: 4, race: 'gnome', roles: ['imbuer'] },
@@ -245,6 +258,11 @@ const R: Recipe[] = [
   { id: 'iron_sword', skill: 'smithing', station: 'anvil', level: 10, inputs: [{ item: 'iron_bar', qty: 4 }, { item: 'shaped_stone', qty: 1 }], output: { item: 'iron_sword', qty: 1 }, xp: 100, seconds: 4 },
   { id: 'iron_longsword', skill: 'smithing', station: 'anvil', level: 14, inputs: [{ item: 'iron_bar', qty: 8 }, { item: 'shaped_stone', qty: 2 }], output: { item: 'iron_longsword', qty: 1 }, xp: 190, seconds: 5 },
   { id: 'iron_battleaxe', skill: 'smithing', station: 'anvil', level: 15, inputs: [{ item: 'iron_bar', qty: 8 }, { item: 'pine_log', qty: 1 }], output: { item: 'iron_battleaxe', qty: 1 }, xp: 200, seconds: 5 },
+  { id: 'stone_skinning_knife', skill: 'smithing', station: 'anvil', level: 2, inputs: [{ item: 'shaped_stone', qty: 2 }], output: { item: 'stone_skinning_knife', qty: 1 }, xp: 16, seconds: 2.5 },
+  { id: 'iron_skinning_knife', skill: 'smithing', station: 'anvil', level: 9, inputs: [{ item: 'iron_bar', qty: 2 }, { item: 'birch_log', qty: 1 }], output: { item: 'iron_skinning_knife', qty: 1 }, xp: 50, seconds: 3 },
+  // leatherworking
+  { id: 'leather', skill: 'leatherworking', station: 'tanning', level: 1, inputs: [{ item: 'wolf_pelt', qty: 1 }], output: { item: 'leather', qty: 1 }, xp: 8, seconds: 2.5 },
+  { id: 'goblin_leather', skill: 'leatherworking', station: 'tanning', level: 8, inputs: [{ item: 'goblin_skin', qty: 1 }], output: { item: 'goblin_leather', qty: 1 }, xp: 18, seconds: 2.8 },
   // carpentry
   { id: 'arrow_shaft', skill: 'carpentry', station: 'workbench', level: 1, inputs: [{ item: 'birch_log', qty: 1 }], output: { item: 'arrow_shaft', qty: 15 }, xp: 6, seconds: 2 },
   { id: 'stone_arrow', skill: 'carpentry', station: 'workbench', level: 1, inputs: [{ item: 'arrow_shaft', qty: 15 }, { item: 'stone_arrowheads', qty: 15 }], output: { item: 'stone_arrow', qty: 15 }, xp: 10, seconds: 2.5 },
@@ -266,6 +284,14 @@ for (const p of ARMOUR_PIECES) {
   const lvl = { helm: 3, pauldrons: 4, breastplate: 7, greaves: 5, gauntlets: 2, boots: 2, kite_shield: 6 }[p.piece] ?? 3;
   R.push({ id: `stone_${p.piece}`, skill: 'smithing', station: 'anvil', level: lvl, inputs: [{ item: 'shaped_stone', qty: p.bars }], output: { item: `stone_${p.piece}`, qty: 1 }, xp: p.bars * 8, seconds: 2 + p.bars * 0.2 });
   R.push({ id: `iron_${p.piece}`, skill: 'smithing', station: 'anvil', level: lvl + 9, inputs: [{ item: 'iron_bar', qty: p.bars }, { item: 'shaped_stone', qty: Math.ceil(p.bars / 6) }], output: { item: `iron_${p.piece}`, qty: 1 }, xp: p.bars * 25, seconds: 3 + p.bars * 0.2 });
+}
+// Leather armour: wolf leather (tier 1) and goblinhide (tier 2, needs a little wolf leather too).
+for (const p of ARMOUR_PIECES) {
+  if (p.slot === 'offHand') continue;
+  const n = { helm: 3, pauldrons: 3, breastplate: 6, greaves: 5, gauntlets: 2, boots: 2 }[p.piece] ?? 3;
+  const lvl = { gauntlets: 1, boots: 1, helm: 2, pauldrons: 3, greaves: 4, breastplate: 5 }[p.piece] ?? 2;
+  R.push({ id: `leather_${p.piece}`, skill: 'leatherworking', station: 'tanning', level: lvl, inputs: [{ item: 'leather', qty: n }], output: { item: `leather_${p.piece}`, qty: 1 }, xp: n * 14, seconds: 2 + n * 0.3 });
+  R.push({ id: `goblinhide_${p.piece}`, skill: 'leatherworking', station: 'tanning', level: lvl + 9, inputs: [{ item: 'goblin_leather', qty: n }, { item: 'leather', qty: 1 }], output: { item: `goblinhide_${p.piece}`, qty: 1 }, xp: n * 35, seconds: 2.5 + n * 0.3 });
 }
 export const RECIPES: Recipe[] = R;
 export const RECIPE_BY_ID: Map<string, Recipe> = new Map(RECIPES.map((r) => [r.id, r]));

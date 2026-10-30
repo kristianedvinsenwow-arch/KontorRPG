@@ -5,7 +5,7 @@
  * checks the same spots.
  */
 import * as THREE from 'three';
-import { CAVE_ENTRANCE, INN, NPCS, STATIONS, VILLAGE, heightAt, innDoor, type Npc, type Station } from '@kontor/shared';
+import { CAVE_ENTRANCE, INN, NPCS, PIER, STATIONS, VILLAGE, heightAt, innDoor, type Npc, type Station } from '@kontor/shared';
 import { mat, bx, mesh, canvasTex } from '../engine/procgen.js';
 import { makeCharacter, animateCharacter, type Character } from '../entities/character.js';
 import { applyGear } from '../entities/held.js';
@@ -47,13 +47,28 @@ export class Places {
     this.stall();
     this.lodge();
     this.village();
+    this.pier();
     this.caveMouth();
   }
 
-  private place(x: number, z: number, faceX = 0, faceZ = 0): THREE.Group {
+  /**
+   * A group standing at (x, z), its −Z facing (faceX, faceZ). With a footprint (w × d), it sits on
+   * the highest ground under it and gets a stone plinth down to the lowest, so nothing floats on a
+   * slope or half-sinks into it.
+   */
+  private place(x: number, z: number, faceX = 0, faceZ = 0, foot?: [number, number]): THREE.Group {
     const g = new THREE.Group();
-    g.position.set(x, heightAt(x, z), z);
-    g.rotation.y = Math.atan2(faceX - x, faceZ - z) + Math.PI; // local −Z faces (faceX, faceZ)
+    g.rotation.y = Math.atan2(faceX - x, faceZ - z) + Math.PI;
+    let y = heightAt(x, z);
+    if (foot) {
+      const [w, d] = foot, c = Math.cos(g.rotation.y), s = Math.sin(g.rotation.y);
+      const hs: number[] = [];
+      for (const lx of [-w / 2, 0, w / 2]) for (const lz of [-d / 2, 0, d / 2]) hs.push(heightAt(x + lx * c + lz * s, z - lx * s + lz * c));
+      const hi = Math.max(...hs), lo = Math.min(...hs);
+      y = hi;
+      if (hi - lo > 0.04) bx(g, w + 0.2, hi - lo + 0.4, d + 0.2, M.stone, 0, -(hi - lo + 0.4) / 2 + 0.02, 0);
+    }
+    g.position.set(x, y, z);
     this.group.add(g);
     return g;
   }
@@ -69,7 +84,8 @@ export class Places {
 
   private station(s: Station): void {
     const centre = s.id.startsWith('camp') ? { x: 0, z: 0 } : VILLAGE;
-    const g = this.place(s.x, s.z, centre.x, centre.z);
+    const foot: Record<string, [number, number]> = { furnace: [2.2, 2.2], anvil: [1.2, 1.2], workbench: [2, 1], stove: [1.4, 1], tanning: [2.2, 1] };
+    const g = this.place(s.x, s.z, centre.x, centre.z, foot[s.kind]);
     let h = 1.6;
     if (s.kind === 'furnace') {
       mesh(new THREE.CylinderGeometry(0.95, 1.15, 1.5, 9).translate(0, 0.75, 0), M.stone, g);
@@ -116,6 +132,19 @@ export class Places {
       for (const sx of [-0.55, 0.55]) bx(g, 0.04, 0.9, 0.04, M.darkWood, sx, 0.45, 0);
       const bar = mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.2, 6), M.iron, g); bar.rotation.z = Math.PI / 2; bar.position.y = 0.88;
       h = 1.5;
+    } else if (s.kind === 'tanning') {
+      // An A-frame rack with two hides stretched on it, and a soaking tub.
+      for (const sx of [-1, 1]) {
+        const leg = bx(g, 0.08, 2, 0.08, M.darkWood, sx * 1, 0.95, 0.25, 0.25, 0, 0); void leg;
+        bx(g, 0.08, 2, 0.08, M.darkWood, sx * 1, 0.95, -0.25, -0.25, 0, 0);
+      }
+      bx(g, 2.2, 0.08, 0.08, M.darkWood, 0, 1.9, 0);
+      const hide = new THREE.MeshStandardMaterial({ color: 0x9a7650, roughness: 0.95, side: THREE.DoubleSide });
+      for (const sx of [-0.48, 0.48]) {
+        const hp = mesh(new THREE.PlaneGeometry(0.85, 1.3), hide, g); hp.position.set(sx, 1.15, -0.2); hp.rotation.x = -0.25;
+      }
+      const tub = mesh(new THREE.CylinderGeometry(0.4, 0.35, 0.5, 12).translate(0, 0.25, 0), M.darkWood, g); tub.position.set(1.4, 0, 0.5);
+      h = 2.3;
     } else if (s.kind === 'stove') {
       bx(g, 1.3, 1.0, 0.9, M.stone, 0, 0.5, 0);
       bx(g, 1.4, 0.1, 1.0, M.dark, 0, 1.05, 0);
@@ -152,7 +181,7 @@ export class Places {
   /** Ingrid's stall at camp. */
   private stall(): void {
     const n = NPCS.find((x) => x.id === 'ingrid')!;
-    const post = this.place(n.x, n.z, 0, 0);
+    const post = this.place(n.x, n.z, 0, 0, [3.2, 2.2]);
     for (const [px, pz] of [[-1.4, -0.7], [1.4, -0.7], [-1.4, 0.9], [1.4, 0.9]]) {
       mesh(new THREE.CylinderGeometry(0.07, 0.08, pz < 0 ? 2.95 : 2.55, 6).translate(px, pz < 0 ? 1.475 : 1.275, pz), M.darkWood, post);
     }
@@ -173,10 +202,9 @@ export class Places {
 
   /** Bjørkvik Lodge: a long timber house with a turf roof and eight numbered room doors. */
   private lodge(): void {
-    const g = new THREE.Group();
-    g.position.set(INN.x, heightAt(INN.x, INN.z), INN.z);
-    this.group.add(g);
     const W = INN.w, D = INN.d;
+    const g = this.place(INN.x, INN.z, INN.x, INN.z - 1, [W, D]);
+    g.rotation.y = 0;
     bx(g, W, 0.4, D, M.stone, 0, 0.2, 0);
     // Log walls.
     for (let i = 0; i < 9; i++) {
@@ -229,12 +257,11 @@ export class Places {
 
   /** A couple of turf-roofed cottages and a well around the green. */
   private village(): void {
-    const spots = [[VILLAGE.x - 14, VILLAGE.z + 8, 0.6], [VILLAGE.x + 16, VILLAGE.z + 9, -0.5], [VILLAGE.x - 3, VILLAGE.z + 18, 0]];
-    for (const [x, z, ry] of spots) {
-      const g = new THREE.Group();
-      g.position.set(x, heightAt(x, z), z);
-      g.rotation.y = ry;
-      this.group.add(g);
+    // Cottages on the flat east side of the green, doors facing the middle.
+    const spots = [[VILLAGE.x + 17, VILLAGE.z - 4], [VILLAGE.x + 17, VILLAGE.z + 12], [VILLAGE.x + 8, VILLAGE.z + 17]];
+    for (const [x, z] of spots) {
+      const g = this.place(x, z, VILLAGE.x, VILLAGE.z, [4.2, 3.4]);
+      const ry = g.rotation.y;
       bx(g, 4.2, 2.2, 3.4, M.plank, 0, 1.1, 0);
       for (const sz of [-1, 1]) bx(g, 4.6, 0.16, 2.2, M.turf, 0, 2.65, sz * 0.9, sz * 0.6, 0, 0);
       bx(g, 0.8, 1.6, 0.08, M.darkWood, 0, 0.8, -1.72);
@@ -242,11 +269,38 @@ export class Places {
       for (const dx of [-1.6, 0, 1.6]) for (const dz of [-1.2, 0, 1.2]) this.colliders.push({ x: x + dx * Math.cos(ry) + dz * Math.sin(ry), z: z - dx * Math.sin(ry) + dz * Math.cos(ry), r: 1 });
     }
     const wx = VILLAGE.x + 4, wz = VILLAGE.z + 3;
-    const well = new THREE.Group(); well.position.set(wx, heightAt(wx, wz), wz); this.group.add(well);
+    const well = this.place(wx, wz, VILLAGE.x, VILLAGE.z, [1.6, 1.6]);
     mesh(new THREE.CylinderGeometry(0.7, 0.75, 0.8, 12, 1, true).translate(0, 0.4, 0), M.stone, well);
     for (const sx of [-0.65, 0.65]) bx(well, 0.1, 1.8, 0.1, M.darkWood, sx, 0.9, 0);
     bx(well, 1.6, 0.12, 1.0, M.roof, 0, 1.85, 0, 0, 0, 0);
     this.colliders.push({ x: wx, z: wz, r: 0.8 });
+  }
+
+  /** Bjørkvik's fishing pier: plank deck on stilts down to the lake bed, a lantern at the end. */
+  private pier(): void {
+    const P = PIER;
+    const g = new THREE.Group();
+    g.position.set(P.x, 0, P.z);
+    g.rotation.y = Math.atan2(P.ux, P.uz); // local +Z runs out along the pier
+    this.group.add(g);
+    const plank = mat(0x8a6a48, 'wood', { r: 0.85 });
+    for (let d = 0; d < P.length; d += 0.5) bx(g, P.width, 0.08, 0.46, plank, 0, P.deck - 0.04, d + 0.25);
+    for (const sx of [-1, 1]) bx(g, 0.1, 0.16, P.length, M.darkWood, sx * (P.width / 2 - 0.05), P.deck - 0.16, P.length / 2);
+    for (let d = 0.3; d <= P.length; d += 2.2) for (const sx of [-1, 1]) {
+      const wx = P.x + P.ux * d + -P.uz * 0 + (sx * (P.width / 2 - 0.1)) * P.uz, wz = P.z + P.uz * d - (sx * (P.width / 2 - 0.1)) * P.ux;
+      const bottom = Math.min(heightAt(wx, wz), -0.2) - 0.4;
+      const len = P.deck - bottom;
+      const post = mesh(new THREE.CylinderGeometry(0.09, 0.1, len, 7), M.darkWood, g);
+      post.position.set(sx * (P.width / 2 - 0.1), bottom + len / 2, d);
+      // Railing posts along the outer two thirds.
+      if (d > P.length * 0.35) { bx(g, 0.07, 0.9, 0.07, M.darkWood, sx * (P.width / 2 - 0.1), P.deck + 0.45, d); }
+    }
+    for (const sx of [-1, 1]) bx(g, 0.06, 0.06, P.length * 0.65, M.wood, sx * (P.width / 2 - 0.1), P.deck + 0.85, P.length * 0.675);
+    const lampPost = bx(g, 0.1, 2, 0.1, M.darkWood, P.width / 2 - 0.1, P.deck + 1, P.length - 0.2); void lampPost;
+    const lamp = new THREE.PointLight(0xffb060, 3, 9, 2); lamp.position.set(P.width / 2 - 0.3, P.deck + 2, P.length - 0.2); g.add(lamp);
+    this.fires.push({ light: lamp, mats: [], base: 3 });
+    const end = new THREE.Vector3(P.x + P.ux * (P.length - 1), P.deck + 2.4, P.z + P.uz * (P.length - 1));
+    tag('Fishing pier', 'Cast off the end', 'place', end, 30);
   }
 
   /** The Old Mine's entrance: a timber-framed adit in a heap of rock. */

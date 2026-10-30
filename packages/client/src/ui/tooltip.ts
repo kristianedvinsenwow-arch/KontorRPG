@@ -44,6 +44,11 @@ export function itemTip(s: Stack, sellMult = 1): HTMLElement[] {
     if (d.swingSec) out.push(row(`Power ${d.power} · ${d.swingSec}s per swing at level 1`, 'tmain'));
     else out.push(row(`Power ${d.power}`, 'tmain'));
   }
+  if (d.knife) {
+    const max = Math.round(d.knife.uses * (1 + 0.3 * r));
+    out.push(row(`${Math.round(d.knife.fail * 100)}% chance to ruin a hide · ${s.d ?? max}/${max} uses left`, (s.d ?? max) === 0 ? 'tneg' : 'tmain'));
+    if (r) out.push(row(`+${r * 10}% chance of an extra pelt`, 'tfx'));
+  }
   if (d.ammoDmg) out.push(row(`+${d.ammoDmg} damage per arrow`, 'tmain'));
   // Base armour/ward and side effects (metal slows, leather speeds), then rolled effects.
   const base = itemStats({ id: s.id, qty: 1, r: s.r });

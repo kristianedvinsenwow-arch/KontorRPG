@@ -10,7 +10,7 @@ import type { SkillId } from './skills.js';
 import { levelFromXp, type SkillXp } from './skills.js';
 import type { Stats } from './stats.js';
 
-export type TreeId = 'mining' | 'woodcutting' | 'fishing' | 'smithing' | 'carpentry' | 'cooking' | 'melee' | 'ranged' | 'magic' | 'defence';
+export type TreeId = 'mining' | 'woodcutting' | 'fishing' | 'smithing' | 'carpentry' | 'leatherworking' | 'cooking' | 'melee' | 'ranged' | 'magic' | 'defence';
 
 export interface TalentNode {
   id: string;
@@ -86,6 +86,12 @@ export const TREES: TalentTree[] = [
     n('fine_grain', 'Fine Grain', 3, 1, 1, ['whittler'], { luck: 2 }),
     n('quick_hands', 'Quick Hands', 3, -1, 1, ['whittler'], { craftSpeed: 0.04 }),
     n('bowyer', 'Bowyer', 1, 1, 2, ['fine_grain'], { luck: 6 }),
+  ] },
+  { id: 'leatherworking', name: 'Leatherworking', skill: 'leatherworking', nodes: [
+    n('tanner', 'Tanner', 3, 0, 0, [], { craftSpeed: 0.04 }),
+    n('supple', 'Supple Hides', 3, 1, 1, ['tanner'], { luck: 2 }),
+    n('quick_stitch', 'Quick Stitch', 3, -1, 1, ['tanner'], { craftSpeed: 0.04 }),
+    n('master_tanner', 'Master Tanner', 1, 1, 2, ['supple'], { luck: 6 }),
   ] },
   { id: 'cooking', name: 'Cooking', skill: 'cooking', nodes: [
     n('kitchen_hand', 'Kitchen Hand', 3, 0, 0, [], { burnChance: 0.03 }),

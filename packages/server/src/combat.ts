@@ -5,7 +5,7 @@
  * flight time so the hit numbers match what players see.
  */
 import {
-  BURN, FREEZE_SEC, ITEMS, MOBS, PROJECTILE_SPEED, SLOW, SPAWNS, SPECIALS, ST_ANGRY, ST_BURN, ST_DEAD, ST_FROZEN, ST_SLOW,
+  BURN, CORPSE_SEC, FREEZE_SEC, ITEMS, knifeBonus, knifeUses, levelOf, MOBS, PROJECTILE_SPEED, SLOW, SPAWNS, SPECIALS, ST_ANGRY, ST_BURN, ST_DEAD, ST_FROZEN, ST_SLOW,
   attackInterval, attackRange, groundAt, incoming, inCaveRegion, mitigate, outgoing, r2, r3, rollCraftRarity, rollEffects,
   specialCooldown, styleOf, weaponClass, type Drop, type MobState, type Rarity, type Stack,
 } from '@kontor/shared';
@@ -29,7 +29,7 @@ export function createMobs(w: World): Map<string, Mob> {
     const y = groundAt(s.x, s.z);
     out.set(s.id, {
       id: s.id, spawn: s, def, x: s.x, y, z: s.z, yaw: w.rand() * 6.28, hp: def.hp, dead: false, respawnAt: 0, target: null, returning: false,
-      nextAtk: 0, nextSlam: 0, burn: null, slowUntil: 0, frozenUntil: 0, dmgBy: new Map(), act: undefined, actUntil: 0, wander: { x: s.x, z: s.z, at: 0 },
+      nextAtk: 0, nextSlam: 0, burn: null, slowUntil: 0, frozenUntil: 0, dmgBy: new Map(), act: undefined, actUntil: 0, wander: { x: s.x, z: s.z, at: 0 }, corpseUntil: 0, skinned: false,
     });
   }
   return out;
@@ -42,7 +42,8 @@ export function mobState(m: Mob, now: number): MobState {
   if (m.frozenUntil > now) st |= ST_FROZEN;
   if (m.dead) st |= ST_DEAD;
   if (m.target) st |= ST_ANGRY;
-  return { id: m.id, k: m.def.kind, x: r2(m.x), y: r2(m.y), z: r2(m.z), yaw: r3(m.yaw), hp: Math.ceil(m.hp), mhp: m.def.hp, st, bs: m.burn && m.burn.until > now ? m.burn.stacks : undefined, act: now < m.actUntil ? m.act : undefined };
+  const sk = m.dead && m.def.skin && !m.skinned && now < m.corpseUntil ? 1 : undefined;
+  return { id: m.id, k: m.def.kind, x: r2(m.x), y: r2(m.y), z: r2(m.z), yaw: r3(m.yaw), hp: Math.ceil(m.hp), mhp: m.def.hp, st, bs: m.burn && m.burn.until > now ? m.burn.stacks : undefined, act: now < m.actUntil ? m.act : undefined, sk };
 }
 
 const sameRegion = (a: { x: number; z: number }, b: { x: number; z: number }) => inCaveRegion(a.x, a.z) === inCaveRegion(b.x, b.z);
@@ -234,6 +235,7 @@ export function damageMob(w: World, m: Mob, dmg: number, by: string, now: number
   m.burn = null;
   const [lo, hi] = m.def.respawnSec;
   m.respawnAt = now + (lo + w.rand() * (hi - lo)) * 1000;
+  if (m.def.skin) { m.corpseUntil = now + CORPSE_SEC * 1000; m.skinned = false; m.respawnAt = Math.max(m.respawnAt, m.corpseUntil + 2000); }
   // Everyone who did at least 10% of the damage gets full XP and quest credit.
   const total = [...m.dmgBy.values()].reduce((a, b) => a + b, 0);
   let top: ServerPlayer | undefined, topDmg = 0;
@@ -276,4 +278,37 @@ function dropLoot(w: World, m: Mob, owner: ServerPlayer | undefined): void {
     const a = (i / Math.max(1, items.length)) * Math.PI * 2;
     w.spawnGround(it, m.x + Math.cos(a) * 0.8, m.z + Math.sin(a) * 0.8, owner?.state.id, m.def.boss ? 120 : 45);
   });
+}
+
+/**
+ * Skin a body with the skinning knife you're wearing. The hide can be ruined (knife tier sets the
+ * odds); either way the body is gone afterwards, for everyone. Each attempt uses up the knife.
+ */
+export function skin(w: World, p: ServerPlayer, targetId: string): void {
+  const now = w.now();
+  const m = w.mobs.get(targetId);
+  if (!m || !m.dead || !m.def.skin || m.skinned || now >= m.corpseUntil) return w.notice(p, 'There’s nothing left to skin.', 'error');
+  if (Math.hypot(m.x - p.state.x, m.z - p.state.z) > 3.2) return w.notice(p, 'Get closer to skin it.', 'error');
+  const knife = p.equip.knife;
+  const def = knife ? ITEMS[knife.id] : undefined;
+  if (!knife || !def?.knife) return w.notice(p, 'You need a skinning knife (smith one at an anvil) in your knife slot.', 'error');
+  if ((knife.d ?? knifeUses(knife)) <= 0) return w.notice(p, 'Your skinning knife is worn out — repair it at an anvil.', 'error');
+  m.skinned = true;
+  knife.d = (knife.d ?? knifeUses(knife)) - 1;
+  p.act = 'swing'; p.actUntil = now + 600;
+  if (w.rand() < def.knife.fail) {
+    w.notice(p, `You ruined the ${m.def.name.toLowerCase()}’s hide.`, 'error');
+  } else {
+    const sk = m.def.skin;
+    let qty = sk.qty[0] + Math.floor(w.rand() * (sk.qty[1] - sk.qty[0] + 1));
+    if (w.rand() < knifeBonus(knife)) qty++;
+    w.giveOrDrop(p, { id: sk.item, qty });
+    const xp = w.addXp(p, 'leatherworking', 6 * (levelOf(p.xp, 'leatherworking') < 5 ? 1.5 : 1));
+    p.client.send({ t: 'gain', skill: 'leatherworking', xp, item: sk.item, qty });
+  }
+  if (knife.d <= 0) {
+    w.notice(p, 'Your skinning knife is worn out. Repair it at an anvil (right-click it in your bag, or use the anvil).', 'error');
+  }
+  p.dirty = true;
+  w.sendInv(p);
 }

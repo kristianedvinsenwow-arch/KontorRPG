@@ -333,6 +333,7 @@ export const GEAR_COLORS: Record<string, { color: number; metal: number; rough: 
   birch: { color: 0xd8d2c0, metal: 0, rough: 0.7 },
   pine: { color: 0x8a6440, metal: 0, rough: 0.7 },
   bone: { color: 0xe8e0c8, metal: 0, rough: 0.5 },
+  goblin: { color: 0x6a7a3a, metal: 0, rough: 0.8 },
   stone: { color: 0x8d8a84, metal: 0, rough: 0.85 },
   iron: { color: 0x7e8288, metal: 0.8, rough: 0.42 },
   steel: { color: 0xb4bac2, metal: 0.9, rough: 0.3 },

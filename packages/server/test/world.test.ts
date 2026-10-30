@@ -316,7 +316,7 @@ test('combat: kill a wolf, get XP and loot on the ground; wolves fight back', ()
   assert.ok(wolf.dead);
   assert.equal(p.xp.combat, MOBS.wolf.xp);
   assert.ok(c.inbox.some((m) => m.t === 'hit' && m.to === p.state.id), 'the wolf hit back');
-  assert.ok(last('ground')?.add?.length);
+  void last;
 });
 
 test('dying knocks you out; respawn at camp, weakened', () => {
@@ -439,3 +439,79 @@ test('everything is saved and loaded', async () => {
 });
 
 void ITEMS;
+
+test('skinning: needs a knife, can ruin the hide, the body goes away, the knife wears out and can be repaired', () => {
+  let r = 0.95;
+  const { world, c, p, place, last, advance } = game(() => r);
+  const wolf = [...world.mobs.values()].find((m) => m.def.kind === 'wolf')!;
+  world.kill; // (players can die; here the wolf does)
+  wolf.hp = 1;
+  p.equip.mainHand = { id: 'stone_sword', qty: 1 };
+  world.recompute(p);
+  place(wolf.x + 1.2, wolf.z);
+  world.handle(c, { t: 'attack', target: wolf.id, special: false });
+  assert.ok(wolf.dead);
+  world.step();
+  const snap = last('snap')!;
+  assert.equal(snap.mobs.find((m) => m.id === wolf.id)?.sk, 1, 'the body can be skinned');
+  assert.ok(!last('ground')?.add?.some((g) => g.item.id === 'wolf_pelt'), 'no pelts without skinning');
+  world.handle(c, { t: 'skin', target: wolf.id });
+  assert.match(last('notice')!.text, /skinning knife/);
+  p.equip.knife = { id: 'stone_skinning_knife', qty: 1, d: 1 };
+  r = 0.5; // > 35% fail chance: success
+  world.handle(c, { t: 'skin', target: wolf.id });
+  assert.ok(countItem(p.bag, 'wolf_pelt') >= 1);
+  assert.equal(p.equip.knife.d, 0);
+  world.handle(c, { t: 'skin', target: wolf.id });
+  assert.match(last('notice')!.text, /nothing left/);
+  world.step();
+  assert.equal(last('snap')!.mobs.find((m) => m.id === wolf.id)?.sk, undefined, 'gone once skinned');
+  // Repair at the anvil for a shaped stone.
+  const anvil = STATION_BY_ID.get('camp_anvil')!;
+  place(anvil.x + 1.2, anvil.z);
+  p.bag[5] = { id: 'shaped_stone', qty: 1 };
+  world.handle(c, { t: 'repair', slot: 'knife' });
+  assert.equal(p.equip.knife.d, 12);
+  void advance;
+});
+
+test('a ruined hide gives nothing; bodies vanish after 30 s', () => {
+  let r = 0.95;
+  const { world, c, p, place, last, advance } = game(() => r);
+  const wolf = [...world.mobs.values()].find((m) => m.def.kind === 'wolf')!;
+  wolf.hp = 1;
+  place(wolf.x + 1.2, wolf.z);
+  world.handle(c, { t: 'attack', target: wolf.id, special: false });
+  p.equip.knife = { id: 'stone_skinning_knife', qty: 1, d: 5 };
+  r = 0.1; // < 35%: ruined
+  world.handle(c, { t: 'skin', target: wolf.id });
+  assert.equal(countItem(p.bag, 'wolf_pelt'), 0);
+  assert.match(last('notice')!.text, /ruined/);
+  const wolf2 = [...world.mobs.values()].filter((m) => m.def.kind === 'wolf')[1];
+  wolf2.hp = 1;
+  place(wolf2.x + 1.2, wolf2.z);
+  world.handle(c, { t: 'attack', target: wolf2.id, special: false });
+  advance(31_000); world.step();
+  assert.equal(last('snap')!.mobs.find((m) => m.id === wolf2.id)?.sk, undefined);
+});
+
+test('leather: tan pelts at the tanning rack, then make armour; Ingrid no longer sells leather', () => {
+  const { world, c, p, place, advance } = game();
+  assert.ok(!NPC_BY_ID.get('ingrid')!.sells!.some((i) => i.startsWith('leather_') && i !== 'leather_backpack'));
+  const rack = STATION_BY_ID.get('camp_tanning')!;
+  place(rack.x + 1.3, rack.z);
+  p.bag[0] = { id: 'wolf_pelt', qty: 2 };
+  world.handle(c, { t: 'craft', recipe: 'leather', count: 2, station: rack.id });
+  advance(3000); world.step(); advance(3000); world.step();
+  assert.equal(countItem(p.bag, 'leather'), 2);
+  world.handle(c, { t: 'craft', recipe: 'leather_gauntlets', count: 1, station: rack.id });
+  advance(4000); world.step();
+  assert.equal(countItem(p.bag, 'leather_gauntlets'), 1);
+});
+
+test('the pier is walkable ground', async () => {
+  const { PIER, checkStep, groundAt } = await import('@kontor/shared');
+  const end = { x: PIER.x + PIER.ux * (PIER.length - 1), z: PIER.z + PIER.uz * (PIER.length - 1) };
+  assert.equal(groundAt(end.x, end.z), PIER.deck);
+  assert.ok(checkStep({ ...end, y: PIER.deck }, { ...end, y: PIER.deck }, 0.1).ok);
+});

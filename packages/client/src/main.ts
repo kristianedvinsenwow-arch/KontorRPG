@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import {
   CAST_RANGE, CAVE_ENTRANCE, CAVE_EXIT, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS,
   STATIONS, TREE_BY_ID, TREE_TYPES, USE_RANGE, VEIN_BY_ID, VEIN_TYPES, WATER_LEVEL,
-  attackInterval, attackRange, computeStats, faceOf, inCaveRegion, isFishable, levelFromXp, r2, r3, swingSeconds, weaponClass,
+  MOBS, groundAt, attackInterval, attackRange, computeStats, faceOf, inCaveRegion, isFishable, levelFromXp, r2, r3, swingSeconds, weaponClass,
   type CharacterBuild, type HoldSlot, type MobState, type PlayerStats, type Tree, type Vein,
 } from '@kontor/shared';
 import { createGfx } from './engine/renderer.js';
@@ -296,7 +296,7 @@ function setPrompt(html: string | null) {
 }
 
 // ---------------------------------------------------------------- what you're pointing at / standing by
-type Near = { kind: 'npc'; id: string; name: string } | { kind: 'station'; id: string; name: string } | { kind: 'loot'; id: number; name: string } | null;
+type Near = { kind: 'npc'; id: string; name: string } | { kind: 'station'; id: string; name: string } | { kind: 'loot'; id: number; name: string } | { kind: 'corpse'; id: string; name: string } | null;
 type Aim = { kind: 'mob'; m: MobState } | { kind: 'vein'; v: Vein } | { kind: 'tree'; t: Tree } | { kind: 'water'; p: THREE.Vector3 } | null;
 let near: Near = null;
 let aimed: Aim = null;
@@ -306,6 +306,7 @@ const fwd = new THREE.Vector3();
 function use() {
   if (!near || !me) return;
   if (near.kind === 'loot') net.send({ t: 'pickup', id: near.id });
+  else if (near.kind === 'corpse') net.send({ t: 'skin', target: near.id });
   else if (near.kind === 'npc') openPanel('npc', { npc: near.id });
   else openPanel('craft', { station: near.id });
 }
@@ -345,14 +346,35 @@ function special() {
 function interact(now: number, playing: boolean) {
   if (!me) return;
   const g = gameStore.get();
-  // Things you can use with E: loot first, then NPCs, then stations.
+  // Things you can use with E: loot at your feet, or the body, NPC or station you're looking at.
+  cam.getWorldDirection(fwd);
   near = null;
-  const loot = fx.nearestLoot(me.x, me.z);
-  if (loot) near = { kind: 'loot', id: loot.id, name: `${ITEMS[loot.item.id]?.name ?? loot.item.id}${loot.item.qty > 1 ? ` ×${loot.item.qty}` : ''}` };
+  const loot = fx.nearestLoot(me.x, me.z, 2.2);
+  const body = mobs.pick(cam.position, fwd, 3.2, 0.3, true);
+  if (body) near = { kind: 'corpse', id: body.id, name: MOBS[body.k].name.toLowerCase() };
+  else if (loot) near = { kind: 'loot', id: loot.id, name: `${ITEMS[loot.item.id]?.name ?? loot.item.id}${loot.item.qty > 1 ? ` ×${loot.item.qty}` : ''}` };
   else {
-    let best = USE_RANGE;
-    for (const n of NPCS) { const d = Math.hypot(me.x - n.x, me.z - n.z); if (d < best) { best = d; near = { kind: 'npc', id: n.id, name: `${n.name} the ${n.title.toLowerCase()}` }; } }
-    for (const s of STATIONS) { const d = Math.hypot(me.x - s.x, me.z - s.z); if (d < best) { best = d; near = { kind: 'station', id: s.id, name: s.name.toLowerCase() }; } }
+    // Ray vs. a slim upright cylinder per NPC/station: you have to look at them, not just stand near.
+    let best = Infinity;
+    const look = (x: number, z: number, r: number, h0: number, h1: number) => {
+      if (Math.hypot(me!.x - x, me!.z - z) > USE_RANGE) return Infinity;
+      const ox = cam.position.x - x, oz = cam.position.z - z;
+      const a = fwd.x * fwd.x + fwd.z * fwd.z, b = 2 * (ox * fwd.x + oz * fwd.z), c = ox * ox + oz * oz - r * r;
+      const disc = b * b - 4 * a * c;
+      if (a < 1e-6 || disc < 0) return Infinity;
+      const t = (-b - Math.sqrt(disc)) / (2 * a);
+      if (t < 0) return Infinity;
+      const y = cam.position.y + fwd.y * t, g = groundAt(x, z);
+      return y >= g + h0 && y <= g + h1 ? t : Infinity;
+    };
+    for (const n of NPCS) {
+      const t = look(n.x, n.z, 0.42, 0, RACES[n.race].height + 0.1);
+      if (t < best) { best = t; near = { kind: 'npc', id: n.id, name: `${n.name} the ${n.title.toLowerCase()}` }; }
+    }
+    for (const s of STATIONS) {
+      const t = look(s.x, s.z, s.r + 0.15, -0.2, 2.2);
+      if (t < best) { best = t; near = { kind: 'station', id: s.id, name: s.name.toLowerCase() }; }
+    }
   }
   // The mine: walk in / walk out.
   if (now > travelAt) {
@@ -361,12 +383,11 @@ function interact(now: number, playing: boolean) {
   }
 
   // What's under the crosshair.
-  cam.getWorldDirection(fwd);
   const main = g.equip.mainHand;
   const reach = attackRange(main);
   const ranged = reach > 6;
   aimed = null;
-  const m = mobs.pick(cam.position, fwd, ranged ? reach : reach + 1.2, ranged ? 0.4 : 1.2);
+  const m = mobs.pick(cam.position, fwd, ranged ? reach : reach + 0.6, ranged ? 0.1 : 0.25);
   if (m) aimed = { kind: 'mob', m };
   else {
     const v = veins.target(cam.position, fwd, MINE_RANGE + 0.6);
@@ -428,7 +449,7 @@ function interact(now: number, playing: boolean) {
     const name = aimed.kind === 'vein' ? VEIN_TYPES[aimed.v.type].name.toLowerCase() : TREE_TYPES[aimed.t.kind].name.toLowerCase();
     setPrompt(block ? `<span class="bad">${block}</span>` : `Hold <b>click</b> to ${aimed.kind === 'vein' ? 'mine' : 'chop'} ${name}`);
   } else if (aimed?.kind === 'water') setPrompt('<b>Click</b> to cast');
-  else if (near) setPrompt(`<b>E</b> ${near.kind === 'loot' ? `Pick up ${near.name}` : near.kind === 'npc' ? `Talk to ${near.name}` : `Use the ${near.name}`}`);
+  else if (near) setPrompt(`<b>E</b> ${near.kind === 'loot' ? `Pick up ${near.name}` : near.kind === 'corpse' ? `Skin the ${near.name}${g.equip.knife ? '' : ' <span class="bad">(needs a skinning knife)</span>'}` : near.kind === 'npc' ? `Talk to ${near.name}` : `Use the ${near.name}`}`);
   else setPrompt(null);
 
   // Purse and crafting bar.

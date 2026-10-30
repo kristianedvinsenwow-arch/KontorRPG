@@ -14,6 +14,9 @@ const fishEl = box.querySelector('.fish') as HTMLElement;
 const meterEl = box.querySelector('.meter i') as HTMLElement;
 
 const TRACK = 280;
+/** Seconds at the start where the meter can't drain and the fish holds still: time to see what's going on. */
+const GRACE = 1.8;
+const hintEl = box.querySelector('.hint') as HTMLElement;
 
 let state: null | {
   difficulty: number; until: number; done: (ok: boolean) => void;
@@ -29,7 +32,7 @@ export const fishing = {
     state = {
       difficulty, until: performance.now() + seconds * 1000, done,
       zone: 40, zoneV: 0, zoneH: Math.min(TRACK * 0.55, 78 * (1 + ease) * (1.15 - difficulty * 0.35)),
-      fish: 120, fishV: 0, fishTarget: 120, nextMove: 0, progress: 0.3, t: 0,
+      fish: 60, fishV: 0, fishTarget: 60, nextMove: GRACE, progress: 0.4, t: 0,
     };
     box.hidden = false;
   },
@@ -39,7 +42,9 @@ export const fishing = {
     if (!s) return;
     s.t += dt;
     // Catch bar: lift while holding, fall otherwise, bounce softly off the ends.
-    s.zoneV += (holding ? 620 : -520) * dt;
+    const grace = s.t < GRACE;
+    // During the grace period the bar floats gently so you can find the controls.
+    s.zoneV += (holding ? 620 : grace ? -150 : -520) * dt;
     s.zoneV *= 0.985;
     s.zone += s.zoneV * dt;
     if (s.zone < 0) { s.zone = 0; s.zoneV *= -0.3; }
@@ -56,7 +61,11 @@ export const fishing = {
     s.fish += s.fishV * dt;
     s.fish = Math.max(0, Math.min(TRACK - 24, s.fish));
     const inside = s.fish + 12 >= s.zone && s.fish + 12 <= s.zone + s.zoneH;
-    s.progress += (inside ? 0.34 : -0.22 - s.difficulty * 0.1) * dt;
+    // Draining ramps in after the grace period instead of starting at full strength.
+    const ramp = Math.min(1, Math.max(0, (s.t - GRACE) / 1.5));
+    s.progress += (inside ? 0.34 : (-0.22 - s.difficulty * 0.1) * ramp) * dt;
+    box.classList.toggle('grace', grace);
+    if (hintEl.dataset.g !== String(grace)) hintEl.dataset.g = String(grace), hintEl.innerHTML = grace ? '<b>Get ready…</b> hold <b>click</b> to raise the bar' : 'Hold <b>click</b> to raise the bar · keep the fish inside';
     zoneEl.style.height = `${s.zoneH}px`;
     zoneEl.style.bottom = `${s.zone}px`;
     zoneEl.classList.toggle('hit', inside);

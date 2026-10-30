@@ -19,8 +19,8 @@ The design doc lives in the claude.ai doc "KontorRPG — Product Design Doc".
 - **Gathering:** shared ore veins (stone, iron, silver in the mine) in a few hotspots plus loners,
   every tree can be felled (birch and pine) and topples over, leaving a stump until it regrows.
   A ring shows how used-up a vein or tree is, the same for everyone. Depleted nodes return after
-  a random 45 min – 2 h (trees 20–60 min); nobody is told when. Fishing in the lake with a
-  reel-in minigame.
+  a random 45 min – 2 h (trees 20–60 min); nobody is told when. Fishing in the lake (or off
+  Bjørkvik's pier) with a reel-in minigame.
 - **Crafting:** furnace, anvil, workbench (carpentry), campfires and the inn stove (cooking, can
   burn). Timed queues. Crafted gear can roll **uncommon / rare / epic** with 1–3 random effects;
   luck raises the odds. **Legendary** only drops from bosses.
@@ -34,6 +34,10 @@ The design doc lives in the claude.ai doc "KontorRPG — Product Design Doc".
   Nova freezes. Wolves and goblins in the wild; bats, goblins, shamans and the boss **Old Knut** in
   the mine. Loot drops on the ground (the top damager owns it for a minute). Soft death: wake up
   at camp, weakened for two minutes.
+- **Skinning and leather:** smith a skinning knife and wear it, then press E on a dead wolf or
+  goblin (bodies stay 30 s) for pelts or goblin skin. Hides can be ruined (stone knife 35%, iron
+  18%); either way the body is gone for everyone. Knives wear out — repair them at an anvil; rarer
+  knives last longer and give extra pelts. Tan hides at a tanning rack, then make leather armour.
 - **Progression:** skills (mining, smithing, woodcutting, carpentry, fishing, cooking) and a
   player level from combat. Every level is a talent point; talent trees (**T**) start with a
   three-rank root and branch out to bigger one-point notables. Repeatable daily / twice-weekly /

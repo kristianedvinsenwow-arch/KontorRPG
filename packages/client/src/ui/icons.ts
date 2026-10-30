@@ -13,6 +13,7 @@ const LOOK: Record<string, [string, string]> = {
   leather: ['#9a7148', '#5c4026'],
   cloth: ['#8a7cb0', '#4e4470'],
   bone: ['#ece4cc', '#a49a7c'],
+  goblin: ['#7a8a4a', '#4a5a28'],
 };
 const cache = new Map<string, string>();
 type G = CanvasRenderingContext2D;
@@ -128,6 +129,9 @@ export function iconFor(id: string): string {
     old_boot: () => armourPiece(g, 'feet', '#5a4a36', '#3a2a1a'),
     golden_perch: () => fish(g, '#f2cc5a', '#d8a030'),
     wolf_pelt: () => poly(g, [[12, 20], [26, 12], [40, 14], [54, 22], [50, 50], [30, 56], [14, 46]], '#8a8478'),
+    goblin_skin: () => poly(g, [[14, 18], [30, 10], [50, 16], [52, 44], [34, 54], [12, 44]], '#7a8a4a'),
+    leather: () => { poly(g, [[10, 20], [54, 20], [50, 46], [14, 46]], '#9a7148'); line(g, '#5c4026', 2, [[14, 30], [50, 30]]); },
+    goblin_leather: () => { poly(g, [[10, 20], [54, 20], [50, 46], [14, 46]], '#6a7a3a'); line(g, '#3a4a1a', 2, [[14, 30], [50, 30]]); },
     goblin_trinket: () => { dot(g, 32, 36, 14, '#c8a040'); dot(g, 32, 36, 6, '#4a8a3a'); line(g, '#6a5434', 2, [[32, 22], [32, 8]]); },
     bat_wing: () => poly(g, [[8, 20], [56, 14], [50, 30], [42, 26], [36, 40], [28, 30], [18, 42]], '#4a3a40'),
     troll_tooth: () => poly(g, [[24, 10], [40, 10], [44, 30], [32, 56], [22, 30]], '#ece4cc'),
@@ -142,6 +146,7 @@ export function iconFor(id: string): string {
   else if (d?.tool === 'pickaxe') pick(g, a);
   else if (d?.tool === 'hatchet') hatchet(g, a);
   else if (d?.tool === 'rod') rod(g, a);
+  else if (d?.tool === 'knife') { line(g, '#3a2818', 6, [[14, 54], [26, 40]]); poly(g, [[26, 40], [52, 10], [56, 14], [32, 44]], a); }
   else if (d?.weapon === 'sword') sword(g, a);
   else if (d?.weapon === 'longsword') sword(g, a, true);
   else if (d?.weapon === 'battleaxe') axe(g, a);

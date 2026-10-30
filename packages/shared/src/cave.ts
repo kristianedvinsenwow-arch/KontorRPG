@@ -3,7 +3,7 @@
  * in its own region far outside the overworld (around CAVE.x, CAVE.z). An entrance in the hills
  * teleports you there; the exit brings you back. Shape = corridors (capsules) + chambers (circles).
  */
-import { heightAt } from './terrain.js';
+import { heightAt, pierDeck } from './terrain.js';
 import { WORLD_HALF } from './constants.js';
 
 export const CAVE = { x: 0, z: 1000 };
@@ -57,7 +57,9 @@ export function caveFloor(x: number, z: number): number {
 
 /** Ground height anywhere: overworld terrain or cave floor. */
 export function groundAt(x: number, z: number): number {
-  return inCaveRegion(x, z) ? caveFloor(x, z) : heightAt(x, z);
+  if (inCaveRegion(x, z)) return caveFloor(x, z);
+  const h = heightAt(x, z), deck = pierDeck(x, z);
+  return deck != null ? Math.max(h, deck) : h;
 }
 
 /** Can a player stand here? Overworld bounds or inside the cave. */

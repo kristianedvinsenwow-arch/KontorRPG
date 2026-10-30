@@ -5,7 +5,7 @@
  */
 import {
   COMING_SKILLS, EQUIP_SLOTS, IMBUE, INN, ITEMS, NPC_BY_ID, QUESTS, RECIPES, SKILLS, STATION_BY_ID, TALENT_TREE, TREES,
-  canLearn, countItem, formatStat, levelFromXp, levelProgress, pointsLeft, questAvailable, recipeAt, respecCost, xpForLevel,
+  canLearn, countItem, knifeRepair, knifeUses, formatStat, levelFromXp, levelProgress, pointsLeft, questAvailable, recipeAt, respecCost, xpForLevel,
   type ClientMsg, type Stack, type StatKey, type TreeId,
 } from '@kontor/shared';
 import { gameStore, uiStore, type GameState } from '../state/store.js';
@@ -239,8 +239,27 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
       q.append(bar, btn('Stop', 'btn ghost', () => send({ t: 'cancelCraft' })));
       body.append(q);
     }
+    // Repairs at the anvil: worn skinning knives (equipped or in the bag).
+    if (st.kind === 'anvil') {
+      const worn: [string, Stack][] = [];
+      if (g.equip.knife) worn.push(['knife', g.equip.knife]);
+      g.bag.forEach((s, i) => { if (s && ITEMS[s.id]?.knife) worn.push([String(i), s]); });
+      for (const [slot, s] of worn) {
+        const max = knifeUses(s), left = s.d ?? max;
+        if (left >= max) continue;
+        const cost = knifeRepair(s.id);
+        const row = el('div', 'recipe');
+        const info = el('div', 'rinfo');
+        info.append(el('b', '', `Repair ${ITEMS[s.id].name}`), el('span', 'note', `${left}/${max} uses left · costs ${cost.qty} × ${ITEMS[cost.item].name} (you have ${countItem(g.bag, cost.item)})`));
+        const b = btn('Repair', 'btn', () => send({ t: 'repair', slot: slot as never }));
+        b.disabled = countItem(g.bag, cost.item) < cost.qty;
+        const act = el('div', 'ract'); act.append(b);
+        row.append(icon(s), info, act);
+        list.prepend(row);
+      }
+    }
     body.append(list, goldLine(g));
-    return [header(st.name, { furnace: 'Smelt ore into bars', anvil: 'Shape stone, smith weapons and metal armour', workbench: 'Carpentry: shafts, arrows, bows, staffs, rods', campfire: 'Cook your catch', stove: 'Cook your catch (burns less)' }[st.kind], 'E'), body];
+    return [header(st.name, { furnace: 'Smelt ore into bars', anvil: 'Shape stone, smith weapons and metal armour', workbench: 'Carpentry: shafts, arrows, bows, staffs, rods', campfire: 'Cook your catch', stove: 'Cook your catch (burns less)', tanning: 'Leatherworking: tan hides, make leather armour' }[st.kind], 'E'), body];
   }
 
   // ---------------------------------------------------------------- NPC dialogs

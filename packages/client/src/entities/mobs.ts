@@ -193,13 +193,16 @@ export class Mobs {
         v.deadT += dt;
         v.body.rotation.z = Math.min(Math.PI / 2, v.deadT * 4) * (v.kind === 'bat' ? 0 : 1);
         if (v.kind === 'bat') g.position.y = Math.max(groundAt(g.position.x, g.position.z) + 0.1, g.position.y - dt * 4);
-        if (v.deadT > 3) g.visible = false;
+        // Skinnable bodies stay until skinned or until the server lets them go (30 s).
+        if (v.deadT > 3 && !s.sk) g.visible = false;
+        else if (s.sk) g.visible = true;
       }
       // Status tint: red-orange glow while burning, icy blue while frozen/slowed.
       const burn = !!(s.st & ST_BURN), slow = !!(s.st & ST_SLOW);
       const emis = frozen ? 0x3a6a9a : burn ? 0x7a2a08 : slow ? 0x1a3050 : 0;
       for (const m of v.tintMats) m.emissive.setHex(emis);
       v.hpFill.style.width = `${Math.max(0, (s.hp / s.mhp) * 100)}%`;
+      v.label.el.classList.toggle('corpse', dead && !!s.sk);
       v.label.el.classList.toggle('hurt', s.hp < s.mhp || v.id === this.targetId);
       const st = [burn ? `Burn ×${s.bs ?? 1}` : '', frozen ? 'Frozen' : slow ? 'Slowed' : ''].filter(Boolean).join(' · ');
       if (v.statusEl.textContent !== st) v.statusEl.textContent = st;
@@ -207,19 +210,24 @@ export class Mobs {
   }
 
   /** Live mob under the crosshair within `reach` (ray vs. a sphere around the body). */
-  pick(origin: THREE.Vector3, dir: THREE.Vector3, reach: number, slack = 0.9): MobState | null {
+  /**
+   * Mob under the crosshair: a ray against a body-sized sphere (no huge margins — you have to
+   * actually look at it). `corpses` picks skinnable bodies instead of live mobs.
+   */
+  pick(origin: THREE.Vector3, dir: THREE.Vector3, reach: number, slack = 0.2, corpses = false): MobState | null {
     let best: MobState | null = null, bestT = Infinity;
     const c = new THREE.Vector3();
     for (const v of this.views.values()) {
-      if (v.s.st & ST_DEAD) continue;
+      const dead = !!(v.s.st & ST_DEAD);
+      if (corpses ? !(dead && v.s.sk) : dead) continue;
       const def = MOBS[v.kind];
-      const r = (v.kind === 'troll' ? 1.2 : v.kind === 'bat' ? 0.5 : 0.55) * (v.kind === 'troll' ? 1 : def.scale) + slack * 0.3;
-      const h = v.kind === 'troll' ? 1.6 : v.kind === 'bat' ? 0 : 0.6;
+      const r = (v.kind === 'troll' ? 1.0 : v.kind === 'bat' ? 0.38 : v.kind === 'wolf' ? 0.5 : 0.42 * def.scale) * (1 + slack) + (corpses ? 0.25 : 0);
+      const h = corpses ? 0.25 : v.kind === 'troll' ? 1.6 : v.kind === 'bat' ? 0 : v.kind === 'wolf' ? 0.6 : 0.55 * def.scale;
       c.set(v.g.position.x, v.g.position.y + h, v.g.position.z).sub(origin);
       const t = c.dot(dir);
-      if (t < 0 || t > reach + r + 2) continue;
+      if (t < 0 || t > reach + r + 0.5) continue;
       const d2 = c.lengthSq() - t * t;
-      if (d2 > r * r * (1 + slack)) continue;
+      if (d2 > r * r) continue;
       if (t < bestT) { bestT = t; best = v.s; }
     }
     return best;

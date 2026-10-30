@@ -10,7 +10,7 @@ import { levelFromXp, type SkillId, type SkillXp } from './skills.js';
 import { COMBAT_TREES, talentStats, type TalentAlloc, type TreeId } from './talents.js';
 import { maxSpeed } from './movement.js';
 
-export type GatherSkill = 'mining' | 'woodcutting' | 'fishing' | 'smithing' | 'carpentry' | 'cooking';
+export type GatherSkill = 'mining' | 'woodcutting' | 'fishing' | 'smithing' | 'carpentry' | 'leatherworking' | 'cooking';
 export const TOOL_SKILL: Partial<Record<Slot, GatherSkill>> = { pickaxe: 'mining', hatchet: 'woodcutting', rod: 'fishing' };
 
 export interface Buff { name: string; stats: Partial<Stats>; until: number }
@@ -48,7 +48,7 @@ export function computeStats(build: CharacterBuild, equip: Equipment, talents: T
   if (PERKS[build.major]?.mods.critMult) all.crit *= PERKS[build.major].mods.critMult!;
   for (const t of COMBAT_TREES) addStats(all, talentStats(talents, t));
   for (const b of buffs) if (b.until > now) addStats(all, b.stats);
-  const scopedExtra: Record<GatherSkill, Stats> = { mining: emptyStats(), woodcutting: emptyStats(), fishing: emptyStats(), smithing: emptyStats(), carpentry: emptyStats(), cooking: emptyStats() };
+  const scopedExtra: Record<GatherSkill, Stats> = { mining: emptyStats(), woodcutting: emptyStats(), fishing: emptyStats(), smithing: emptyStats(), carpentry: emptyStats(), leatherworking: emptyStats(), cooking: emptyStats() };
   for (const [slot, st] of Object.entries(equip) as [Slot, NonNullable<Equipment[Slot]>][]) {
     if (!st || !ITEMS[st.id]) continue;
     const skill = TOOL_SKILL[slot];
