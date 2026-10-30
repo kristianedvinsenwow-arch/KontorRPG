@@ -1,4 +1,4 @@
-import { defaultBuild, validateBuild, type CharacterBuild, type Race } from '@kontor/shared';
+import { defaultBuild, validateBuild, type Bag, type CharacterBuild, type Equipment, type Race, type SkillId, type StationId } from '@kontor/shared';
 
 /**
  * Tiny subscribable store. Three layers live in the app (design doc §11):
@@ -38,7 +38,9 @@ export interface NetState {
 }
 
 export interface UiState {
-  panel: 'none' | 'menu' | 'character' | 'pause';
+  panel: 'none' | 'menu' | 'character' | 'pause' | 'inventory' | 'skills' | 'craft' | 'shop';
+  /** Which station the crafting panel is for. */
+  station: StationId;
   chatOpen: boolean;
   bossKey: boolean;
 }
@@ -77,6 +79,17 @@ export function saveSettings(s: Settings): void {
 }
 
 export const netStore = createStore<NetState>({ status: 'offline', myId: null, build: null, pingMs: null, online: [] });
-export const uiStore = createStore<UiState>({ panel: 'menu', chatOpen: false, bossKey: false });
+export const uiStore = createStore<UiState>({ panel: 'menu', station: 'anvil', chatOpen: false, bossKey: false });
+
+/** What the server says you own and know. Only changed by server messages. */
+export interface GameState {
+  bag: Bag;
+  equip: Equipment;
+  gold: number;
+  xp: Partial<Record<SkillId, number>>;
+  /** Crafting queue; `endsAt` is when the current item finishes (performance.now ms). */
+  job: { recipe: string; done: number; total: number; endsAt: number; seconds: number } | null;
+}
+export const gameStore = createStore<GameState>({ bag: [], equip: {}, gold: 0, xp: {}, job: null });
 export const settingsStore = createStore<Settings>(loadSettings());
 settingsStore.subscribe(saveSettings);

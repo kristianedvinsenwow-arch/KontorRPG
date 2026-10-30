@@ -62,9 +62,9 @@ test('moving points keeps the build valid; adding points does not', () => {
 test('perks change derived stats', () => {
   const base = derive(defaultBuild());
   assert.equal(base.maxHp, 25);
-  assert.equal(base.carryKg, 40);
+  assert.equal(base.bagBonus, 0);
   const mule = derive({ ...defaultBuild(), major: 'pack_mule' });
-  assert.equal(mule.carryKg, 52);
+  assert.equal(mule.bagBonus, 4);
   assert.ok(maxSpeed(1, mule.speedBonus) < maxSpeed());
   const gifted = derive({ ...defaultBuild(), major: 'gifted' });
   assert.equal(gifted.attrs.str, 6);
@@ -97,4 +97,59 @@ test('shoulders are an equipment slot and full armour costs 48 bars', () => {
   assert.ok(EQUIP_SLOTS.some((s) => s.slot === 'shoulders'));
   const armour = ['helmet', 'shoulders', 'chestplate', 'legs', 'gloves', 'boots'].reduce((n, k) => n + BARS_PER_ITEM[k], 0);
   assert.equal(armour, 48);
+});
+
+import { addItem, removeItem, countItem, emptyBag, roomFor, resizeBag, levelFromXp, xpForLevel, VEINS, VEIN_TYPES, RECIPES, ITEMS, swingSeconds, sanitiseBag } from '../src/index.js';
+
+test('bag stacks ores to 10 and gems to 5', () => {
+  const bag = emptyBag(16);
+  assert.equal(addItem(bag, 'stone', 25), 0);
+  assert.deepEqual(bag.slice(0, 3).map((s) => s?.qty), [10, 10, 5]);
+  addItem(bag, 'quartz', 7);
+  assert.equal(bag.filter((s) => s?.id === 'quartz').length, 2);
+  assert.equal(countItem(bag, 'stone'), 25);
+  assert.ok(removeItem(bag, 'stone', 12));
+  assert.equal(countItem(bag, 'stone'), 13);
+  assert.equal(removeItem(bag, 'stone', 99), false);
+  assert.equal(countItem(bag, 'stone'), 13);
+});
+
+test('a full bag rejects the overflow', () => {
+  const bag = emptyBag(2);
+  assert.equal(addItem(bag, 'stone', 25), 5);
+  assert.equal(roomFor(bag, 'stone'), 0);
+  assert.equal(resizeBag(bag, 1), null);
+  assert.equal(resizeBag(bag, 4)?.length, 4);
+});
+
+test('XP curve: 10 × L² per level', () => {
+  assert.equal(levelFromXp(0), 1);
+  assert.equal(levelFromXp(9), 1);
+  assert.equal(levelFromXp(10), 2);
+  assert.equal(xpForLevel(10), 2850);
+  assert.equal(levelFromXp(2850), 10);
+});
+
+test('veins exist, are on land, and include a starter cluster near camp', () => {
+  assert.ok(VEINS.filter((v) => v.type === 'stone').length >= 15);
+  assert.ok(VEINS.filter((v) => v.type === 'iron').length >= 6);
+  assert.ok(VEINS.some((v) => v.id.startsWith('camp-')));
+  for (const v of VEINS) assert.ok(v.y > 0.5);
+  for (const t of Object.values(VEIN_TYPES)) assert.ok(ITEMS[t.item] && ITEMS[t.gem.item]);
+});
+
+test('every recipe uses real items; iron recipes need a lower-tier part', () => {
+  for (const r of RECIPES) for (const i of [...r.inputs, r.output]) assert.ok(ITEMS[i.item], i.item);
+  for (const r of RECIPES.filter((x) => x.id.startsWith('iron_') && x.id !== 'iron_bar')) assert.ok(r.inputs.some((i) => i.item === 'shaped_stone'));
+});
+
+test('swings get faster with level and Hardrock', () => {
+  assert.ok(swingSeconds(2.6, 20, 0) < swingSeconds(2.6, 1, 0));
+  assert.ok(swingSeconds(2.6, 1, 0.2) < swingSeconds(2.6, 1, 0));
+});
+
+test('stored bags are sanitised', () => {
+  const bag = sanitiseBag([{ id: 'stone', qty: 3 }, { id: 'nope', qty: 1 }, { id: 'quartz', qty: -2 }], 16);
+  assert.equal(countItem(bag, 'stone'), 3);
+  assert.equal(bag.filter(Boolean).length, 1);
 });

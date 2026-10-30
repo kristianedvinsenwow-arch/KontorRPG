@@ -21,8 +21,8 @@ export const RACES: Record<Race, RaceDef> = {
 };
 
 export const ATTRS: { key: AttrKey; short: string; name: string; desc: string }[] = [
-  { key: 'str', short: 'STR', name: 'Strength', desc: 'Melee damage and carry weight. Governs Mining, Smithing, Woodcutting.' },
-  { key: 'dex', short: 'DEX', name: 'Dexterity', desc: 'Ranged damage, critical hits, gathering speed. Governs Fishing, Fletching.' },
+  { key: 'str', short: 'STR', name: 'Strength', desc: 'Melee damage; +1 bag slot at 8 and at 10. Governs Mining, Smithing, Woodcutting.' },
+  { key: 'dex', short: 'DEX', name: 'Dexterity', desc: 'Ranged damage, critical hits, +1% mining and fishing speed per point. Governs Fishing, Fletching.' },
   { key: 'int', short: 'INT', name: 'Intellect', desc: 'Spell damage, mana, rare crafting procs. Governs Cooking, Alchemy.' },
   { key: 'sta', short: 'STA', name: 'Stamina', desc: 'Health and ability stamina. Governs Defence, Herbalism.' },
 ];
@@ -38,7 +38,7 @@ export interface Mods {
   allAttrs?: number;
   hpPct?: number;
   hpFlat?: number;
-  carryPct?: number;
+  bagSlots?: number;
   speedPct?: number;
   xpPct?: number;
   dmgPct?: number;
@@ -68,8 +68,8 @@ export interface Perk {
 
 export const MAJOR_PERKS: Perk[] = [
   { id: 'hardrock', name: 'Hardrock', kind: 'major', plus: '+20% mining speed', minus: '−10% spell damage', mods: { miningSpeedPct: 0.2, spellPct: -0.1 } },
-  { id: 'pack_mule', name: 'Pack Mule', kind: 'major', plus: '+30% carry weight', minus: '−10% move speed', mods: { carryPct: 0.3, speedPct: -0.1 } },
-  { id: 'small_frame', name: 'Small Frame', kind: 'major', plus: '+10% move speed', minus: '−20% carry weight', mods: { speedPct: 0.1, carryPct: -0.2 } },
+  { id: 'pack_mule', name: 'Pack Mule', kind: 'major', plus: '+4 bag slots', minus: '−10% move speed', mods: { bagSlots: 4, speedPct: -0.1 } },
+  { id: 'small_frame', name: 'Small Frame', kind: 'major', plus: '+10% move speed', minus: '−2 bag slots', mods: { speedPct: 0.1, bagSlots: -2 } },
   { id: 'glass_cannon', name: 'Glass Cannon', kind: 'major', plus: '+20% all damage', minus: '−20% max HP', mods: { dmgPct: 0.2, hpPct: -0.2 } },
   { id: 'heavy_handed', name: 'Heavy Handed', kind: 'major', plus: '+15% melee damage', minus: 'Half the critical-hit chance', mods: { meleePct: 0.15, critMult: 0.5 } },
   { id: 'bookworm', name: 'Bookworm', kind: 'major', plus: '+10% XP in every skill', minus: '−10% max HP', mods: { xpPct: 0.1, hpPct: -0.1 } },
@@ -146,7 +146,10 @@ export function validateBuild(b: unknown): string | null {
 export interface Derived {
   attrs: Attrs; // after perks such as Gifted
   maxHp: number;
-  carryKg: number;
+  /** Extra bag slots from STR and perks (the bag itself starts at 16). */
+  bagBonus: number;
+  /** Mining speed bonus as a fraction (Hardrock +0.2, DEX +0.01 per point above 5). */
+  miningSpeed: number;
   speedBonus: number; // fraction, e.g. -0.1
   meleePct: number; // percent bonus vs. a 5-STR character
   rangedPct: number;
@@ -171,7 +174,8 @@ export function derive(b: CharacterBuild): Derived {
   return {
     attrs: a,
     maxHp: Math.round((10 + 3 * a.sta) * (1 + (m.hpPct ?? 0))) + (m.hpFlat ?? 0),
-    carryKg: Math.round((20 + 4 * a.str) * (1 + (m.carryPct ?? 0))),
+    bagBonus: (a.str >= 8 ? 1 : 0) + (a.str >= 10 ? 1 : 0) + (m.bagSlots ?? 0),
+    miningSpeed: (m.miningSpeedPct ?? 0) + 0.01 * (a.dex - 5),
     speedBonus: m.speedPct ?? 0,
     meleePct: pct(0.02 * (a.str - 5) + dmg + (m.meleePct ?? 0)),
     rangedPct: pct(0.02 * (a.dex - 5) + dmg),

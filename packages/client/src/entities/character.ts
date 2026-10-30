@@ -13,7 +13,12 @@ export interface Character {
   upper: THREE.Group;
   head: THREE.Group;
   arms: { shoulder: THREE.Group; elbow: THREE.Group }[];
-  tool: THREE.Group;
+  tool: THREE.Group | null;
+  pack: THREE.Group;
+  /** Item id currently in hand (tool or weapon). */
+  heldId?: string;
+  /** Shoulder tier currently shown (applyGear bookkeeping). */
+  userData_sh?: string | null;
   tag?: THREE.Sprite;
   /** Pauldrons on each shoulder; hidden until something is equipped in the shoulders slot. */
   pauldrons: THREE.Group[];
@@ -43,6 +48,7 @@ export function makePickaxe(): THREE.Group {
   pickB.rotation.z = Math.PI / 2; pickB.position.x = -0.12;
   bx(head, 0.08, 0.07, 0.07, stone, 0, 0, 0);
   bx(head, 0.05, 0.1, 0.075, lash, 0, -0.02, 0);
+  for (const o of head.children) if ((o as THREE.Mesh).material === stone) o.userData.metal = true;
   return g;
 }
 
@@ -97,8 +103,16 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
   bx(upper, 0.42, 0.06, 0.26, M.belt, 0, 0.16, 0);
   bx(upper, 0.07, 0.06, 0.02, M.buckle, 0, 0.16, -0.135);
   bx(upper, 0.12, 0.1, 0.06, M.pack, 0.17, 0.12, -0.08); // belt pouch
-  bx(upper, 0.3, 0.34, 0.14, M.pack, 0, 0.4, 0.19); // backpack
-  bx(upper, 0.05, 0.42, 0.04, M.belt, 0.1, 0.42, 0.0, 0, 0, 0.0);
+  // Backpack: only shown while a bag is worn in the back slot (bigger bag, bigger pack).
+  const pack = new THREE.Group();
+  pack.position.set(0, 0.4, 0.19);
+  upper.add(pack);
+  bx(pack, 0.3, 0.34, 0.14, M.pack, 0, 0, 0);
+  bx(pack, 0.26, 0.08, 0.15, M.belt, 0, 0.13, 0.005); // flap
+  bx(pack, 0.2, 0.12, 0.05, M.pack, 0, -0.07, 0.09); // front pocket
+  for (const sx of [-0.1, 0.1]) bx(pack, 0.04, 0.4, 0.03, M.belt, sx, 0.02, -0.08); // straps
+  pack.traverse((o) => (o.userData.keep = true));
+  pack.visible = false;
   limb(upper, v3(0, 0.6, 0), v3(0, 0.7, 0), 0.06, 0.055, M.skin, 10);
 
   // Head with hood.
@@ -172,15 +186,6 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
     ball(elbow, v3(0, -0.27, 0), 0.048, M.skin, 10);
     arms.push({ shoulder, elbow });
   }
-  const tool = makePickaxe();
-  tool.position.set(0, -0.27, 0);
-  // In forearm space: tilt the haft so it rises forward out of the fist, then spin it about its own
-  // axis so the picks sit fore and aft (upright) instead of sideways. Grip ~8 cm up the haft.
-  tool.rotation.set(-2.15, Math.PI / 2, 0, 'XYZ');
-  tool.translateY(-0.08);
-  tool.traverse((o) => (o.userData.keep = true));
-  arms[1].elbow.add(tool);
-
   mergeStatic(g);
 
   // Overall size per race. The body goes in its own scaled group so the name tag keeps a readable
@@ -191,13 +196,27 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
   body.scale.setScalar(scale);
   g.add(body);
 
-  const ch: Character = { g, legs, upper, head, arms, tool, pauldrons, race, hipY, stride: 1 / (scale * (0.35 + 0.65 * L)), ph: 0, swing: 0 };
+  const ch: Character = { g, legs, upper, head, arms, tool: null, pack, pauldrons, race, hipY, stride: 1 / (scale * (0.35 + 0.65 * L)), ph: 0, swing: 0 };
   if (name) {
     ch.tag = nameSprite(name, col);
     ch.tag.position.y = R.height + 0.3;
     g.add(ch.tag);
   }
   return ch;
+}
+
+/** Put a model in the right hand (or empty it with null). */
+export function setHeld(c: Character, model: THREE.Group | null, id?: string): void {
+  if (c.tool) c.tool.parent?.remove(c.tool);
+  c.tool = model;
+  c.heldId = id;
+  if (!model) return;
+  model.position.set(0, -0.27, 0);
+  // In forearm space: tilt the haft so it rises forward out of the fist, then spin it about its own
+  // axis so the picks sit fore and aft (upright) instead of sideways. Grip ~8 cm up the haft.
+  model.rotation.set(-2.15, Math.PI / 2, 0, 'XYZ');
+  model.translateY(-0.08);
+  c.arms[1].elbow.add(model);
 }
 
 /** Walk cycle + look + tool swing (KontorLAN's animSoldier, trimmed for RPG use). */

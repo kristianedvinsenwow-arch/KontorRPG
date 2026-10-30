@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { INTERP_DELAY_MS, type PlayerState } from '@kontor/shared';
 import { makeCharacter, animateCharacter, type Character } from '../entities/character.js';
+import { applyGear } from '../entities/held.js';
 
 interface Sample { at: number; s: PlayerState }
 
@@ -52,6 +53,7 @@ export class Remotes {
         r = { id: s.id, name: s.name, color: s.color, race: s.race, model, buf: [], lastSeen: now };
         this.map.set(s.id, r);
       }
+      applyGear(r.model, s.gear);
       r.buf.push({ at, s });
       if (r.buf.length > 20) r.buf.shift();
       r.lastSeen = now;

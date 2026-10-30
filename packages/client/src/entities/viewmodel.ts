@@ -9,11 +9,19 @@
  */
 import * as THREE from 'three';
 import { mat, mesh, limb, ball, v3 } from '../engine/procgen.js';
-import { makePickaxe } from './character.js';
+import { makeHeld } from './held.js';
+
+/** Length of one swing animation; the strike lands at STRIKE_AT of it. */
+export const SWING_SEC = 0.62;
+export const STRIKE_AT = 0.5;
 
 export interface Viewmodel {
   root: THREE.Group;
-  update(dt: number, speed: number, swinging: boolean, lookDx: number, lookDy: number): void;
+  /** Play one swing (the caller paces them to the tool's swing time). */
+  swing(): void;
+  /** Show this item in hand (tool or weapon id), or nothing. */
+  setHeld(id: string | undefined): void;
+  update(dt: number, speed: number, lookDx: number, lookDy: number): void;
 }
 
 const HAFT_R = 0.022; // pickaxe haft radius before scaling
@@ -70,12 +78,9 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
   const back = new THREE.Vector3().crossVectors(side, up).normalize();
   grip.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(side, up, back));
 
-  const tool = makePickaxe();
   const s = 0.62;
-  tool.scale.setScalar(s);
-  tool.position.y = -0.09; // grip near the end of the haft
-  tool.rotation.y = 0.35; // head crosses the haft like a T, turned slightly so it reads in depth
-  grip.add(tool);
+  let tool: THREE.Group | null = null;
+  let heldId: string | undefined;
 
   const hand = makeGrip(HAFT_R * s, skin, knuckle);
   grip.add(hand);
@@ -94,10 +99,25 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
   const rest = new THREE.Vector3(0.37, -0.39, -0.24);
   const sway = new THREE.Vector2();
   let ph = 0, breath = 0, swing = 0, active = false;
+  root.visible = false;
 
   return {
     root,
-    update(dt, speed, swinging, lookDx, lookDy) {
+    swing() { if (!active) { active = true; swing = 0; } },
+    setHeld(id) {
+      if (id === heldId) return;
+      heldId = id;
+      if (tool) grip.remove(tool);
+      tool = makeHeld(id);
+      root.visible = !!tool;
+      if (!tool) return;
+      tool.scale.setScalar(s);
+      tool.position.y = id?.includes('sword') ? -0.03 : -0.09; // grip near the end of the haft
+      tool.rotation.y = 0.35; // head crosses the haft like a T, turned slightly so it reads in depth
+      tool.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+      grip.add(tool);
+    },
+    update(dt, speed, lookDx, lookDy) {
       ph += dt * speed * 1.6;
       breath += dt;
       const bob = Math.min(1, speed / 5);
@@ -107,10 +127,9 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
       sway.y += (lookDy * 0.0009 - sway.y) * Math.min(1, dt * 6);
       sway.clampScalar(-0.05, 0.05);
 
-      if (swinging && !active) { active = true; swing = 0; }
       if (active) {
-        swing += dt * 1.9;
-        if (swing >= 1) { swing = 0; active = swinging; }
+        swing += dt / SWING_SEC;
+        if (swing >= 1) { swing = 0; active = false; }
       }
       // Swing curve around the elbow: wind up over the shoulder, fast strike, slow recovery.
       let lift = 0;

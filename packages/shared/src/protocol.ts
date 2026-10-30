@@ -1,4 +1,6 @@
 import type { CharacterBuild, Race } from './character.js';
+import type { Bag, Equipment, Slot } from './items.js';
+import type { SkillId } from './skills.js';
 
 /**
  * Wire protocol. JSON for M0 (readable while we iterate); the shape is designed so it can move to a
@@ -19,6 +21,8 @@ export interface PlayerState {
   spd: number;
   /** Optional action being played (e.g. a pickaxe swing), shown to others. */
   act?: 'swing';
+  /** Visible gear: t = tool, m = main hand, s = shoulders, b = back (bag). */
+  gear?: { t?: string; m?: string; s?: string; b?: string };
 }
 
 // ---------- client → server ----------
@@ -27,7 +31,14 @@ export type ClientMsg =
   | { t: 'hello'; name: string; color: number; proto: number; build: CharacterBuild; token?: string }
   | { t: 'input'; seq: number; x: number; y: number; z: number; yaw: number; pitch: number; act?: 'swing' }
   | { t: 'chat'; text: string }
-  | { t: 'ping'; at: number };
+  | { t: 'ping'; at: number }
+  | { t: 'mine'; node: string }
+  | { t: 'craft'; recipe: string; count: number }
+  | { t: 'cancelCraft' }
+  | { t: 'equip'; index: number }
+  | { t: 'unequip'; slot: Slot }
+  | { t: 'buy'; item: string }
+  | { t: 'sell'; index: number; qty: number };
 
 // ---------- server → client ----------
 export type ServerMsg =
@@ -41,7 +52,17 @@ export type ServerMsg =
   | { t: 'chat'; from: string; name: string; text: string; at: number }
   | { t: 'system'; text: string }
   | { t: 'pong'; at: number }
-  | { t: 'reject'; reason: string };
+  | { t: 'reject'; reason: string }
+  /** Your bag, equipment and gold (sent whenever they change). */
+  | { t: 'inv'; bag: Bag; equip: Equipment; gold: number }
+  | { t: 'skills'; xp: Partial<Record<SkillId, number>> }
+  /** Something you gained: XP and/or an item (drives the pop-ups). */
+  | { t: 'gain'; skill?: SkillId; xp?: number; item?: string; qty?: number; rare?: boolean }
+  /** Depleted veins: [id, seconds until it respawns]; 0 means it is back. */
+  | { t: 'nodes'; depleted: [string, number][] }
+  /** Your crafting queue (recipe null = idle). */
+  | { t: 'job'; recipe: string | null; done: number; total: number; seconds: number }
+  | { t: 'notice'; text: string; kind: 'error' | 'info' | 'rare' };
 
 export function encode(msg: ClientMsg | ServerMsg): string {
   return JSON.stringify(msg);
@@ -80,6 +101,20 @@ export function decodeClient(raw: string): ClientMsg | null {
     case 'ping':
       if (!num(m.at)) return null;
       return { t: 'ping', at: m.at };
+    case 'mine':
+      return typeof m.node === 'string' && m.node.length < 40 ? { t: 'mine', node: m.node } : null;
+    case 'craft':
+      return typeof m.recipe === 'string' && num(m.count) ? { t: 'craft', recipe: m.recipe, count: Math.max(1, Math.min(100, Math.floor(m.count))) } : null;
+    case 'cancelCraft':
+      return { t: 'cancelCraft' };
+    case 'equip':
+      return num(m.index) ? { t: 'equip', index: Math.floor(m.index) } : null;
+    case 'unequip':
+      return typeof m.slot === 'string' ? { t: 'unequip', slot: m.slot as Slot } : null;
+    case 'buy':
+      return typeof m.item === 'string' ? { t: 'buy', item: m.item } : null;
+    case 'sell':
+      return num(m.index) && num(m.qty) ? { t: 'sell', index: Math.floor(m.index), qty: Math.max(1, Math.floor(m.qty)) } : null;
     default:
       return null;
   }

@@ -3,21 +3,30 @@
  */
 import './styles.css';
 import * as THREE from 'three';
-import { EYE_HEIGHT, INPUT_HZ, RACES, derive, r2, r3, type CharacterBuild } from '@kontor/shared';
+import {
+  EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, RACES, RECIPE_BY_ID, STATIONS, TRADING_POST, USE_RANGE, VEIN_TYPES,
+  derive, levelFromXp, r2, r3, swingSeconds,
+  type CharacterBuild, type StationId, type Vein,
+} from '@kontor/shared';
 import { createGfx } from './engine/renderer.js';
 import { Input } from './engine/input.js';
 import { Terrain } from './world/terrain.js';
-import { makeViewmodel } from './entities/viewmodel.js';
+import { makeViewmodel, SWING_SEC, STRIKE_AT } from './entities/viewmodel.js';
+import { heldOf } from './entities/held.js';
+import { Veins } from './world/veins.js';
+import { Camp } from './world/camp.js';
+import { initPanels } from './ui/panels.js';
+import { iconFor } from './ui/icons.js';
 import { createLocalPlayer, stepPlayer, type LocalPlayer } from './physics/movement.js';
 import { NetClient } from './net/client.js';
 import { Remotes } from './net/remotes.js';
-import { netStore, settingsStore, uiStore } from './state/store.js';
+import { gameStore, netStore, settingsStore, uiStore } from './state/store.js';
 import { initHud } from './ui/hud.js';
 import { initPause, initBossKey } from './ui/menu.js';
 import { initCreator } from './ui/creator.js';
 import { initAccount } from './ui/account.js';
 import { Auth } from './net/auth.js';
-import { CharacterPreview, fillCharacterPanel } from './ui/characterPanel.js';
+import { CharacterPreview, fillCharacterPanel, fillEquipment } from './ui/characterPanel.js';
 
 const view = document.getElementById('view')!;
 const gfx = createGfx(view, settingsStore.get().quality);
@@ -27,6 +36,8 @@ settingsStore.subscribe((s) => { if (s.quality !== gfx.quality) gfx.setQuality(s
 const terrain = new Terrain(scene);
 terrain.dense = settingsStore.get().quality !== 'low';
 terrain.update(0, 0, 99); // build the spawn area up front
+const veins = new Veins(scene);
+const camp = new Camp(scene);
 const input = new Input(renderer.domElement);
 const viewmodel = makeViewmodel(vmScene);
 const preview = new CharacterPreview('preview', () => uiStore.get().panel === 'character');
@@ -73,6 +84,13 @@ syncCreatorPreview();
 initPause(() => { uiStore.set({ panel: 'none' }); input.lock(); });
 initBossKey(() => input.unlock());
 
+const panels = initPanels((m) => net.send(m), () => { if (me) input.lock(); });
+const GAME_PANELS = ['inventory', 'skills', 'craft', 'shop'];
+function openPanel(panel: 'inventory' | 'skills' | 'craft' | 'shop', station?: StationId) {
+  uiStore.set({ panel, ...(station ? { station } : {}) });
+  input.unlock();
+}
+
 renderer.domElement.addEventListener('click', () => {
   const p = uiStore.get().panel;
   if ((p === 'none' || p === 'pause') && me) { uiStore.set({ panel: 'none' }); input.lock(); }
@@ -86,6 +104,18 @@ document.addEventListener('pointerlockchange', () => {
 input.onKey((code) => {
   const u = uiStore.get();
   if (u.panel === 'menu' || u.bossKey) return;
+  if (GAME_PANELS.includes(u.panel)) {
+    const closeKey = { inventory: 'KeyI', skills: 'KeyK', craft: 'KeyE', shop: 'KeyE' }[u.panel as 'inventory'];
+    if (code === 'Escape' || code === closeKey || (code === 'KeyI' && u.panel === 'shop')) { uiStore.set({ panel: 'none' }); return; }
+    if (code === 'KeyI') { openPanel('inventory'); return; }
+    if (code === 'KeyK') { openPanel('skills'); return; }
+    return;
+  }
+  if (u.panel === 'none' && !u.chatOpen && me) {
+    if (code === 'KeyI') return openPanel('inventory');
+    if (code === 'KeyK') return openPanel('skills');
+    if (code === 'KeyE' && near) return near.kind === 'shop' ? openPanel('shop') : openPanel('craft', near.station);
+  }
   if (code === 'KeyC') {
     if (u.panel === 'character') { uiStore.set({ panel: 'none' }); input.lock(); }
     else { uiStore.set({ panel: 'character' }); input.unlock(); }
@@ -131,12 +161,127 @@ net.on((msg) => {
       hud.chat(msg.name, who?.color ?? 0, msg.text);
       break;
     }
+    case 'inv': {
+      gameStore.set({ bag: msg.bag, equip: msg.equip, gold: msg.gold });
+      const gear = { t: msg.equip.tool, m: msg.equip.mainHand, s: msg.equip.shoulders, b: msg.equip.back };
+      viewmodel.setHeld(heldOf(gear));
+      preview.setGear(gear);
+      fillEquipment(msg.equip);
+      break;
+    }
+    case 'skills':
+      gameStore.set({ xp: msg.xp });
+      break;
+    case 'gain':
+      if (msg.item) pop(`+${msg.qty ?? 1} ${ITEMS[msg.item]?.name ?? msg.item}`, msg.rare ? 'rare' : '', msg.item);
+      if (msg.xp && msg.skill) setTimeout(() => pop(`+${msg.xp} ${msg.skill![0].toUpperCase()}${msg.skill!.slice(1)} XP`, 'xp'), 180);
+      break;
+    case 'nodes':
+      veins.setDepleted(msg.depleted);
+      break;
+    case 'job':
+      gameStore.set({ job: msg.recipe ? { recipe: msg.recipe, done: msg.done, total: msg.total, seconds: RECIPE_BY_ID.get(msg.recipe)?.seconds ?? msg.seconds, endsAt: performance.now() + msg.seconds * 1000 } : null });
+      break;
+    case 'notice':
+      hud.toast(msg.text, msg.kind === 'rare' ? 6000 : 3500, msg.kind);
+      if (msg.kind !== 'error') hud.system(msg.text);
+      break;
     case 'system':
       hud.system(msg.text);
       if (/reloading|restarting/i.test(msg.text)) hud.toast(msg.text, 5000);
       break;
   }
 });
+
+// ---------------------------------------------------------------- mining & interaction
+const pops = document.getElementById('pops')!;
+let popRow = 0;
+function pop(text: string, cls = '', item?: string) {
+  const d = document.createElement('div');
+  d.className = `pop ${cls}`;
+  d.style.top = `${(popRow++ % 3) * 22}px`;
+  if (item) { const img = document.createElement('img'); img.src = iconFor(item); d.append(img); }
+  d.append(document.createTextNode(text));
+  pops.append(d);
+  setTimeout(() => d.remove(), 1700);
+}
+
+/** What's in front of you or next to you this frame. */
+let near: { kind: 'shop' } | { kind: 'craft'; station: StationId } | null = null;
+let aimed: Vein | null = null;
+let nextSwingAt = 0;
+let swingUntil = 0;
+const promptEl = document.getElementById('prompt')!;
+const purse = { gold: document.getElementById('goldtext')!, bag: document.getElementById('bagtext')! };
+const job = { box: document.getElementById('jobbar')!, text: document.getElementById('jobtext')!, fill: document.getElementById('jobfill')! };
+const fwd = new THREE.Vector3();
+
+function setPrompt(html: string | null) {
+  if (!html) { promptEl.hidden = true; return; }
+  if (promptEl.innerHTML !== html) promptEl.innerHTML = html; // only our own fixed strings, never player text
+  promptEl.hidden = false;
+}
+
+/** Why you can't mine this vein right now, or null if you can. */
+function mineBlocker(v: Vein): string | null {
+  const g = gameStore.get();
+  const type = VEIN_TYPES[v.type];
+  const tool = g.equip.tool ? ITEMS[g.equip.tool] : null;
+  if (veins.isDepleted(v.id)) return `${type.name} — depleted, back in ${veins.secondsLeft(v.id)}s`;
+  if (!tool) return `You need a pickaxe — <b>Trader Ingrid</b> at the trading post sells one`;
+  if ((tool.toolPower ?? 0) < type.power) return 'You need a stronger pickaxe';
+  const lvl = levelFromXp(g.xp.mining ?? 0);
+  if (lvl < type.level) return `${type.name} — needs Mining ${type.level} (you have ${lvl})`;
+  return null;
+}
+
+function interact(now: number, playing: boolean) {
+  if (!me) return;
+  // Stations and the trader: walk up to them and press E.
+  near = null;
+  const d = (p: { x: number; z: number }) => Math.hypot(me!.x - p.x, me!.z - p.z);
+  let best = USE_RANGE;
+  if (d(TRADING_POST) < best) { near = { kind: 'shop' }; best = d(TRADING_POST); }
+  for (const id of Object.keys(STATIONS) as StationId[]) if (d(STATIONS[id]) < best) { near = { kind: 'craft', station: id }; best = d(STATIONS[id]); }
+
+  cam.getWorldDirection(fwd);
+  aimed = veins.target(cam.position, fwd, MINE_RANGE + 0.6);
+  veins.setHighlight(aimed?.id ?? null);
+  const blocked = aimed ? mineBlocker(aimed) : null;
+  const g = gameStore.get();
+  const tool = g.equip.tool ? ITEMS[g.equip.tool] : null;
+
+  if (playing && input.mouseDown && now >= nextSwingAt && (tool || g.equip.mainHand)) {
+    if (aimed && !blocked && tool) {
+      const lvl = levelFromXp(g.xp.mining ?? 0);
+      const ms = swingSeconds(tool.swingSec ?? 2.6, lvl, myBuild ? derive(myBuild).miningSpeed : 0) * 1000;
+      nextSwingAt = now + Math.max(ms, SWING_SEC * 1000);
+      const target = aimed.id;
+      viewmodel.swing();
+      setTimeout(() => { net.send({ t: 'mine', node: target }); veins.hit(target); }, SWING_SEC * STRIKE_AT * 1000);
+    } else {
+      nextSwingAt = now + SWING_SEC * 1000; // swinging at air
+      viewmodel.swing();
+    }
+    swingUntil = now + SWING_SEC * 1000;
+  }
+
+  if (!playing) setPrompt(null);
+  else if (aimed) setPrompt(blocked ? `<span class="bad">${blocked}</span>` : `Hold <b>click</b> to mine ${VEIN_TYPES[aimed.type].name.toLowerCase()}`);
+  else if (near?.kind === 'shop') setPrompt(`<b>E</b> Trade with Ingrid`);
+  else if (near?.kind === 'craft') setPrompt(`<b>E</b> Use the ${STATIONS[near.station].name.toLowerCase()}`);
+  else setPrompt(null);
+
+  // HUD purse and crafting bar.
+  purse.gold.textContent = `${g.gold} g`;
+  purse.bag.textContent = `Bag ${g.bag.filter(Boolean).length}/${g.bag.length}`;
+  const j = g.job;
+  job.box.hidden = !j;
+  if (j) {
+    job.text.textContent = `${ITEMS[RECIPE_BY_ID.get(j.recipe)!.output.item].name} ${j.done + 1}/${j.total}`;
+    job.fill.style.width = `${Math.round(100 * Math.min(1, Math.max(0, 1 - (j.endsAt - now) / (j.seconds * 1000))))}%`;
+  }
+}
 
 // ---------------------------------------------------------------- loop
 const clock = new THREE.Clock();
@@ -160,7 +305,6 @@ function frame() {
   if (u.bossKey) return; // nothing drawn while the spreadsheet is up
 
   const playing = u.panel === 'none' && !u.chatOpen && input.locked;
-  let swinging = false;
 
   let look = { dx: 0, dy: 0 };
   if (me) {
@@ -169,10 +313,10 @@ function frame() {
       const k = 0.0022 * settingsStore.get().sensitivity;
       me.yaw -= look.dx * k;
       me.pitch = THREE.MathUtils.clamp(me.pitch - look.dy * k, -1.5, 1.5);
-      swinging = input.mouseDown;
     }
-    stepPlayer(me, playing ? input.axes() : { forward: 0, right: 0, jump: false }, terrain.collidersNear(me.x, me.z), dt, speedBonus);
-    sendInput(now, swinging);
+    const colliders = terrain.collidersNear(me.x, me.z).concat(veins.collidersNear(me.x, me.z), camp.colliders);
+    stepPlayer(me, playing ? input.axes() : { forward: 0, right: 0, jump: false }, colliders, dt, speedBonus);
+    sendInput(now, now < swingUntil);
     terrain.update(me.x, me.z);
 
     walkPh += dt * me.speed * 1.6;
@@ -181,6 +325,7 @@ function frame() {
     cam.rotation.set(me.pitch, me.yaw, 0);
     gfx.follow(cam.position);
     hud.frame(me.x, me.z);
+    interact(now, playing);
   } else {
     // Menu: slow flyover of the spawn clearing.
     flyT += dt * 0.04;
@@ -190,13 +335,16 @@ function frame() {
   }
 
   remotes.update(dt);
-  viewmodel.update(dt, me?.speed ?? 0, swinging, playing ? look.dx : 0, playing ? look.dy : 0);
+  viewmodel.update(dt, me?.speed ?? 0, playing ? look.dx : 0, playing ? look.dy : 0);
+  veins.animate(dt);
+  camp.animate(dt);
+  panels.frame();
 
   renderer.setScissorTest(false);
   renderer.setClearColor(0x000000, 1);
   terrain.animate(clock.elapsedTime);
   gfx.renderWorld();
-  if (me && u.panel !== 'character') {
+  if (me && u.panel !== 'character' && viewmodel.root.visible) {
     renderer.clearDepth();
     renderer.render(vmScene, vmCam);
   }
@@ -206,4 +354,4 @@ function frame() {
 frame();
 
 // Exposed for automated smoke tests and debugging in the console.
-(window as any).__kontor = { get me() { return me; }, get build() { return myBuild; }, remotes, net, terrain, netStore, uiStore, settingsStore, creatorPreview, auth };
+(window as any).__kontor = { get me() { return me; }, get build() { return myBuild; }, get aimed() { return aimed; }, remotes, net, terrain, veins, netStore, uiStore, gameStore, settingsStore, creatorPreview, preview, auth, openPanel };

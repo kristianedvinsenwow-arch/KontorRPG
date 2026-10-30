@@ -23,8 +23,12 @@
       <div id="chatlog"></div>
       <input id="chatin" maxlength="200" placeholder="Say something… (Enter to send, Esc to cancel)" hidden />
     </div>
+    <div id="prompt" hidden></div>
+    <div id="pops"></div>
+    <div id="jobbar" class="chip" hidden><span id="jobtext"></span><div class="bar"><i id="jobfill"></i></div></div>
+    <div id="purse" class="chip"><span class="gold" id="goldtext">0 g</span><span id="bagtext">Bag 0/16</span></div>
     <div id="keys" class="chip">
-      <kbd>WASD</kbd> walk <kbd>Space</kbd> jump <kbd>Click</kbd> swing <kbd>C</kbd> character <kbd>Enter</kbd> chat <kbd>F9</kbd> boss key
+      <kbd>WASD</kbd> walk <kbd>Click</kbd> mine <kbd>E</kbd> use <kbd>I</kbd> bag <kbd>K</kbd> skills <kbd>C</kbd> character <kbd>Enter</kbd> chat <kbd>F9</kbd> boss key
     </div>
     <div id="fps"></div>
   </div>
@@ -32,7 +36,7 @@
   <!-- Start menu = character creator. The right-hand window is drawn by the renderer (live preview). -->
   <section id="menu" class="overlay">
     <div class="brief creator">
-      <div class="eyebrow">Create your character · M0 tech spike</div>
+      <div class="eyebrow">Create your character · M1 mining &amp; smithing</div>
       <h1>Kontor<span>RPG</span></h1>
 
       <div id="account" class="account" hidden></div>
@@ -122,6 +126,11 @@
         <button id="closeChar" class="btn ghost">Close (C)</button>
       </div>
     </div>
+  </section>
+
+  <!-- Inventory, skills, crafting and the trading post share one overlay -->
+  <section id="gamePanel" class="overlay" hidden>
+    <div id="gameCard" class="pcard"></div>
   </section>
 
   <!-- Boss key: one key swaps the game for something that looks like work -->

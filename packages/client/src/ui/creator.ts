@@ -5,7 +5,7 @@
  */
 import {
   ATTRS, ATTR_MAX, ATTR_MIN, ATTR_START, MAJOR_PERKS, MINOR_PERKS, MAX_NAME_LEN, PLAYER_COLORS, RACES,
-  derive, freePoints, maxSpeed, validateBuild,
+  BASE_BAG_SLOTS, derive, freePoints, maxSpeed, validateBuild,
   type AttrKey, type CharacterBuild, type Perk, type Race,
 } from '@kontor/shared';
 import { netStore, settingsStore, uiStore } from '../state/store.js';
@@ -168,7 +168,7 @@ export function derivedTiles(b: CharacterBuild): HTMLElement[] {
   const tiles: [string, string, number][] = [
     ['HP', String(d.maxHp), d.maxHp - 25],
     ['Mana', String(d.mana), d.mana - 35],
-    ['Carry', `${d.carryKg} kg`, d.carryKg - 40],
+    ['Bag', `${BASE_BAG_SLOTS + d.bagBonus} slots`, d.bagBonus],
     ['Speed', signed(speed), speed],
     ['Melee', signed(d.meleePct), d.meleePct],
     ['Ranged', signed(d.rangedPct), d.rangedPct],

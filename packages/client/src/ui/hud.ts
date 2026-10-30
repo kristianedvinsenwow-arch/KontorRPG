@@ -67,9 +67,10 @@ export function initHud(onSendChat: (text: string) => void) {
   return {
     chat(name: string, color: number, text: string) { line(text, '', PLAYER_COLORS[color % PLAYER_COLORS.length], name); },
     system(text: string) { line(text, 'sys'); },
-    toast(text: string, ms = 3500) {
+    toast(text: string, ms = 3500, kind = '') {
       const d = document.createElement('div');
-      d.className = 'toast';
+      d.className = kind ? `toast ${kind}` : 'toast';
+      while (toasts.children.length > 3) toasts.firstElementChild?.remove();
       d.textContent = text;
       toasts.append(d);
       setTimeout(() => d.remove(), ms);

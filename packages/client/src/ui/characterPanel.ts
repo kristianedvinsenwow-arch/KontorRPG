@@ -5,8 +5,9 @@
  * WebGL context, no texture readback).
  */
 import * as THREE from 'three';
-import { EQUIP_SLOTS, PERKS, RACES, type CharacterBuild, type Race, type Slot } from '@kontor/shared';
+import { EQUIP_SLOTS, ITEMS, PERKS, RACES, type CharacterBuild, type Equipment, type PlayerState, type Race } from '@kontor/shared';
 import { makeCharacter, animateCharacter, setShoulders, type Character, type GEAR_COLORS } from '../entities/character.js';
+import { applyGear } from '../entities/held.js';
 import { derivedTiles } from './creator.js';
 
 export class CharacterPreview {
@@ -46,7 +47,15 @@ export class CharacterPreview {
     this.key = k;
     if (this.model) this.scene.remove(this.model.g);
     this.model = makeCharacter(color, undefined, race);
+    if (this.gear) applyGear(this.model, this.gear);
     this.scene.add(this.model.g);
+  }
+
+  private gear: PlayerState['gear'] | null = null;
+  /** Dress the preview in your worn gear. */
+  setGear(gear: PlayerState['gear']): void {
+    this.gear = gear;
+    if (this.model) applyGear(this.model, gear);
   }
 
   /** Use the world's sky environment so metal gear reflects the same light as in the game. */
@@ -84,25 +93,22 @@ export class CharacterPreview {
   }
 }
 
-/** Fill the in-game character panel's text from the build. */
-/** Starter equipment until inventories arrive in M1. */
-const STARTER: Partial<Record<Slot, [string, string]>> = {
-  chest: ['Travel Tunic', '—'],
-  legs: ['Wool Trousers', '—'],
-  feet: ['Leather Boots', '—'],
-  mainHand: ['Stone Pickaxe', 'Tier 1'],
-};
-
-export function fillCharacterPanel(name: string, build: CharacterBuild): void {
+/** Worn gear in the character panel (from the server's inventory message). */
+export function fillEquipment(equip: Equipment): void {
   document.getElementById('slots')!.replaceChildren(...EQUIP_SLOTS.map(({ slot, label }) => {
     const li = document.createElement('li');
-    const [item, tier] = STARTER[slot] ?? ['Empty', ''];
+    const id = equip[slot];
+    const def = id ? ITEMS[id] : undefined;
     const a = document.createElement('span'); a.textContent = label;
-    const b = document.createElement('b'); b.textContent = item; if (item === 'Empty') b.style.color = 'var(--muted)';
-    const c = document.createElement('em'); c.textContent = tier;
+    const b = document.createElement('b'); b.textContent = def?.name ?? 'Empty'; if (!def) b.style.color = 'var(--muted)';
+    const c = document.createElement('em'); c.textContent = def?.tier ? `${def.tier[0].toUpperCase()}${def.tier.slice(1)} tier` : '';
     li.append(a, b, c);
     return li;
   }));
+}
+
+/** Fill the in-game character panel's text from the build. */
+export function fillCharacterPanel(name: string, build: CharacterBuild): void {
   document.getElementById('charName')!.textContent = name;
   document.getElementById('charRace')!.textContent = `${RACES[build.race].name} · STR ${build.attrs.str} · DEX ${build.attrs.dex} · INT ${build.attrs.int} · STA ${build.attrs.sta}`;
   document.getElementById('charStats')!.replaceChildren(...derivedTiles(build));

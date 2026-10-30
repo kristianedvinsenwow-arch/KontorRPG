@@ -184,3 +184,173 @@ test('bad tokens are rejected and a second login replaces the first', async () =
   assert.equal(a.closed, 'replaced');
   assert.equal(world.players.size, 1);
 });
+
+// ------------------------------------------------------------------ M1: mining, smithing, trading
+import { ITEMS, STATIONS, TRADING_POST, VEIN_BY_ID, VEIN_TYPES, countItem, xpForLevel } from '@kontor/shared';
+
+function m1() {
+  let t = 2_000_000;
+  const world = new World({ build: 'test', now: () => t, random: () => 0.5 });
+  const c = fakeClient();
+  world.connect(c);
+  world.handle(c, { t: 'hello', name: 'Miner', color: 0, proto: PROTOCOL_VERSION, build: defaultBuild() });
+  const id = (c.inbox.find((m) => m.t === 'welcome') as any).id as string;
+  const p = world.inspect(id)!;
+  const place = (x: number, z: number) => { const y = heightAt(x, z); Object.assign(p.state, { x, y, z }); p.lastValid = { x, y, z, at: t }; };
+  const last = <T extends ServerMsg['t']>(k: T) => c.inbox.filter((m) => m.t === k).at(-1) as Extract<ServerMsg, { t: T }> | undefined;
+  return { world, c, p, place, last, advance: (ms: number) => (t += ms) };
+}
+
+test('new characters start with 16 empty slots, 15 gold and no pickaxe', () => {
+  const { last } = m1();
+  const inv = last('inv')!;
+  assert.equal(inv.bag.length, 16);
+  assert.equal(inv.gold, 15);
+  assert.equal(inv.equip.tool, undefined);
+});
+
+test('you cannot mine without a pickaxe; buy one at the trading post and equip it', () => {
+  const { world, c, p, place, last } = m1();
+  const vein = VEIN_BY_ID.get('camp-0')!;
+  place(vein.x + 1.5, vein.z);
+  world.handle(c, { t: 'mine', node: vein.id });
+  assert.match(last('notice')!.text, /pickaxe/);
+  world.handle(c, { t: 'buy', item: 'stone_pickaxe' });
+  assert.match(last('notice')!.text, /trading post/); // too far away
+  place(TRADING_POST.x + 1, TRADING_POST.z);
+  world.handle(c, { t: 'buy', item: 'stone_pickaxe' });
+  assert.equal(last('inv')!.gold, 5);
+  world.handle(c, { t: 'equip', index: p.bag.findIndex((s) => s?.id === 'stone_pickaxe') });
+  assert.equal(p.equip.tool, 'stone_pickaxe');
+  assert.equal(p.state.gear?.t, 'stone_pickaxe');
+  assert.equal(countItem(p.bag, 'stone_pickaxe'), 0);
+});
+
+test('mining respects the swing timer, gives stone and XP, and depletes the vein for everyone', () => {
+  const { world, c, p, place, last, advance } = m1();
+  p.equip.tool = 'stone_pickaxe';
+  const vein = VEIN_BY_ID.get('camp-0')!;
+  place(vein.x + 1.5, vein.z);
+  world.handle(c, { t: 'mine', node: vein.id });
+  world.handle(c, { t: 'mine', node: vein.id }); // too soon: ignored
+  assert.equal(countItem(p.bag, 'stone'), 1);
+  assert.equal(p.xp.mining, VEIN_TYPES.stone.xp);
+  let swings = 1;
+  while (!last('nodes')?.depleted.some(([id, s]) => id === vein.id && s > 0)) { advance(3000); world.handle(c, { t: 'mine', node: vein.id }); swings++; assert.ok(swings < 10); }
+  assert.equal(countItem(p.bag, 'stone'), swings);
+  advance(3000);
+  world.handle(c, { t: 'mine', node: vein.id });
+  assert.match(last('notice')!.text, /depleted/);
+  advance(VEIN_TYPES.stone.respawnSec * 1000);
+  world.step();
+  assert.deepEqual(last('nodes')!.depleted, [[vein.id, 0]]);
+});
+
+test('iron veins need Mining 8, and mining from far away is refused', () => {
+  const { world, c, p, place, last } = m1();
+  p.equip.tool = 'stone_pickaxe';
+  const iron = [...VEIN_BY_ID.values()].find((v) => v.type === 'iron')!;
+  place(iron.x + 10, iron.z);
+  world.handle(c, { t: 'mine', node: iron.id });
+  assert.match(last('notice')!.text, /far/);
+  place(iron.x + 1.2, iron.z);
+  world.handle(c, { t: 'mine', node: iron.id });
+  assert.match(last('notice')!.text, /Mining 8/);
+  p.xp.mining = xpForLevel(8);
+  world.handle(c, { t: 'mine', node: iron.id });
+  assert.equal(countItem(p.bag, 'iron_ore'), 1);
+});
+
+test('ores stack to 10 and a full bag stops mining', () => {
+  const { world, c, p, place, last } = m1();
+  p.equip.tool = 'stone_pickaxe';
+  p.bag = p.bag.map(() => ({ id: 'stone', qty: 10 }));
+  const vein = VEIN_BY_ID.get('camp-1')!;
+  place(vein.x + 1.5, vein.z);
+  world.handle(c, { t: 'mine', node: vein.id });
+  assert.match(last('notice')!.text, /full/);
+});
+
+test('crafting is a timed queue at the station and stops when materials run out', () => {
+  const { world, c, p, place, last, advance } = m1();
+  p.bag[0] = { id: 'stone', qty: 5 };
+  world.handle(c, { t: 'craft', recipe: 'shaped_stone', count: 5 });
+  assert.match(last('notice')!.text, /anvil/);
+  place(STATIONS.anvil.x + 1.5, STATIONS.anvil.z);
+  world.handle(c, { t: 'craft', recipe: 'shaped_stone', count: 5 });
+  assert.equal(last('job')!.total, 5);
+  world.step();
+  assert.equal(countItem(p.bag, 'shaped_stone'), 0); // not yet done
+  for (let i = 0; i < 4; i++) { advance(1700); world.step(); }
+  assert.equal(countItem(p.bag, 'shaped_stone'), 2);
+  assert.equal(countItem(p.bag, 'stone'), 1);
+  assert.equal(last('job')!.recipe, null);
+  assert.match(last('notice')!.text, /Out of materials/);
+  assert.equal(p.xp.smithing, 12);
+});
+
+test('recipes check Smithing level; walking away cancels the queue', () => {
+  const { world, c, p, place, last, advance } = m1();
+  place(STATIONS.furnace.x + 1, STATIONS.furnace.z);
+  p.bag[0] = { id: 'iron_ore', qty: 10 };
+  world.handle(c, { t: 'craft', recipe: 'iron_bar', count: 5 });
+  assert.match(last('notice')!.text, /Smithing 8/);
+  p.xp.smithing = xpForLevel(8);
+  world.handle(c, { t: 'craft', recipe: 'iron_bar', count: 5 });
+  advance(2100); world.step();
+  assert.equal(countItem(p.bag, 'iron_bar'), 1);
+  place(STATIONS.furnace.x + 20, STATIONS.furnace.z);
+  advance(2100); world.step();
+  assert.equal(countItem(p.bag, 'iron_bar'), 1);
+  assert.equal(last('job')!.recipe, null);
+});
+
+test('a rucksack in the back slot adds bag slots; it can’t come off while those slots are full', () => {
+  const { world, c, p, place } = m1();
+  p.gold = 100;
+  place(TRADING_POST.x + 1, TRADING_POST.z);
+  world.handle(c, { t: 'buy', item: 'small_rucksack' });
+  world.handle(c, { t: 'equip', index: p.bag.findIndex((s) => s?.id === 'small_rucksack') });
+  assert.equal(p.bag.length, 20);
+  p.bag = p.bag.map(() => ({ id: 'stone', qty: 1 }));
+  world.handle(c, { t: 'unequip', slot: 'back' });
+  assert.equal(p.equip.back, 'small_rucksack');
+  p.bag = p.bag.map((s, i) => (i < 5 ? s : null));
+  world.handle(c, { t: 'unequip', slot: 'back' });
+  assert.equal(p.equip.back, undefined);
+  assert.equal(p.bag.length, 16);
+  assert.equal(countItem(p.bag, 'small_rucksack'), 1);
+});
+
+test('selling pays the item’s value; worthless items are refused', () => {
+  const { world, c, p, place, last } = m1();
+  place(TRADING_POST.x + 1, TRADING_POST.z);
+  p.bag[0] = { id: 'sapphire', qty: 3 };
+  p.bag[1] = { id: 'stone', qty: 4 };
+  world.handle(c, { t: 'sell', index: 0, qty: 2 });
+  assert.equal(p.gold, 15 + 2 * ITEMS.sapphire.sellValue);
+  assert.equal(p.bag[0]?.qty, 1);
+  world.handle(c, { t: 'sell', index: 1, qty: 4 });
+  assert.match(last('notice')!.text, /interested/);
+});
+
+test('bag, equipment, gold and XP are saved and loaded', async () => {
+  const store = new MemoryStore();
+  const world = new World({ build: 'test', store });
+  const c = fakeClient();
+  world.connect(c);
+  await world.handle(c, { t: 'hello', name: 'Saver', color: 0, proto: PROTOCOL_VERSION, build: defaultBuild(), token: 'dev:s1' });
+  const id = (c.inbox.find((m) => m.t === 'welcome') as any).id;
+  const p = world.inspect(id)!;
+  p.bag[3] = { id: 'iron_bar', qty: 7 }; p.equip.tool = 'iron_pickaxe'; p.gold = 42; p.xp.mining = 1234;
+  world.disconnect(c);
+  await new Promise((r) => setTimeout(r, 0));
+  const c2 = fakeClient();
+  world.connect(c2);
+  await world.handle(c2, { t: 'hello', name: 'Saver', color: 0, proto: PROTOCOL_VERSION, build: defaultBuild(), token: 'dev:s1' });
+  const inv = c2.inbox.find((m) => m.t === 'inv') as Extract<ServerMsg, { t: 'inv' }>;
+  assert.equal(countItem(inv.bag, 'iron_bar'), 7);
+  assert.equal(inv.equip.tool, 'iron_pickaxe');
+  assert.equal(inv.gold, 42);
+  assert.equal((c2.inbox.find((m) => m.t === 'skills') as any).xp.mining, 1234);
+});

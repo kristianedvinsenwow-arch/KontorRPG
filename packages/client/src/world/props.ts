@@ -5,7 +5,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CHUNK_SIZE, WORLD_HALF, WATER_LEVEL, heightAt, mulberry32 } from '@kontor/shared';
+import { CHUNK_SIZE, VEINS, WORLD_HALF, WATER_LEVEL, heightAt, mulberry32 } from '@kontor/shared';
 import { canvasTex, TEX } from '../engine/procgen.js';
 
 export interface Collider { x: number; z: number; r: number }
@@ -16,7 +16,7 @@ export const wind = { value: 0 };
 // ------------------------------------------------------------------ geometry helpers
 
 /** Jitter vertices (seeded), then make the geometry faceted with a vertical colour gradient. */
-function faceted(geo: THREE.BufferGeometry, seed: number, jitter: number, bottom: THREE.Color, top: THREE.Color, y0: number, y1: number, moss?: THREE.Color): THREE.BufferGeometry {
+export function faceted(geo: THREE.BufferGeometry, seed: number, jitter: number, bottom: THREE.Color, top: THREE.Color, y0: number, y1: number, moss?: THREE.Color): THREE.BufferGeometry {
   const rng = mulberry32(seed);
   const g = geo.index ? geo.toNonIndexed() : geo;
   const p = g.attributes.position as THREE.BufferAttribute;
@@ -67,7 +67,7 @@ function birchCrownGeo(): THREE.BufferGeometry {
   return faceted(mergeGeometries(parts.map((g) => g.toNonIndexed()))!, 21, 0.25, new THREE.Color(0x45612a), new THREE.Color(0x7f9a3e), 2.8, 5.4);
 }
 
-function rockGeo(seed: number, flat: number): THREE.BufferGeometry {
+export function rockGeo(seed: number, flat: number): THREE.BufferGeometry {
   const g = new THREE.IcosahedronGeometry(0.8, 1).scale(1, flat, 1);
   return faceted(g, seed, 0.38, new THREE.Color(0x6c6a64), new THREE.Color(0x9a978f), -0.5, 0.6, new THREE.Color(0x667a3c));
 }
@@ -142,18 +142,22 @@ const PROP = {
   birchCrown: { geo: birchCrownGeo(), mat: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 }) },
   rockA: { geo: rockGeo(3, 0.7), mat: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 }) },
   rockB: { geo: rockGeo(7, 0.5), mat: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 }) },
-  ore: { geo: rockGeo(13, 0.75), mat: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85, color: 0x9a8a80 }) },
-  oreFleck: { geo: new THREE.OctahedronGeometry(0.16, 0), mat: new THREE.MeshStandardMaterial({ color: 0xc0703c, roughness: 0.3, metalness: 0.75 }) },
   grass: { geo: tuftGeo(0.8, 0.45), mat: windMaterial(bladesTex, 0x6f8c42, 0.1) },
   heather: { geo: tuftGeo(0.55, 0.38), mat: windMaterial(flowerTex('#b77fc9'), 0xffffff, 0.06) },
   buttercup: { geo: tuftGeo(0.5, 0.42), mat: windMaterial(flowerTex('#f4d54a'), 0xffffff, 0.07) },
   cotton: { geo: tuftGeo(0.5, 0.45), mat: windMaterial(flowerTex('#f4f2ea'), 0xffffff, 0.08) },
 };
 // Shadows from thousands of grass cards cost a lot and look noisy; only the big things cast.
-const CASTS: Partial<Record<PropKey, boolean>> = { pineTrunk: true, pineCrown: true, birchTrunk: true, birchCrown: true, rockA: true, rockB: true, ore: true };
+const CASTS: Partial<Record<PropKey, boolean>> = { pineTrunk: true, pineCrown: true, birchTrunk: true, birchCrown: true, rockA: true, rockB: true };
 type PropKey = keyof typeof PROP;
 
 /** Scatter one chunk's props deterministically, filling `colliders` for trees and big rocks. */
+/** Real ore veins (and their mining space) come from shared data; keep scenery off them. */
+function nearVein(x: number, z: number, d: number): boolean {
+  for (const v of VEINS) if (Math.abs(v.x - x) < d + v.r && Math.abs(v.z - z) < d + v.r && Math.hypot(v.x - x, v.z - z) < d + v.r) return true;
+  return false;
+}
+
 export function buildProps(cx: number, cz: number, colliders: Collider[], dense: boolean): THREE.Object3D[] {
   const rng = mulberry32((cx * 73856093) ^ (cz * 19349663) ^ 0x5eed);
   const items: Partial<Record<PropKey, { m: THREE.Matrix4; c: THREE.Color }[]>> = {};
@@ -173,17 +177,11 @@ export function buildProps(cx: number, cz: number, colliders: Collider[], dense:
     const x = cx * CHUNK_SIZE + rng() * CHUNK_SIZE, z = cz * CHUNK_SIZE + rng() * CHUNK_SIZE;
     const y = heightAt(x, z);
     normalAt(x, z);
-    if (y < WATER_LEVEL + 0.6 || Math.hypot(x, z) < 18 || !inWorld(x, z)) continue;
+    if (y < WATER_LEVEL + 0.6 || Math.hypot(x, z) < 18 || !inWorld(x, z) || nearVein(x, z, 2.6)) continue;
     const roll = rng(), ry = rng() * Math.PI * 2, tint = 0.85 + rng() * 0.3;
     if (N.y < 0.8 || y > 16) {
       const s = 0.7 + rng() * 1.3;
-      if (roll < 0.25 && y > 5) {
-        add('ore', x, y + 0.1, z, s, ry, s, tint);
-        for (let f = 0; f < 5; f++) {
-          const a = rng() * Math.PI * 2;
-          add('oreFleck', x + Math.cos(a) * 0.55 * s, y + (0.25 + rng() * 0.25) * s, z + Math.sin(a) * 0.55 * s, s * (0.6 + rng() * 0.5), rng() * 3);
-        }
-      } else if (roll < 0.6) add(roll < 0.45 ? 'rockA' : 'rockB', x, y + 0.05, z, s, ry, s, tint);
+      if (roll < 0.6) add(roll < 0.45 ? 'rockA' : 'rockB', x, y + 0.05, z, s, ry, s, tint);
       else continue;
       colliders.push({ x, z, r: 0.75 * s });
     } else if (roll < 0.55) {

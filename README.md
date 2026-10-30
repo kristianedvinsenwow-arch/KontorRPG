@@ -1,7 +1,8 @@
 # KontorRPG
 
 A slow, social sandbox RPG for the office — crafting, combat and housing in a world inspired by
-Rana. This repository is the **M0 tech spike**: the engine and netcode everything else builds on.
+Rana. This repository is at **M1 — mining & smithing**: the M0 engine and netcode plus the first real
+gameplay loop.
 The design doc lives in the claude.ai doc "KontorRPG — Product Design Doc".
 
 ## What it does so far
@@ -22,6 +23,16 @@ The design doc lives in the claude.ai doc "KontorRPG — Product Design Doc".
 - **Accounts (optional):** email magic-link login through Supabase. Characters are saved on
   first login and loaded afterwards, with your last position. Guests can still play unless
   `REQUIRE_LOGIN=true`.
+- **Mining (M1):** 57 shared ore veins (stone near camp, iron on the high ground). Hold click to
+  swing; each vein gives a few ores, then is depleted *for everyone* until it respawns (45 s /
+  2 min). Rare gems (Mofjell quartz, sapphire). Mining level speeds up swings; iron needs Mining 8.
+- **Smithing (M1):** furnace and anvil at camp. Timed queues: shape stone → stone sword and
+  pauldrons; smelt iron bars → iron pickaxe, sword and pauldrons (cross-tier recipes).
+- **Bag and trading (M1):** 16 slots (+STR, perks and a worn rucksack/backpack in the back slot),
+  ores stack to 10, gems to 5. You start with 15 gold and no pickaxe — buy one from Trader Ingrid
+  at the Mofjell Trading Post next to spawn. Separate tool slot, so a weapon can stay equipped.
+  Gold, bag, gear and skill XP are saved for logged-in players. Everything is server-authoritative.
+- **Keys:** **E** use station / trade, **I** bag, **K** skills, **C** character, **Enter** chat.
 - **Office features:** chat, roster, ping, boss key (**F9**), character panel (**C**), and every
   open tab reloads itself after a deploy.
 
@@ -105,11 +116,9 @@ self-hosted WebSocket with version check, and the dark/amber UI style.
 What changed: three.js r128 → current via npm, one HTML file → TypeScript modules, client-trusted
 damage → server authority, small flat maps → streamed heightmap chunks.
 
-## Next: M1
+## Next
 
-Mining and smithing slice in Mofjellet: real ore veins with shared depletion and gems, carry
-weight, furnace and anvil, bag and bank, character creation with attributes and traits, and
-SQLite persistence.
+M1 polish (bank chest, durability, more veins and recipes), then M2: fishing and the docks.
 
 ## Tools
 
