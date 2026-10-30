@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { heightAt, PROTOCOL_VERSION, CHUNK_SIZE, type ServerMsg } from '@kontor/shared';
+import { heightAt, PROTOCOL_VERSION, CHUNK_SIZE, defaultBuild, type ServerMsg } from '@kontor/shared';
 import { World, sanitizeName, type Client } from '../src/world.js';
 
 function fakeClient() {
@@ -19,7 +19,7 @@ function setup() {
   const join = (name: string) => {
     const c = fakeClient();
     world.connect(c);
-    world.handle(c, { t: 'hello', name, color: 1, proto: PROTOCOL_VERSION });
+    world.handle(c, { t: 'hello', name, color: 1, proto: PROTOCOL_VERSION, build: defaultBuild() });
     const welcome = c.inbox.find((m) => m.t === 'welcome') as Extract<ServerMsg, { t: 'welcome' }>;
     return { c, id: welcome.id, you: welcome.you };
   };
@@ -94,7 +94,7 @@ test('outdated clients are rejected', () => {
   const { world } = setup();
   const c = fakeClient();
   world.connect(c);
-  world.handle(c, { t: 'hello', name: 'Old', color: 0, proto: PROTOCOL_VERSION - 1 });
+  world.handle(c, { t: 'hello', name: 'Old', color: 0, proto: PROTOCOL_VERSION - 1, build: defaultBuild() });
   assert.equal(c.inbox[0].t, 'reject');
   assert.equal(c.closed, 'outdated_client');
 });
@@ -114,4 +114,24 @@ test('names are sanitised', () => {
   assert.equal(sanitizeName('  <script>  '), 'script');
   assert.equal(sanitizeName(''), 'Adventurer');
   assert.equal(sanitizeName('a'.repeat(40)).length, 16);
+});
+
+test('hand-edited characters are rejected', () => {
+  const { world } = setup();
+  const c = fakeClient();
+  world.connect(c);
+  const build = defaultBuild();
+  build.attrs.str = 10; // 25 points total instead of 20
+  world.handle(c, { t: 'hello', name: 'Cheat', color: 0, proto: PROTOCOL_VERSION, build });
+  assert.equal(c.inbox[0].t, 'reject');
+  assert.equal(world.players.size, 0);
+});
+
+test('race is shared with other players', () => {
+  const { world } = setup();
+  const c = fakeClient();
+  world.connect(c);
+  world.handle(c, { t: 'hello', name: 'Gnomey', color: 2, proto: PROTOCOL_VERSION, build: { ...defaultBuild(), race: 'gnome' } });
+  const roster = c.inbox.find((m) => m.t === 'roster') as Extract<ServerMsg, { t: 'roster' }>;
+  assert.equal(roster.players[0].race, 'gnome');
 });

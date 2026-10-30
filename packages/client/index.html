@@ -29,23 +29,55 @@
     <div id="fps"></div>
   </div>
 
-  <!-- Start menu -->
+  <!-- Start menu = character creator. The right-hand window is drawn by the renderer (live preview). -->
   <section id="menu" class="overlay">
-    <div class="brief">
-      <div class="eyebrow">M0 tech spike · Mofjellet</div>
+    <div class="brief creator">
+      <div class="eyebrow">Create your character · M0 tech spike</div>
       <h1>Kontor<span>RPG</span></h1>
-      <p class="note">A slow, social sandbox RPG for the office. This build tests the engine: walk the hills of Mofjellet with your colleagues.</p>
+
       <div class="sec">
-        <label for="nameIn">Character name</label>
+        <label for="nameIn">Name</label>
         <input id="nameIn" maxlength="16" autocomplete="off" placeholder="Your name" />
       </div>
+
+      <div class="sec">
+        <span class="lbl">Race</span>
+        <div id="races" class="cards two"></div>
+      </div>
+
       <div class="sec">
         <span class="lbl">Colour</span>
         <div id="swatches"></div>
       </div>
+
+      <div class="sec">
+        <div class="lblrow"><span class="lbl">Attributes</span><span id="pool" class="pool"></span></div>
+        <p class="note">Everyone starts with 5 in each. Lower one to free a point, then spend it on another (1–10).</p>
+        <div id="attrs"></div>
+      </div>
+
+      <div class="sec">
+        <div class="lblrow"><span class="lbl">Major perk</span><span class="pool">pick 1 of 10</span></div>
+        <div id="majors" class="cards two"></div>
+      </div>
+
+      <div class="sec">
+        <div class="lblrow"><span class="lbl">Minor perk</span><span class="pool">pick 1 of 8</span></div>
+        <div id="minors" class="cards two"></div>
+      </div>
+
+      <div class="sec">
+        <span class="lbl">Resulting stats</span>
+        <div id="derived" class="derived"></div>
+      </div>
+
       <label class="chk"><input type="checkbox" id="lowGpu" /> Low-GPU mode (no shadows, lower resolution)</label>
       <button id="enter" class="btn big">Enter the world</button>
-      <p class="note" id="menuNet">Connecting to server…</p>
+      <p class="note" id="menuNet">Pick a name and enter the world.</p>
+    </div>
+    <div class="previewcol">
+      <div id="createPreview" title="Drag to rotate"></div>
+      <p class="note center">Drag to rotate</p>
     </div>
   </section>
 
@@ -68,11 +100,9 @@
       <div class="charside">
         <div class="eyebrow">Character</div>
         <h2 id="charName">Adventurer</h2>
-        <table class="stats">
-          <tr><th>STR</th><td>5</td><th>DEX</th><td>5</td></tr>
-          <tr><th>INT</th><td>5</td><th>STA</th><td>5</td></tr>
-        </table>
-        <p class="note">Attributes and traits are chosen at character creation (milestone M1).</p>
+        <div id="charRace" class="note"></div>
+        <div id="charStats" class="derived"></div>
+        <div id="charPerks" class="perklist"></div>
         <div class="lbl">Equipment</div>
         <ul class="slots">
           <li><span>Main hand</span><b>Stone Pickaxe</b><em>Tier 1</em></li>

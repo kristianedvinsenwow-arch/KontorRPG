@@ -21,13 +21,13 @@ export function createLocalPlayer(x: number, y: number, z: number, yaw: number):
   return { x, y, z, vx: 0, vy: 0, vz: 0, yaw, pitch: 0, onGround: true, speed: 0 };
 }
 
-export function stepPlayer(p: LocalPlayer, input: MoveInput, colliders: Collider[], dt: number): void {
+export function stepPlayer(p: LocalPlayer, input: MoveInput, colliders: Collider[], dt: number, speedBonus = 0): void {
   // Wish direction in world space from yaw (camera looks down -Z at yaw 0).
   const len = Math.hypot(input.forward, input.right) || 1;
   const f = input.forward / len, r = input.right / len;
   const sin = Math.sin(p.yaw), cos = Math.cos(p.yaw);
   const wishX = -sin * f + cos * r, wishZ = -cos * f - sin * r;
-  let target = maxSpeed();
+  let target = maxSpeed(1, speedBonus); // perks like Pack Mule or Small Frame; the server uses the same cap
   const inWater = heightAt(p.x, p.z) < WATER_LEVEL - 0.4 && p.y < WATER_LEVEL;
   if (inWater) target *= 0.55; // wading is slow, never faster than walking
 

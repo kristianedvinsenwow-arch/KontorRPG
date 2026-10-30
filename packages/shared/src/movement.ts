@@ -7,9 +7,9 @@ import { heightAt } from './terrain.js';
 
 export interface Vec3 { x: number; y: number; z: number }
 
-/** Highest horizontal speed a player may currently have (M0: on foot, no buffs yet). */
+/** Highest horizontal speed: mount multiplier × (1 + bonuses). Bonuses cap at +30%; perks can also be negative. */
 export function maxSpeed(mountMult = 1, bonus = 0): number {
-  return WALK_SPEED * mountMult * (1 + Math.min(bonus, MAX_SPEED_BONUS));
+  return WALK_SPEED * mountMult * (1 + Math.max(-0.5, Math.min(bonus, MAX_SPEED_BONUS)));
 }
 
 export function clampToWorld(p: Vec3): Vec3 {

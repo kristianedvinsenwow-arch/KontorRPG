@@ -4,7 +4,7 @@
  * Legs and arms live in their own groups so they animate; everything else is merged.
  */
 import * as THREE from 'three';
-import { PLAYER_COLORS } from '@kontor/shared';
+import { PLAYER_COLORS, RACES, type Race } from '@kontor/shared';
 import { mat, bx, ball, limb, mesh, mergeStatic, nameSprite, v3, lerp } from '../engine/procgen.js';
 
 export interface Character {
@@ -15,6 +15,7 @@ export interface Character {
   arms: { shoulder: THREE.Group; elbow: THREE.Group }[];
   tool: THREE.Group;
   tag?: THREE.Sprite;
+  race: Race;
   ph: number;
   swing: number;
 }
@@ -39,7 +40,7 @@ export function makePickaxe(): THREE.Group {
   return g;
 }
 
-export function makeCharacter(colorIndex: number, name?: string): Character {
+export function makeCharacter(colorIndex: number, name?: string, race: Race = 'human'): Character {
   const col = PLAYER_COLORS[colorIndex % PLAYER_COLORS.length];
   const tunicColor = new THREE.Color(col).multiplyScalar(0.75).getHex();
   const M = {
@@ -127,9 +128,18 @@ export function makeCharacter(colorIndex: number, name?: string): Character {
 
   mergeStatic(g);
 
-  const ch: Character = { g, legs, upper, head, arms, tool, ph: 0, swing: 0 };
+  // Gnomes are the same model, scaled down. The body goes in its own scaled group so the name tag
+  // keeps a readable size and just sits lower.
+  const scale = RACES[race].scale;
+  const body = new THREE.Group();
+  body.add(...g.children);
+  body.scale.setScalar(scale);
+  g.add(body);
+
+  const ch: Character = { g, legs, upper, head, arms, tool, race, ph: 0, swing: 0 };
   if (name) {
     ch.tag = nameSprite(name, col);
+    ch.tag.position.y = 1.95 * scale + 0.25;
     g.add(ch.tag);
   }
   return ch;
@@ -145,6 +155,8 @@ export function animateCharacter(c: Character, speed: number, pitch: number, swi
   c.legs[0].knee.rotation.x = Math.max(0, Math.sin(c.ph + 1.2)) * amp * 1.2;
   c.legs[1].knee.rotation.x = Math.max(0, Math.sin(c.ph + 1.2 + Math.PI)) * amp * 1.2;
   c.upper.position.y = 0.93 + Math.abs(Math.cos(c.ph)) * amp * 0.04;
+  // Speed is in world metres per second; a gnome's short legs take more steps for the same speed.
+  if (c.race === 'gnome') c.ph += dt * speed * 2.2 * (1 / RACES.gnome.scale - 1);
   c.head.rotation.x = THREE.MathUtils.clamp(-pitch * 0.6, -0.6, 0.6);
 
   // Arms swing opposite the legs; the tool arm lifts and strikes while swinging.

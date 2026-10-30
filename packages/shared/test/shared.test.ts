@@ -38,3 +38,36 @@ test('decodeClient drops malformed input', () => {
   assert.equal(decodeClient(JSON.stringify({ t: 'nope' })), null);
   assert.deepEqual(decodeClient(JSON.stringify({ t: 'chat', text: 'hei' })), { t: 'chat', text: 'hei' });
 });
+
+import { defaultBuild, validateBuild, derive, freePoints, maxSpeed } from '../src/index.js';
+
+test('a fresh build has 5 in every stat and is valid', () => {
+  const b = defaultBuild();
+  assert.deepEqual(b.attrs, { str: 5, dex: 5, int: 5, sta: 5 });
+  assert.equal(freePoints(b.attrs), 0);
+  assert.equal(validateBuild(b), null);
+});
+
+test('moving points keeps the build valid; adding points does not', () => {
+  const b = defaultBuild();
+  b.attrs.int = 2; b.attrs.str = 8;
+  assert.equal(validateBuild(b), null);
+  b.attrs.dex = 6;
+  assert.equal(validateBuild(b), 'attr_total');
+  assert.equal(validateBuild({ ...defaultBuild(), attrs: { str: 11, dex: 3, int: 3, sta: 3 } }), 'attr_str');
+  assert.equal(validateBuild({ ...defaultBuild(), major: 'nope' }), 'major');
+  assert.equal(validateBuild({ ...defaultBuild(), race: 'dragon' }), 'race');
+});
+
+test('perks change derived stats', () => {
+  const base = derive(defaultBuild());
+  assert.equal(base.maxHp, 25);
+  assert.equal(base.carryKg, 40);
+  const mule = derive({ ...defaultBuild(), major: 'pack_mule' });
+  assert.equal(mule.carryKg, 52);
+  assert.ok(maxSpeed(1, mule.speedBonus) < maxSpeed());
+  const gifted = derive({ ...defaultBuild(), major: 'gifted' });
+  assert.equal(gifted.attrs.str, 6);
+  const tough = derive({ ...defaultBuild(), minor: 'thick_skin' });
+  assert.equal(tough.maxHp, 30);
+});

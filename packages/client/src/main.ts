@@ -3,7 +3,7 @@
  */
 import './styles.css';
 import * as THREE from 'three';
-import { EYE_HEIGHT, INPUT_HZ, r2, r3 } from '@kontor/shared';
+import { EYE_HEIGHT, INPUT_HZ, RACES, derive, r2, r3, type CharacterBuild } from '@kontor/shared';
 import { createGfx } from './engine/renderer.js';
 import { Input } from './engine/input.js';
 import { Terrain } from './world/terrain.js';
@@ -13,8 +13,9 @@ import { NetClient } from './net/client.js';
 import { Remotes } from './net/remotes.js';
 import { netStore, settingsStore, uiStore } from './state/store.js';
 import { initHud } from './ui/hud.js';
-import { initMenu, initBossKey } from './ui/menu.js';
-import { CharacterPreview } from './ui/characterPanel.js';
+import { initPause, initBossKey } from './ui/menu.js';
+import { initCreator } from './ui/creator.js';
+import { CharacterPreview, fillCharacterPanel } from './ui/characterPanel.js';
 
 const view = document.getElementById('view')!;
 const gfx = createGfx(view, settingsStore.get().lowGpu);
@@ -25,26 +26,40 @@ const terrain = new Terrain(scene);
 terrain.update(0, 0, 99); // build the spawn area up front
 const input = new Input(renderer.domElement);
 const viewmodel = makeViewmodel(vmScene);
-const preview = new CharacterPreview();
+const preview = new CharacterPreview('preview', () => uiStore.get().panel === 'character');
+const creatorPreview = new CharacterPreview('createPreview', () => uiStore.get().panel === 'menu');
 const remotes = new Remotes(scene);
 const net = new NetClient();
 
 let me: LocalPlayer | null = null;
+let myBuild: CharacterBuild | null = null;
+let speedBonus = 0;
+let eyeHeight = EYE_HEIGHT;
 let seq = 0;
 let lastSent = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, at: 0 };
 
 // ---------------------------------------------------------------- UI wiring
 const hud = initHud((text) => net.send({ t: 'chat', text }));
 
-initMenu(
-  (name, color) => {
-    net.connect(name, color);
-    preview.setCharacter(color, name);
+const syncCreatorPreview = () => {
+  const s = settingsStore.get();
+  creatorPreview.setCharacter(s.color, s.build.race);
+};
+initCreator(
+  (name, color, build) => {
+    myBuild = build;
+    speedBonus = derive(build).speedBonus;
+    eyeHeight = EYE_HEIGHT * RACES[build.race].scale;
+    net.connect(name, color, build);
+    preview.setCharacter(color, build.race);
+    fillCharacterPanel(name, build);
     uiStore.set({ panel: 'none' });
     input.lock();
   },
-  () => { uiStore.set({ panel: 'none' }); input.lock(); },
+  syncCreatorPreview,
 );
+syncCreatorPreview();
+initPause(() => { uiStore.set({ panel: 'none' }); input.lock(); });
 initBossKey(() => input.unlock());
 
 renderer.domElement.addEventListener('click', () => {
@@ -134,21 +149,22 @@ function frame() {
   const playing = u.panel === 'none' && !u.chatOpen && input.locked;
   let swinging = false;
 
+  let look = { dx: 0, dy: 0 };
   if (me) {
-    const look = input.consumeLook();
+    look = input.consumeLook();
     if (playing) {
       const k = 0.0022 * settingsStore.get().sensitivity;
       me.yaw -= look.dx * k;
       me.pitch = THREE.MathUtils.clamp(me.pitch - look.dy * k, -1.5, 1.5);
       swinging = input.mouseDown;
     }
-    stepPlayer(me, playing ? input.axes() : { forward: 0, right: 0, jump: false }, terrain.collidersNear(me.x, me.z), dt);
+    stepPlayer(me, playing ? input.axes() : { forward: 0, right: 0, jump: false }, terrain.collidersNear(me.x, me.z), dt, speedBonus);
     sendInput(now, swinging);
     terrain.update(me.x, me.z);
 
     walkPh += dt * me.speed * 1.6;
     const bob = me.onGround ? Math.min(1, me.speed / 5) : 0;
-    cam.position.set(me.x, me.y + EYE_HEIGHT + Math.abs(Math.sin(walkPh)) * 0.04 * bob, me.z);
+    cam.position.set(me.x, me.y + eyeHeight + Math.abs(Math.sin(walkPh)) * 0.04 * bob * (eyeHeight / EYE_HEIGHT), me.z);
     cam.rotation.set(me.pitch, me.yaw, 0);
     gfx.follow(cam.position);
     hud.frame(me.x, me.z);
@@ -161,7 +177,7 @@ function frame() {
   }
 
   remotes.update(dt);
-  viewmodel.update(dt, me?.speed ?? 0, swinging);
+  viewmodel.update(dt, me?.speed ?? 0, swinging, playing ? look.dx : 0, playing ? look.dy : 0);
 
   renderer.setScissorTest(false);
   renderer.setClearColor(0x000000, 1);
@@ -172,8 +188,9 @@ function frame() {
     renderer.render(vmScene, vmCam);
   }
   preview.render(renderer, dt);
+  creatorPreview.render(renderer, dt);
 }
 frame();
 
 // Exposed for automated smoke tests and debugging in the console.
-(window as any).__kontor = { get me() { return me; }, remotes, net, terrain, netStore, uiStore };
+(window as any).__kontor = { get me() { return me; }, get build() { return myBuild; }, remotes, net, terrain, netStore, uiStore, settingsStore };

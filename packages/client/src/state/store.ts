@@ -1,3 +1,5 @@
+import { defaultBuild, validateBuild, type CharacterBuild, type Race } from '@kontor/shared';
+
 /**
  * Tiny subscribable store. Three layers live in the app (design doc §11):
  *  - net state: what the server told us (who is online, our id, ping) — only changed by server messages
@@ -32,7 +34,7 @@ export interface NetState {
   myId: string | null;
   build: string | null;
   pingMs: number | null;
-  online: { id: string; name: string; color: number }[];
+  online: { id: string; name: string; color: number; race: Race }[];
 }
 
 export interface UiState {
@@ -46,16 +48,22 @@ export interface Settings {
   color: number;
   sensitivity: number;
   lowGpu: boolean;
+  /** Character build from the creator. Kept in the browser until M1 stores characters on the server. */
+  build: CharacterBuild;
 }
 
 const SETTINGS_KEY = 'kontorrpg.settings';
 
 /** Settings are a per-browser convenience, so localStorage is the right home (wrapped: it can throw). */
 export function loadSettings(): Settings {
-  const d: Settings = { name: '', color: Math.floor(Math.random() * 8), sensitivity: 1, lowGpu: false };
+  const d: Settings = { name: '', color: Math.floor(Math.random() * 8), sensitivity: 1, lowGpu: false, build: defaultBuild() };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
-    if (raw) return { ...d, ...JSON.parse(raw) };
+    if (raw) {
+      const s = { ...d, ...JSON.parse(raw) } as Settings;
+      if (validateBuild(s.build)) s.build = defaultBuild(); // rules changed since it was saved
+      return s;
+    }
   } catch { /* private window or blocked storage */ }
   return d;
 }

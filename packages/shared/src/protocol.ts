@@ -1,3 +1,5 @@
+import type { CharacterBuild, Race } from './character.js';
+
 /**
  * Wire protocol. JSON for M0 (readable while we iterate); the shape is designed so it can move to a
  * binary codec later without touching game code — only encode/decode change.
@@ -7,6 +9,7 @@ export interface PlayerState {
   id: string;
   name: string;
   color: number; // index into PLAYER_COLORS
+  race: Race;
   x: number;
   y: number;
   z: number;
@@ -20,7 +23,7 @@ export interface PlayerState {
 
 // ---------- client → server ----------
 export type ClientMsg =
-  | { t: 'hello'; name: string; color: number; proto: number }
+  | { t: 'hello'; name: string; color: number; proto: number; build: CharacterBuild }
   | { t: 'input'; seq: number; x: number; y: number; z: number; yaw: number; pitch: number; act?: 'swing' }
   | { t: 'chat'; text: string }
   | { t: 'ping'; at: number };
@@ -31,7 +34,7 @@ export type ServerMsg =
   | { t: 'snap'; tick: number; at: number; players: PlayerState[] }
   | { t: 'leave'; id: string }
   /** Everyone online, wherever they are (snapshots only carry players inside your area of interest). */
-  | { t: 'roster'; players: { id: string; name: string; color: number }[] }
+  | { t: 'roster'; players: { id: string; name: string; color: number; race: Race }[] }
   | { t: 'correct'; seq: number; x: number; y: number; z: number; reason: string }
   | { t: 'chat'; from: string; name: string; text: string; at: number }
   | { t: 'system'; text: string }
@@ -64,7 +67,8 @@ export function decodeClient(raw: string): ClientMsg | null {
   switch (m.t) {
     case 'hello':
       if (typeof m.name !== 'string' || !num(m.color) || !num(m.proto)) return null;
-      return { t: 'hello', name: m.name, color: m.color, proto: m.proto };
+      // The build's contents are checked by validateBuild on the server; here only its shape.
+      return { t: 'hello', name: m.name, color: m.color, proto: m.proto, build: m.build && typeof m.build === 'object' ? m.build : null };
     case 'input':
       if (![m.seq, m.x, m.y, m.z, m.yaw, m.pitch].every(num)) return null;
       return { t: 'input', seq: m.seq, x: m.x, y: m.y, z: m.z, yaw: m.yaw, pitch: m.pitch, act: m.act === 'swing' ? 'swing' : undefined };

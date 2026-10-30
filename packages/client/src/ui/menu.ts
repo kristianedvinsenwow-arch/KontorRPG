@@ -1,59 +1,18 @@
-/** Start menu, pause/settings card and the boss key. */
-import { PLAYER_COLORS, MAX_NAME_LEN } from '@kontor/shared';
-import { netStore, settingsStore, uiStore } from '../state/store.js';
+/** Pause/settings card and the boss key. (The start menu is the character creator, see creator.ts.) */
+import { settingsStore, uiStore } from '../state/store.js';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
-export function initMenu(onEnter: (name: string, color: number) => void, onResume: () => void) {
-  const menu = $('menu'), pause = $('pause');
-  const nameIn = $<HTMLInputElement>('nameIn');
-  const swatches = $('swatches');
-  const enter = $<HTMLButtonElement>('enter');
-  const lowGpu = $<HTMLInputElement>('lowGpu'), lowGpu2 = $<HTMLInputElement>('lowGpu2');
+export function initPause(onResume: () => void) {
+  const pause = $('pause');
+  const lowGpu2 = $<HTMLInputElement>('lowGpu2');
   const sens = $<HTMLInputElement>('sens');
-  const menuNet = $('menuNet');
-
-  const s = settingsStore.get();
-  nameIn.value = s.name;
-  nameIn.maxLength = MAX_NAME_LEN;
-  sens.value = String(s.sensitivity);
-
-  const renderSwatches = () => {
-    const sel = settingsStore.get().color;
-    swatches.replaceChildren(...PLAYER_COLORS.map((c, i) => {
-      const b = document.createElement('button');
-      b.className = 'sw';
-      b.style.background = c;
-      b.setAttribute('aria-label', `Colour ${i + 1}`);
-      b.setAttribute('aria-pressed', String(i === sel));
-      b.onclick = () => { settingsStore.set({ color: i }); renderSwatches(); };
-      return b;
-    }));
-  };
-  renderSwatches();
-
-  settingsStore.subscribe((st) => { lowGpu.checked = lowGpu2.checked = st.lowGpu; });
-  lowGpu.onchange = () => settingsStore.set({ lowGpu: lowGpu.checked });
+  sens.value = String(settingsStore.get().sensitivity);
+  settingsStore.subscribe((st) => { lowGpu2.checked = st.lowGpu; });
   lowGpu2.onchange = () => settingsStore.set({ lowGpu: lowGpu2.checked });
   sens.oninput = () => settingsStore.set({ sensitivity: Number(sens.value) });
-
-  const go = () => {
-    const name = nameIn.value.trim().slice(0, MAX_NAME_LEN) || 'Adventurer';
-    settingsStore.set({ name });
-    onEnter(name, settingsStore.get().color);
-  };
-  enter.onclick = go;
-  nameIn.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); e.stopPropagation(); });
   $('resume').onclick = onResume;
-
-  uiStore.subscribe((u) => {
-    menu.hidden = u.panel !== 'menu';
-    pause.hidden = u.panel !== 'pause';
-    if (u.panel === 'menu') setTimeout(() => nameIn.focus(), 0);
-  });
-  netStore.subscribe((n) => {
-    menuNet.textContent = n.status === 'online' ? 'Connected.' : n.status === 'offline' ? 'Pick a name and enter the world.' : 'Connecting to server…';
-  });
+  uiStore.subscribe((u) => { pause.hidden = u.panel !== 'pause'; });
 }
 
 /** F9 swaps the game for a dull-looking spreadsheet, and back. */

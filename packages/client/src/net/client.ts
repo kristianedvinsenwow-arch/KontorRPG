@@ -2,7 +2,7 @@
  * Game socket. Reconnects with backoff (Render restarts the server on each deploy), measures ping,
  * and watches /version so a new deploy reloads every open tab — KontorLAN's checkVersion pattern.
  */
-import { PROTOCOL_VERSION, decodeServer, encode, type ClientMsg, type ServerMsg } from '@kontor/shared';
+import { PROTOCOL_VERSION, decodeServer, encode, type CharacterBuild, type ClientMsg, type ServerMsg } from '@kontor/shared';
 import { netStore } from '../state/store.js';
 
 type Handler = (msg: ServerMsg) => void;
@@ -11,7 +11,7 @@ export class NetClient {
   private ws: WebSocket | null = null;
   private handlers: Handler[] = [];
   private retry = 0;
-  private hello: { name: string; color: number } | null = null;
+  private hello: { name: string; color: number; build: CharacterBuild } | null = null;
   private firstBuild: string | null = null;
   private pingTimer = 0;
   private versionTimer = 0;
@@ -21,8 +21,8 @@ export class NetClient {
 
   on(h: Handler): void { this.handlers.push(h); }
 
-  connect(name: string, color: number): void {
-    this.hello = { name, color };
+  connect(name: string, color: number, build: CharacterBuild): void {
+    this.hello = { name, color, build };
     this.open();
     clearInterval(this.versionTimer);
     this.versionTimer = window.setInterval(() => this.checkVersion(), 60_000);
@@ -38,7 +38,7 @@ export class NetClient {
     this.ws = ws;
     ws.onopen = () => {
       this.retry = 0;
-      if (this.hello) this.send({ t: 'hello', name: this.hello.name, color: this.hello.color, proto: PROTOCOL_VERSION });
+      if (this.hello) this.send({ t: 'hello', name: this.hello.name, color: this.hello.color, proto: PROTOCOL_VERSION, build: this.hello.build });
       clearInterval(this.pingTimer);
       this.pingTimer = window.setInterval(() => this.send({ t: 'ping', at: performance.now() }), 3000);
     };

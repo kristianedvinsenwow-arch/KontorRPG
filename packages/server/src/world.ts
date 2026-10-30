@@ -5,7 +5,8 @@
  */
 import {
   CHUNK_SIZE, AOI_CHUNKS, MAX_CHAT_LEN, MAX_NAME_LEN, PLAYER_COLORS, PROTOCOL_VERSION, TICK_HZ,
-  checkStep, heightAt, r2, r3,
+  checkStep, heightAt, r2, r3, validateBuild, derive, maxSpeed,
+  type CharacterBuild,
   type ClientMsg, type PlayerState, type ServerMsg,
 } from '@kontor/shared';
 
@@ -23,6 +24,9 @@ interface ServerPlayer {
   strikes: number;
   lastChatAt: number;
   actUntil: number;
+  build: CharacterBuild;
+  /** Fastest this character may move, from perks (e.g. Pack Mule −10%, Small Frame +10%). */
+  speedCap: number;
 }
 
 export interface WorldOptions {
@@ -84,16 +88,24 @@ export class World {
       client.close('outdated_client');
       return;
     }
+    const bad = validateBuild(msg.build);
+    if (bad) {
+      client.send({ t: 'reject', reason: `invalid_character:${bad}` });
+      client.close('invalid_character');
+      return;
+    }
     this.pending.delete(client);
+    const build = msg.build;
     const id = `p${nextId++}`;
     const name = sanitizeName(msg.name);
     const color = Math.abs(Math.floor(msg.color)) % PLAYER_COLORS.length;
     // Spawn in the clearing, spread out a little so players don't stack.
     const a = Math.random() * Math.PI * 2, d = 2 + Math.random() * 5;
     const x = Math.cos(a) * d, z = Math.sin(a) * d, y = heightAt(x, z);
-    const state: PlayerState = { id, name, color, x: r2(x), y: r2(y), z: r2(z), yaw: r3(-a + Math.PI / 2), pitch: 0, spd: 0 };
+    const state: PlayerState = { id, name, color, race: build.race, x: r2(x), y: r2(y), z: r2(z), yaw: r3(-a + Math.PI / 2), pitch: 0, spd: 0 };
     const now = this.now();
-    this.players.set(id, { state, client, lastValid: { x, y, z, at: now }, lastSeq: -1, strikes: 0, lastChatAt: 0, actUntil: 0 });
+    this.players.set(id, { state, client, lastValid: { x, y, z, at: now }, lastSeq: -1, strikes: 0, lastChatAt: 0, actUntil: 0,
+      build, speedCap: maxSpeed(1, derive(build).speedBonus) });
     client.send({ t: 'welcome', id, build: this.opts.build, proto: PROTOCOL_VERSION, tickHz: TICK_HZ, you: state });
     this.broadcast({ t: 'system', text: `${name} logged in` });
     this.broadcastRoster();
@@ -101,7 +113,7 @@ export class World {
   }
 
   private broadcastRoster(): void {
-    const players = [...this.players.values()].map((p) => ({ id: p.state.id, name: p.state.name, color: p.state.color }));
+    const players = [...this.players.values()].map((p) => ({ id: p.state.id, name: p.state.name, color: p.state.color, race: p.state.race }));
     this.broadcast({ t: 'roster', players });
   }
 
@@ -111,7 +123,7 @@ export class World {
     const now = this.now();
     const dt = (now - p.lastValid.at) / 1000;
     const next = { x: msg.x, y: msg.y, z: msg.z };
-    const check = checkStep(p.lastValid, next, dt);
+    const check = checkStep(p.lastValid, next, dt, p.speedCap);
     if (!check.ok) {
       p.strikes++;
       const lv = p.lastValid;
