@@ -1,0 +1,323 @@
+{
+  "_readme": "Prompt list for meshy.mjs, taken from the KontorRPG Meshy Prompt Style Guide. Each item's prompt = subject + category extra + style block. Edit freely: add items, change subjects, tune budgets per category.",
+  "style": "stylized low-poly game asset, chunky simple shapes, slightly oversized head hands and feet, clean flat-shaded faces, hand-painted flat colour texture with light speckle, muted Nordic palette, no baked lighting, readable silhouette, single object, centered, plain background",
+  "categories": {
+    "races": {
+      "_note": "Matches packages/shared/src/character.ts RACES (human 1.85 m, dwarf 1.3 m, gnome 0.95 m).",
+      "pose": "t-pose",
+      "polycount": 5000,
+      "textureSize": 1024,
+      "rig": "biped",
+      "animations": [
+        "idle",
+        "attack",
+        "hit",
+        "death"
+      ],
+      "extra": ""
+    },
+    "helmets": {
+      "pose": "",
+      "polycount": 1200,
+      "textureSize": 512,
+      "rig": "none",
+      "extra": "single helmet only, empty, no head, no face"
+    },
+    "shoulders": {
+      "pose": "",
+      "polycount": 1000,
+      "textureSize": 512,
+      "rig": "none",
+      "extra": "single shoulder piece only, no body, no arm"
+    },
+    "weapons": {
+      "pose": "",
+      "polycount": 1500,
+      "textureSize": 512,
+      "rig": "none",
+      "extra": "single weapon only, no hands, light neutral grey metal"
+    },
+    "enemies": {
+      "pose": "t-pose",
+      "polycount": 4000,
+      "textureSize": 1024,
+      "rig": "biped",
+      "animations": [
+        "idle",
+        "attack",
+        "hit",
+        "death"
+      ],
+      "extra": ""
+    },
+    "bosses": {
+      "pose": "",
+      "polycount": 10000,
+      "textureSize": 2048,
+      "rig": "none",
+      "extra": ""
+    },
+    "mounts": {
+      "pose": "",
+      "polycount": 6500,
+      "textureSize": 1024,
+      "rig": "quadruped",
+      "animations": [],
+      "extra": ""
+    },
+    "npcs": {
+      "pose": "t-pose",
+      "polycount": 3500,
+      "textureSize": 1024,
+      "rig": "biped",
+      "animations": [
+        "idle",
+        "talk"
+      ],
+      "extra": ""
+    },
+    "weapon-fish": {
+      "pose": "",
+      "polycount": 2500,
+      "textureSize": 1024,
+      "rig": "none",
+      "extra": "single object only, no hands, no stand"
+    }
+  },
+  "items": [
+    {
+      "id": "human",
+      "category": "races",
+      "height": 1.85,
+      "subject": "human adventurer base body, T-pose, rounded friendly proportions, big round head, broad flat shoulders, neutral friendly face, short close-cropped hair, plain birch-white tunic, peat-brown trousers, simple boots"
+    },
+    {
+      "id": "dwarf",
+      "category": "races",
+      "height": 1.3,
+      "subject": "dwarf base body, T-pose, thick and very broad, short stubby legs, big round head, broad flat shoulders, neutral friendly face, full beard tucked in, plain rust tunic, simple boots"
+    },
+    {
+      "id": "gnome",
+      "category": "races",
+      "height": 0.95,
+      "subject": "tiny gnome base body, T-pose, very short tiny legs, very big round head, small broad flat shoulders, neutral friendly face, short close-cropped hair, plain moss-green tunic, simple boots"
+    },
+    {
+      "id": "helm-nasal",
+      "category": "helmets",
+      "subject": "rounded Nordic nasal helmet, thick nose guard, rivet band, chunky shape"
+    },
+    {
+      "id": "helm-miner",
+      "category": "helmets",
+      "subject": "miner's helmet with big lantern-yellow lamp on front, thick brim, dented, rust patches"
+    },
+    {
+      "id": "helm-bucket",
+      "category": "helmets",
+      "subject": "flat-topped great helm, narrow eye slit, breathing holes, heavy chunky plates"
+    },
+    {
+      "id": "helm-winged",
+      "category": "helmets",
+      "subject": "round helmet with two large stylised metal wings on the sides"
+    },
+    {
+      "id": "helm-troll-skull",
+      "category": "helmets",
+      "subject": "helmet made from a huge troll skull with two curved horns, birch-white bone, leather straps"
+    },
+    {
+      "id": "helm-hood-guard",
+      "category": "helmets",
+      "subject": "peat-brown leather hood with a metal face guard plate covering the mouth"
+    },
+    {
+      "id": "helm-crowned",
+      "category": "helmets",
+      "subject": "sleek helmet with a crown-like ridge of short spikes, gem in the forehead"
+    },
+    {
+      "id": "helm-fish-head",
+      "category": "helmets",
+      "subject": "helmet shaped like a giant fish head, mouth open as the face opening, fjord-blue scales"
+    },
+    {
+      "id": "shoulder-spiked-left",
+      "category": "shoulders",
+      "subject": "single large shoulder pauldron, three thick curved spikes, layered plates, rivets, leather strap"
+    },
+    {
+      "id": "shoulder-round",
+      "category": "shoulders",
+      "subject": "rounded dome shoulder pauldron, thick rim, simple rivets"
+    },
+    {
+      "id": "shoulder-layered",
+      "category": "shoulders",
+      "subject": "shoulder pauldron of three overlapping curved plates, raised top edge"
+    },
+    {
+      "id": "shoulder-fur-left",
+      "category": "shoulders",
+      "subject": "shoulder piece of thick peat-brown fur with a large bone clasp and one metal plate"
+    },
+    {
+      "id": "shoulder-horned-right",
+      "category": "shoulders",
+      "subject": "massive shoulder pauldron with one big curved horn rising upward"
+    },
+    {
+      "id": "shoulder-gruben-lantern-left",
+      "category": "shoulders",
+      "subject": "heavy rusty shoulder pauldron with a small lantern-yellow lamp hanging from a chain"
+    },
+    {
+      "id": "shoulder-crystal",
+      "category": "shoulders",
+      "subject": "sleek shoulder pauldron with short aurora-teal crystal shards along the top edge"
+    },
+    {
+      "id": "sword-1h",
+      "category": "weapons",
+      "subject": "chunky one-handed sword, wide blade with central ridge, thick crossguard, leather-wrapped grip, round pommel"
+    },
+    {
+      "id": "mace",
+      "category": "weapons",
+      "subject": "one-handed flanged mace, heavy head with six thick flanges, short leather grip"
+    },
+    {
+      "id": "axe",
+      "category": "weapons",
+      "subject": "one-handed bearded axe, large curved blade, short thick haft, metal bands"
+    },
+    {
+      "id": "greatsword",
+      "category": "weapons",
+      "polycount": 2000,
+      "textureSize": 1024,
+      "subject": "huge two-handed greatsword, broad blade, long grip, wide angular crossguard"
+    },
+    {
+      "id": "warhammer",
+      "category": "weapons",
+      "polycount": 2000,
+      "textureSize": 1024,
+      "subject": "two-handed warhammer, big square head with a spike on the back, long haft with metal bands"
+    },
+    {
+      "id": "longbow",
+      "category": "weapons",
+      "polycount": 2000,
+      "textureSize": 1024,
+      "subject": "tall longbow, thick curved limbs, leather-wrapped grip, carved tips"
+    },
+    {
+      "id": "staff",
+      "category": "weapons",
+      "polycount": 2000,
+      "textureSize": 1024,
+      "subject": "wizard staff, gnarled wooden shaft, large glowing aurora-teal crystal held in roots at the top"
+    },
+    {
+      "id": "kite-shield",
+      "category": "weapons",
+      "subject": "kite shield, thick rim, raised central boss, simple painted emblem"
+    },
+    {
+      "id": "goblin-miner",
+      "category": "enemies",
+      "height": 1.2,
+      "subject": "small goblin miner, T-pose, hunched back, oversized hands, wooden pickaxe on back, ragged moss-green tunic, granite-grey skin"
+    },
+    {
+      "id": "river-troll",
+      "category": "enemies",
+      "height": 3,
+      "subject": "huge river troll, T-pose, long arms, tiny head, mossy granite-grey skin, peat-brown loincloth, carrying a tree-trunk club"
+    },
+    {
+      "id": "smuggler",
+      "category": "enemies",
+      "height": 1.8,
+      "subject": "stocky border smuggler, T-pose, thick rust-coloured wool coat, fur hat, leather satchel, curved cutlass at hip"
+    },
+    {
+      "id": "shaft-ghoul",
+      "category": "enemies",
+      "height": 1.8,
+      "subject": "pale drowned miner, T-pose, rusty helmet with lantern-yellow lamp, tattered rust overalls, dripping, empty eyes"
+    },
+    {
+      "id": "old-cave-bear",
+      "category": "bosses",
+      "rig": "quadruped",
+      "height": 2.5,
+      "subject": "giant old cave bear, standing neutral on four legs, scarred granite-grey fur in large flat shapes, mossy back, broken chains on one leg"
+    },
+    {
+      "id": "glacier-wurm",
+      "category": "bosses",
+      "subject": "large ice wurm, side view, segmented glacier-ice body, birch-white spikes along spine, frozen fish stuck in its jaw"
+    },
+    {
+      "id": "work-horse",
+      "category": "mounts",
+      "height": 1.6,
+      "subject": "sturdy Nordic fjord horse, standing neutral, cream coat with dark mane stripe, simple peat-brown leather saddle and reins"
+    },
+    {
+      "id": "sea-turtle",
+      "category": "mounts",
+      "height": 1.2,
+      "subject": "giant ancient sea turtle, standing neutral, fjord-blue shell with barnacles, birch-white belly, saddle on shell"
+    },
+    {
+      "id": "meteor-stag",
+      "category": "mounts",
+      "height": 1.7,
+      "subject": "majestic stag, standing neutral, granite-grey body, glowing aurora-teal antlers and hooves, saddle"
+    },
+    {
+      "id": "clockwork-mule",
+      "category": "mounts",
+      "height": 1.5,
+      "subject": "mechanical mule made of riveted iron plates, standing neutral, rust and brass colours, visible gears at joints, saddle with cargo packs"
+    },
+    {
+      "id": "fishmonger",
+      "category": "npcs",
+      "height": 1.8,
+      "subject": "cheerful fishmonger, T-pose, fjord-blue apron over birch-white shirt, rubber boots, fish tucked under arm"
+    },
+    {
+      "id": "landlord",
+      "category": "npcs",
+      "height": 1.8,
+      "subject": "stern landlord, T-pose, dark wool suit, ring of large keys at belt, ledger book, small round glasses"
+    },
+    {
+      "id": "healer",
+      "category": "npcs",
+      "height": 1.8,
+      "subject": "kind village healer, T-pose, birch-white robe with moss-green trim, herb pouch at belt, wooden staff"
+    },
+    {
+      "id": "swordfish",
+      "category": "weapon-fish",
+      "subject": "swordfish used as a sword, side view, straight, long sharp bill, fjord-blue back, birch-white belly, leather-wrapped tail as grip"
+    },
+    {
+      "id": "frozen-tuna",
+      "category": "weapon-fish",
+      "subject": "frozen tuna used as a club, side view, straight, glacier-ice crust, frost crystals, rope-wrapped tail as handle"
+    },
+    {
+      "id": "electric-eel",
+      "category": "weapon-fish",
+      "subject": "electric eel used as a staff, side view, straight and stiff, dark body with aurora-teal glowing stripes, tail as grip"
+    }
+  ]
+}

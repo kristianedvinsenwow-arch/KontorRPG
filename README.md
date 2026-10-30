@@ -110,3 +110,7 @@ damage → server authority, small flat maps → streamed heightmap chunks.
 Mining and smithing slice in Mofjellet: real ore veins with shared depletion and gems, carry
 weight, furnace and anvil, bag and bank, character creation with attributes and traits, and
 SQLite persistence.
+
+## Tools
+
+- `tools/meshy-batch/` generates races, gear, enemies, mounts and NPCs as game-ready `.glb` files with the Meshy API: previews, a local pick page, then texture, rig, animate and compress. See its README.
