@@ -146,3 +146,8 @@ select { width: 100%; background: rgba(255, 255, 255, .045); border: 1px solid v
 select:focus { border-color: var(--amber); outline: none; }
 .cards.three { grid-template-columns: repeat(3, 1fr); }
 @media (max-width: 520px) { .cards.three { grid-template-columns: 1fr; } }
+.charside .slots { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+.charside .slots li { grid-template-columns: 1fr; gap: 1px; padding: 5px 8px; }
+.charside .slots li b { font-size: 12px; }
+.charwrap { max-height: calc(100vh - 32px); }
+.charside { overflow-y: auto; }

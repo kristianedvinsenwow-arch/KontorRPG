@@ -15,6 +15,8 @@ export interface Character {
   arms: { shoulder: THREE.Group; elbow: THREE.Group }[];
   tool: THREE.Group;
   tag?: THREE.Sprite;
+  /** Pauldrons on each shoulder; hidden until something is equipped in the shoulders slot. */
+  pauldrons: THREE.Group[];
   race: Race;
   /** Hip height in body space: lower for short-legged races. */
   hipY: number;
@@ -135,18 +137,32 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
     // Tall pointed hat in the player's colour, leaning back.
     const hat = mesh(new THREE.ConeGeometry(0.14, 0.42, 12), M.sleeve, head);
     hat.position.set(0, 0.27, 0.06); hat.rotation.x = 0.22;
-    mesh(new THREE.TorusGeometry(0.13, 0.022, 8, 18), M.belt, head).rotation.x = Math.PI / 2 - 0.22;
-    head.children.at(-1)!.position.set(0, 0.1, 0.02); // brim sits above the brows, not over the eyes
   }
   head.scale.set(H / W, H, H / Wz);
 
   // Arms: shoulder → elbow chain; the right hand carries the tool.
   const arms: Character['arms'] = [];
+  const pauldrons: THREE.Group[] = [];
   for (const sd of [-1, 1]) {
     const shoulder = new THREE.Group();
     shoulder.position.set(sd * 0.25, 0.56, 0);
     upper.add(shoulder);
     ball(shoulder, v3(), 0.075, M.sleeve, 12);
+    // Pauldron: a domed plate over the shoulder with a rim, angled outwards. Its own group so it
+    // survives draw-call merging and can be shown, hidden and recoloured per tier.
+    const pad = new THREE.Group();
+    pad.userData.keep = true;
+    pad.position.set(sd * 0.02, 0.035, 0);
+    pad.rotation.z = -sd * 0.35;
+    const plateM = new THREE.MeshStandardMaterial({ color: 0x8a6a48, roughness: 0.6, metalness: 0.1 });
+    const dome = mesh(new THREE.SphereGeometry(0.11, 14, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), plateM, pad);
+    dome.scale.set(1.05, 0.62, 1.15);
+    const rim = mesh(new THREE.TorusGeometry(0.105, 0.012, 6, 18), plateM, pad);
+    rim.rotation.x = Math.PI / 2; rim.scale.set(1.05, 1.15, 1);
+    pad.traverse((o) => (o.userData.keep = true));
+    pad.visible = false;
+    shoulder.add(pad);
+    pauldrons.push(pad);
     limb(shoulder, v3(), v3(0, -0.28, 0), 0.065, 0.055, M.sleeve);
     const elbow = new THREE.Group();
     elbow.position.y = -0.28;
@@ -175,7 +191,7 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
   body.scale.setScalar(scale);
   g.add(body);
 
-  const ch: Character = { g, legs, upper, head, arms, tool, race, hipY, stride: 1 / (scale * (0.35 + 0.65 * L)), ph: 0, swing: 0 };
+  const ch: Character = { g, legs, upper, head, arms, tool, pauldrons, race, hipY, stride: 1 / (scale * (0.35 + 0.65 * L)), ph: 0, swing: 0 };
   if (name) {
     ch.tag = nameSprite(name, col);
     ch.tag.position.y = R.height + 0.3;
@@ -206,4 +222,29 @@ export function animateCharacter(c: Character, speed: number, pitch: number, swi
   // Tool arm: carried with the forearm forward; swinging lifts it overhead and chops down.
   c.arms[1].shoulder.rotation.x = swinging ? 1.6 + strike * 1.1 : 0.3 + sw * 0.3;
   c.arms[1].elbow.rotation.x = swinging ? 0.45 - strike * 0.3 : 0.95;
+}
+
+/** Tier colours for metal gear (design doc §6). Leather is the starter look. */
+export const GEAR_COLORS: Record<string, { color: number; metal: number; rough: number }> = {
+  leather: { color: 0x8a6a48, metal: 0.05, rough: 0.7 },
+  stone: { color: 0x8d8a84, metal: 0, rough: 0.85 },
+  iron: { color: 0x7e8288, metal: 0.8, rough: 0.42 },
+  steel: { color: 0xb4bac2, metal: 0.9, rough: 0.3 },
+  silver: { color: 0xd8dde4, metal: 1, rough: 0.2 },
+  mithril: { color: 0x9fc6e8, metal: 0.95, rough: 0.22 },
+  grubenSteel: { color: 0x4d5a52, metal: 0.9, rough: 0.35 },
+  somnaminium: { color: 0xc89cf0, metal: 1, rough: 0.15 },
+};
+
+/** Show pauldrons of a tier, or hide them with null. */
+export function setShoulders(c: Character, tier: keyof typeof GEAR_COLORS | null): void {
+  for (const pad of c.pauldrons) {
+    pad.visible = !!tier;
+    if (!tier) continue;
+    const g = GEAR_COLORS[tier];
+    pad.traverse((o) => {
+      const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial | undefined;
+      if (m) { m.color.setHex(g.color); m.metalness = g.metal; m.roughness = g.rough; }
+    });
+  }
 }

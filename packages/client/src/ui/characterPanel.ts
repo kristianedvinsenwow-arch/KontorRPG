@@ -5,8 +5,8 @@
  * WebGL context, no texture readback).
  */
 import * as THREE from 'three';
-import { PERKS, RACES, type CharacterBuild, type Race } from '@kontor/shared';
-import { makeCharacter, animateCharacter, type Character } from '../entities/character.js';
+import { EQUIP_SLOTS, PERKS, RACES, type CharacterBuild, type Race, type Slot } from '@kontor/shared';
+import { makeCharacter, animateCharacter, setShoulders, type Character, type GEAR_COLORS } from '../entities/character.js';
 import { derivedTiles } from './creator.js';
 
 export class CharacterPreview {
@@ -49,6 +49,17 @@ export class CharacterPreview {
     this.scene.add(this.model.g);
   }
 
+  /** Use the world's sky environment so metal gear reflects the same light as in the game. */
+  setEnvironment(env: THREE.Texture | null): void {
+    this.scene.environment = env;
+    this.scene.environmentIntensity = 0.7;
+  }
+
+  /** Show shoulder gear on the preview model (e.g. to preview a tier). */
+  setShoulders(tier: keyof typeof GEAR_COLORS | null): void {
+    if (this.model) setShoulders(this.model, tier);
+  }
+
   render(renderer: THREE.WebGLRenderer, dt: number): void {
     if (!this.isVisible() || !this.model) return;
     const r = this.el.getBoundingClientRect();
@@ -74,7 +85,24 @@ export class CharacterPreview {
 }
 
 /** Fill the in-game character panel's text from the build. */
+/** Starter equipment until inventories arrive in M1. */
+const STARTER: Partial<Record<Slot, [string, string]>> = {
+  chest: ['Travel Tunic', '—'],
+  legs: ['Wool Trousers', '—'],
+  feet: ['Leather Boots', '—'],
+  mainHand: ['Stone Pickaxe', 'Tier 1'],
+};
+
 export function fillCharacterPanel(name: string, build: CharacterBuild): void {
+  document.getElementById('slots')!.replaceChildren(...EQUIP_SLOTS.map(({ slot, label }) => {
+    const li = document.createElement('li');
+    const [item, tier] = STARTER[slot] ?? ['Empty', ''];
+    const a = document.createElement('span'); a.textContent = label;
+    const b = document.createElement('b'); b.textContent = item; if (item === 'Empty') b.style.color = 'var(--muted)';
+    const c = document.createElement('em'); c.textContent = tier;
+    li.append(a, b, c);
+    return li;
+  }));
   document.getElementById('charName')!.textContent = name;
   document.getElementById('charRace')!.textContent = `${RACES[build.race].name} · STR ${build.attrs.str} · DEX ${build.attrs.dex} · INT ${build.attrs.int} · STA ${build.attrs.sta}`;
   document.getElementById('charStats')!.replaceChildren(...derivedTiles(build));

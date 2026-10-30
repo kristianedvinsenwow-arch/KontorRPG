@@ -29,6 +29,8 @@ const input = new Input(renderer.domElement);
 const viewmodel = makeViewmodel(vmScene);
 const preview = new CharacterPreview('preview', () => uiStore.get().panel === 'character');
 const creatorPreview = new CharacterPreview('createPreview', () => uiStore.get().panel === 'menu');
+preview.setEnvironment(scene.environment);
+creatorPreview.setEnvironment(scene.environment);
 const remotes = new Remotes(scene);
 const net = new NetClient();
 
@@ -194,4 +196,4 @@ function frame() {
 frame();
 
 // Exposed for automated smoke tests and debugging in the console.
-(window as any).__kontor = { get me() { return me; }, get build() { return myBuild; }, remotes, net, terrain, netStore, uiStore, settingsStore };
+(window as any).__kontor = { get me() { return me; }, get build() { return myBuild; }, remotes, net, terrain, netStore, uiStore, settingsStore, creatorPreview };

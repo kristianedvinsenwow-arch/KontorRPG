@@ -90,3 +90,11 @@ test('three races, from tallest to smallest', () => {
   assert.ok(RACES.human.height > RACES.dwarf.height && RACES.dwarf.height > RACES.gnome.height);
   assert.ok(RACES.dwarf.width > RACES.human.width);
 });
+
+import { EQUIP_SLOTS, BARS_PER_ITEM } from '../src/index.js';
+
+test('shoulders are an equipment slot and full armour costs 48 bars', () => {
+  assert.ok(EQUIP_SLOTS.some((s) => s.slot === 'shoulders'));
+  const armour = ['helmet', 'shoulders', 'chestplate', 'legs', 'gloves', 'boots'].reduce((n, k) => n + BARS_PER_ITEM[k], 0);
+  assert.equal(armour, 48);
+});
