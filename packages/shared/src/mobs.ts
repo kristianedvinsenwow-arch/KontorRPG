@@ -37,7 +37,7 @@ export interface MobDef {
 }
 
 export const MOBS: Record<MobKind, MobDef> = {
-  wolf: { kind: 'wolf', name: 'Grey wolf', level: 2, hp: 30, dmg: 3, interval: 2, range: 1.8, speed: 4.2, aggro: 9, armour: 2, ward: 2, xp: 25, gold: [0, 2],
+  wolf: { kind: 'wolf', name: 'Grey wolf', level: 2, hp: 30, dmg: 2.5, interval: 2, range: 1.8, speed: 4.2, aggro: 7, armour: 2, ward: 2, xp: 25, gold: [0, 2],
     drops: [{ item: 'wolf_pelt', chance: 0.6, qty: [1, 1] }], respawnSec: [60, 120], scale: 1 },
   goblin: { kind: 'goblin', name: 'Goblin scout', level: 4, hp: 45, dmg: 4, interval: 1.8, range: 1.8, speed: 3.8, aggro: 10, armour: 4, ward: 2, xp: 40, gold: [1, 4],
     drops: [{ item: 'goblin_trinket', chance: 0.4, qty: [1, 1] }, { item: 'stone_arrowheads', chance: 0.2, qty: [5, 10] }, { gear: 1, chance: 0.06 }], respawnSec: [90, 150], scale: 1 },

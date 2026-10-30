@@ -202,11 +202,11 @@ function game(random: () => number = () => 0.5, store?: MemoryStore) {
   return { world, c, p, place, last, at, advance: (ms: number) => (t += ms), now: () => t };
 }
 
-test('new characters start with 16 empty slots, 15 gold and no tools', () => {
+test('new characters start with 16 empty slots, 30 gold and no tools', () => {
   const { last } = game();
   const inv = last('inv')!;
   assert.equal(inv.bag.length, 16);
-  assert.equal(inv.gold, 15);
+  assert.equal(inv.gold, 30);
   assert.deepEqual(inv.equip, {});
 });
 
@@ -214,7 +214,7 @@ test('buy a pickaxe from Ingrid, equip it, mine; vein wear is shared and it depl
   const { world, c, p, place, last, at, advance } = game();
   at('ingrid');
   world.handle(c, { t: 'buy', npc: 'ingrid', item: 'stone_pickaxe' });
-  assert.equal(p.gold, 5);
+  assert.equal(p.gold, 20);
   world.handle(c, { t: 'equip', index: p.bag.findIndex((s) => s?.id === 'stone_pickaxe') });
   assert.equal(p.equip.pickaxe?.id, 'stone_pickaxe');
   const vein = VEIN_BY_ID.get('camp-0')!;
@@ -350,7 +350,7 @@ test('quests: accept, deliver, reward, then locked until the reset', () => {
   world.handle(c, { t: 'quest', quest: q.id, op: 'accept' });
   p.bag[0] = { id: 'stone', qty: 10 };
   world.handle(c, { t: 'quest', quest: q.id, op: 'turnin' });
-  assert.equal(p.gold, 15 + q.reward.gold);
+  assert.equal(p.gold, 30 + q.reward.gold);
   assert.ok((p.xp.mining ?? 0) >= q.reward.xp[1]);
   world.handle(c, { t: 'quest', quest: q.id, op: 'accept' });
   assert.match(last('notice')!.text, /resets/);

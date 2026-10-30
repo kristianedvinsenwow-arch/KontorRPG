@@ -254,7 +254,7 @@ add({ id: 'trolltooth_necklace', name: 'Trolltooth necklace', kind: 'trinket', s
 export const ITEMS: Record<string, ItemDef> = Object.fromEntries(defs.map((d) => [d.id, d]));
 
 export const BASE_BAG_SLOTS = 16;
-export const START_GOLD = 15;
+export const START_GOLD = 30;
 
 /** Order and labels for the character sheet. */
 export const EQUIP_SLOTS: { slot: Slot; label: string }[] = [

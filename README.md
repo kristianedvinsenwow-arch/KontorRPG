@@ -8,111 +8,44 @@ The design doc lives in the claude.ai doc "KontorRPG — Product Design Doc".
 ## What it does so far
 
 - **World:** first-person walking (5 m/s, no sprint, jump) on streamed terrain chunks of
-  "Mofjellet": hills, a lake, faceted pine and birch forest, mossy rocks, ore veins, grass and
-  flowers that sway in the wind, and reflective rippling water.
-- **Graphics:** physical sky baked into an HDR environment map, PBR materials, ACES tone mapping,
-  soft shadows, ambient occlusion (GTAO), bloom and colour grading. Three quality levels
-  (high / medium / low) for office laptops.
-- **Characters:** creator with three races (human, dwarf, gnome — different heights and leg
-  lengths), attributes that start at 5 and can be moved between (1–10, total 20), one of 10
-  major perks and one of 8 minor perks, live derived stats and a 3D preview. Shoulder pauldrons
-  per gear tier.
-- **Multiplayer:** authoritative Node server; the client predicts its own movement and the
-  server checks every step with the same shared rules (including perk speed changes).
-  Remote players are interpolated; you only receive players near you (area of interest).
-- **Accounts (optional):** email magic-link login through Supabase. Characters are saved on
-  first login and loaded afterwards, with your last position. Guests can still play unless
-  `REQUIRE_LOGIN=true`.
-- **Mining (M1):** 57 shared ore veins (stone near camp, iron on the high ground). Hold click to
-  swing; each vein gives a few ores, then is depleted *for everyone* until it respawns (45 s /
-  2 min). Rare gems (Mofjell quartz, sapphire). Mining level speeds up swings; iron needs Mining 8.
-- **Smithing (M1):** furnace and anvil at camp. Timed queues: shape stone → stone sword and
-  pauldrons; smelt iron bars → iron pickaxe, sword and pauldrons (cross-tier recipes).
-- **Bag and trading (M1):** 16 slots (+STR, perks and a worn rucksack/backpack in the back slot),
-  ores stack to 10, gems to 5. You start with 15 gold and no pickaxe — buy one from Trader Ingrid
-  at the Mofjell Trading Post next to spawn. Separate tool slot, so a weapon can stay equipped.
-  Gold, bag, gear and skill XP are saved for logged-in players. Everything is server-authoritative.
-- **Keys:** **E** use station / trade, **I** bag, **K** skills, **C** character, **Enter** chat.
-- **Office features:** chat, roster, ping, boss key (**F9**), character panel (**C**), and every
-  open tab reloads itself after a deploy.
+  "Mofjellet": hills, a lake, pine and birch forest, grass and flowers in the wind, rippling water.
+  The camp at spawn, the lakeside village **Bjørkvik**, and **the Old Mine** (an underground area
+  with its own lighting). Map on **M**.
+- **Graphics:** physical sky, HDR environment, PBR, ACES, soft shadows, ambient occlusion, bloom
+  and grading; three quality levels for office laptops.
+- **Characters:** four races with racial bonuses (human: ranged + fishing; dwarf: armour +
+  mining; gnome: magic + luck; ogre: +15% melee, −15% speed, + woodcutting), five faces,
+  attributes, one major and one minor perk. Worn gear shows on the model.
+- **Gathering:** shared ore veins (stone, iron, silver in the mine) in a few hotspots plus loners,
+  every tree can be felled (birch and pine) and topples over, leaving a stump until it regrows.
+  A ring shows how used-up a vein or tree is, the same for everyone. Depleted nodes return after
+  a random 45 min – 2 h (trees 20–60 min); nobody is told when. Fishing in the lake with a
+  reel-in minigame.
+- **Crafting:** furnace, anvil, workbench (carpentry), campfires and the inn stove (cooking, can
+  burn). Timed queues. Crafted gear can roll **uncommon / rare / epic** with 1–3 random effects;
+  luck raises the odds. **Legendary** only drops from bosses.
+- **Gear:** stone and iron swords, longswords (Whirlwind), battleaxes, kite shields and full metal
+  armour; birch and pine bows (arrows from shafts + smithed arrowheads) and staffs (imbued with fire
+  or frost by Ragna in Bjørkvik); leather and cloth armour from the trader. Metal: strong vs
+  physical, a little slower, magic hurts more. Leather: middle, a little faster. Cloth: strong vs
+  magic.
+- **Combat:** left click attacks at the weapon's pace, right click is the weapon's special on a
+  6–18 s cooldown (longer = stronger). Fire stacks burns, Ignite detonates them; frost slows, Frost
+  Nova freezes. Wolves and goblins in the wild; bats, goblins, shamans and the boss **Old Knut** in
+  the mine. Loot drops on the ground (the top damager owns it for a minute). Soft death: wake up
+  at camp, weakened for two minutes.
+- **Progression:** skills (mining, smithing, woodcutting, carpentry, fishing, cooking) and a
+  player level from combat. Every level is a talent point; talent trees (**T**) start with a
+  three-rank root and branch out to bigger one-point notables. Repeatable daily / twice-weekly /
+  weekly quests from NPCs.
+- **Bjørkvik Lodge:** rent one of eight rooms (25 g a week, up to 4 weeks ahead) for a 24-slot
+  storage chest. One home at a time — your chest moves with you.
+- **Interface:** hotbar (1–5), health and buffs, item tooltips (type, damage, effects, vendor
+  value), right-click to drop, quest tracker, character sheet with gear and bag (**C** / **I**).
+- **Multiplayer:** authoritative Node server checks every move, swing, cast and craft; rolls every
+  random thing. Accounts via Supabase magic links; everything is saved for logged-in players.
+- **Office features:** chat, roster, ping, boss key (**F9**), auto-reload after deploys.
 
-## Run locally
-
-```bash
-corepack enable          # once, gives you pnpm
-pnpm install
-pnpm dev                 # server on :8787, client with hot reload on http://localhost:5173
-```
-
-Open two browser windows (one incognito) to see two players. Production-style:
-
-```bash
-pnpm build && pnpm start # everything on http://localhost:8787
-```
-
-Tests: `pnpm test` (terrain, movement rules, protocol, world/netcode). Types: `pnpm typecheck`.
-
-## Accounts and storage (Supabase)
-
-Project `kontor-rpg` (Stockholm). The schema is in `supabase/migrations/`.
-
-- `characters`: one row per account. Players can **read** only their own row (row-level
-  security); only the game server writes, using the secret key, so gold, items and positions
-  can't be edited from a browser.
-- The server enables accounts when these environment variables are set:
-
-| Variable | Where to find it | Secret? |
-| --- | --- | --- |
-| `SUPABASE_URL` | already in `render.yaml` | no |
-| `SUPABASE_PUBLISHABLE_KEY` | already in `render.yaml` | no |
-| `SUPABASE_SECRET_KEY` | Supabase → Project Settings → API Keys → Secret keys | **yes** — paste it in Render only |
-| `REQUIRE_LOGIN` | `false` while people try it out, `true` once everyone has an account | no |
-
-One-time Supabase setting: **Authentication → URL Configuration** → set *Site URL* to your
-Render URL (e.g. `https://kontor-rpg.onrender.com`) and add it under *Redirect URLs*, plus
-`http://localhost:8787` for local testing. Supabase's built-in email sender only sends a few
-login emails per hour; for the whole office, add your own SMTP under Authentication → Emails.
-
-## Design (Figma)
-
-UI file: <https://www.figma.com/design/mcD4GPOdJW2knnFXc7Dsjl>. It holds the design tokens as
-variables (colours, radius, spacing — the same values as `:root` in `packages/client/src/styles.css`),
-text styles, components (button, option card, stat tile, attribute row, HUD chip, equipment
-slot) and the screens: character creator, in-game HUD, character panel and pause.
-
-## Deploy to Render
-
-1. Push this repo to GitHub.
-2. In Render, choose **New → Blueprint** and pick the repo; `render.yaml` sets everything up.
-3. Every push to `main` deploys; open game tabs reload automatically.
-
-Characters live in Supabase, so no Render disk is needed. The free plan works but sleeps after
-15 idle minutes (about a minute to wake); the Starter plan (about 7 USD/month) stays awake.
-
-## Layout
-
-```
-packages/
-  shared/   constants, terrain, movement rules, character rules (races, perks), items, protocol
-  server/   http + static client + WebSocket; World (tick, validation, area of interest);
-            persistence (Supabase or in-memory)
-  client/   Vite + three.js
-    engine/    renderer, input, procgen (ported from KontorLAN)
-    world/     terrain chunk streaming, vegetation and rocks, water
-    entities/  character model (from KontorLAN's soldier), first-person viewmodel
-    physics/   local movement / prediction
-    net/       socket client, remote-player interpolation, Supabase login
-    state/     stores: net, ui, settings
-    ui/        HUD, creator, account box, character panel, pause, boss key
-supabase/   SQL migrations
-```
-
-## What we took from KontorLAN
-
-Procedural meshes and canvas textures (`canvasTex`, `speckle`, `grime`, `mat`, `boxGeo`, `limb`,
-draw-call merging), the soldier model's skeleton (re-dressed as an adventurer), the separate
-viewmodel scene, the name sprites, the presence-and-interpolation idea for remote players, the
-self-hosted WebSocket with version check, and the dark/amber UI style.
 What changed: three.js r128 → current via npm, one HTML file → TypeScript modules, client-trusted
 damage → server authority, small flat maps → streamed heightmap chunks.
 

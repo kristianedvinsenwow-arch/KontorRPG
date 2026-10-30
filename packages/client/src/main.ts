@@ -535,5 +535,5 @@ frame();
 // Exposed for automated smoke tests and debugging in the console.
 (window as any).__kontor = {
   get me() { return me; }, get build() { return myBuild; }, get aimed() { return aimed; }, get near() { return near; }, get stats() { return stats; },
-  remotes, net, terrain, veins, mobs, fx, viewmodel, netStore, uiStore, gameStore, settingsStore, creatorPreview, preview, auth, openPanel, fishing, use, special,
+  trees: TREE_BY_ID, remotes, net, terrain, veins, mobs, fx, viewmodel, netStore, uiStore, gameStore, settingsStore, creatorPreview, preview, auth, openPanel, fishing, use, special,
 };

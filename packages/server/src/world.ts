@@ -196,7 +196,7 @@ export class World {
     client.send({ t: 'nodes', depleted: dep });
     for (const [nid, st] of this.nodes) if (st.until <= now && st.left > 0 && st.left < st.total) client.send({ t: 'node', id: nid, left: st.left, total: st.total });
     client.send({ t: 'ground', add: [...this.ground.values()].map(groundView) });
-    if (!wasSaved && !p.equip.pickaxe) client.send({ t: 'notice', kind: 'info', text: 'Welcome! Ingrid at the trading post sells your first pickaxe, hatchet and fishing rod.' });
+    if (!wasSaved && !p.equip.pickaxe) client.send({ t: 'notice', kind: 'info', text: 'Welcome! You have 30 gold — Ingrid at the trading post sells your first pickaxe, hatchet and fishing rod (10 g each).' });
     this.broadcast({ t: 'system', text: `${c.name} logged in` });
     this.broadcastRoster();
     this.log(`join ${c.name} (${id}); online ${this.players.size}`);
