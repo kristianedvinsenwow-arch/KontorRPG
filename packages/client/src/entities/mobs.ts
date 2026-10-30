@@ -1,0 +1,236 @@
+/**
+ * Monsters as the client sees them: procedural models (wolf, goblins, bats, the troll), smoothed
+ * movement from snapshots, a name/level/health label, status looks (burning, slowed, frozen),
+ * attack and death animations, and picking under the crosshair.
+ */
+import * as THREE from 'three';
+import { MOBS, ST_BURN, ST_DEAD, ST_FROZEN, ST_SLOW, groundAt, type MobKind, type MobState } from '@kontor/shared';
+import { mat, mesh, bx, ball, limb, v3 } from '../engine/procgen.js';
+import { makeCharacter, animateCharacter, type Character } from './character.js';
+import { applyGear } from './held.js';
+import { addLabel, removeLabel, type Label } from '../engine/labels.js';
+
+interface MobView {
+  id: string;
+  kind: MobKind;
+  g: THREE.Group;
+  body: THREE.Group;
+  char?: Character;
+  legs: THREE.Object3D[];
+  wings: THREE.Object3D[];
+  target: { x: number; y: number; z: number; yaw: number };
+  s: MobState;
+  speed: number;
+  ph: number;
+  deadT: number;
+  label: Label;
+  hpFill: HTMLElement;
+  statusEl: HTMLElement;
+  atkT: number;
+  tintMats: THREE.MeshStandardMaterial[];
+}
+
+function swapSkin(root: THREE.Object3D, from: number, to: THREE.Material) {
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh && (m.material as THREE.MeshStandardMaterial).color?.getHex() === from) m.material = to;
+  });
+}
+
+function humanoid(kind: MobKind): { g: THREE.Group; c: Character } {
+  const race = kind === 'troll' ? 'ogre' : 'gnome';
+  const color = kind === 'cave_shaman' ? 4 : kind === 'troll' ? 7 : kind === 'cave_goblin' ? 0 : 3;
+  const c = makeCharacter(color, undefined, race, kind === 'troll' ? 3 : 1);
+  const skin = kind === 'troll' ? mat(0x7d8790, null, { r: 0.8 }) : mat(kind === 'cave_goblin' ? 0x5f7a48 : 0x7a9a4a, null, { r: 0.6 });
+  swapSkin(c.g, race === 'ogre' ? 0x9fa478 : 0xd1a582, skin);
+  // Goblin ears.
+  if (kind !== 'troll') for (const sx of [-1, 1]) {
+    const ear = mesh(new THREE.ConeGeometry(0.035, 0.16, 5), skin, c.head);
+    ear.position.set(sx * 0.12, 0.03, 0.01); ear.rotation.z = -sx * 1.2;
+  }
+  applyGear(c, kind === 'troll' ? { h: 'stone_battleaxe' } : kind === 'cave_shaman' ? { h: 'birch_fire_staff' } : { h: kind === 'cave_goblin' ? 'iron_sword' : 'stone_sword', hd: kind === 'cave_goblin' ? 'stone_helm' : undefined });
+  const g = new THREE.Group();
+  g.add(c.g);
+  return { g, c };
+}
+
+function wolf(): { g: THREE.Group; legs: THREE.Object3D[] } {
+  const g = new THREE.Group();
+  const fur = mat(0x7a756c, 'cloth', { r: 1 }), dark = mat(0x4a4640, 'cloth', { r: 1 }), nose = mat(0x1a1816, null);
+  const body = ball(g, v3(0, 0.62, 0), 0.28, fur, 12); body.scale.set(0.8, 0.85, 1.9);
+  const chest = ball(g, v3(0, 0.66, -0.35), 0.25, fur, 10); chest.scale.set(0.9, 1, 1);
+  const head = new THREE.Group(); head.position.set(0, 0.85, -0.62); g.add(head);
+  ball(head, v3(), 0.16, fur, 10).scale.set(0.9, 0.9, 1.1);
+  const snout = mesh(new THREE.ConeGeometry(0.08, 0.26, 6), fur, head); snout.rotation.x = -Math.PI / 2; snout.position.set(0, -0.04, -0.2);
+  ball(head, v3(0, -0.03, -0.33), 0.03, nose, 6);
+  for (const sx of [-1, 1]) {
+    const ear = mesh(new THREE.ConeGeometry(0.05, 0.14, 4), dark, head); ear.position.set(sx * 0.08, 0.15, 0.02);
+    ball(head, v3(sx * 0.07, 0.04, -0.12), 0.022, mat(0xe8c040, null, { r: 0.2 }), 6);
+  }
+  const tail = mesh(new THREE.ConeGeometry(0.07, 0.5, 6), dark, g); tail.position.set(0, 0.7, 0.62); tail.rotation.x = 1.9;
+  const legs: THREE.Object3D[] = [];
+  for (const [x, z] of [[-0.14, -0.38], [0.14, -0.38], [-0.14, 0.36], [0.14, 0.36]]) {
+    const leg = new THREE.Group(); leg.position.set(x, 0.55, z); g.add(leg);
+    limb(leg, v3(), v3(0, -0.52, 0), 0.06, 0.04, fur, 6);
+    legs.push(leg);
+  }
+  return { g, legs };
+}
+
+function bat(): { g: THREE.Group; wings: THREE.Object3D[] } {
+  const g = new THREE.Group();
+  const skin = mat(0x3a3036, 'leather', { r: 0.8 });
+  ball(g, v3(0, 0, 0), 0.14, skin, 10).scale.set(0.9, 1, 1.2);
+  for (const sx of [-1, 1]) {
+    const ear = mesh(new THREE.ConeGeometry(0.04, 0.12, 4), skin, g); ear.position.set(sx * 0.06, 0.15, -0.05);
+    ball(g, v3(sx * 0.05, 0.03, -0.13), 0.018, mat(0xff4030, null, { r: 0.3 }), 5);
+  }
+  const wings: THREE.Object3D[] = [];
+  for (const sx of [-1, 1]) {
+    const w = new THREE.Group(); g.add(w);
+    const shape = new THREE.Shape([new THREE.Vector2(0, 0), new THREE.Vector2(0.55, 0.12), new THREE.Vector2(0.5, -0.1), new THREE.Vector2(0.35, -0.02), new THREE.Vector2(0.25, -0.16), new THREE.Vector2(0.1, -0.04)]);
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshStandardMaterial({ color: 0x2a2228, side: THREE.DoubleSide, roughness: 0.8 }));
+    m.rotation.x = -Math.PI / 2;
+    m.scale.x = sx;
+    w.add(m);
+    wings.push(w);
+  }
+  return { g, wings };
+}
+
+export class Mobs {
+  private views = new Map<string, MobView>();
+  private targetId: string | null = null;
+
+  constructor(private readonly scene: THREE.Scene) {}
+
+  ingest(list: MobState[]): void {
+    const seen = new Set<string>();
+    for (const s of list) {
+      seen.add(s.id);
+      let v = this.views.get(s.id);
+      if (!v) v = this.create(s);
+      const wasDead = !!(v.s.st & ST_DEAD);
+      v.s = s;
+      v.target = { x: s.x, y: s.y, z: s.z, yaw: s.yaw };
+      if (wasDead && !(s.st & ST_DEAD)) { v.g.position.set(s.x, s.y, s.z); v.deadT = 0; v.body.rotation.set(0, 0, 0); v.g.visible = true; }
+    }
+    for (const [id, v] of this.views) if (!seen.has(id)) { this.scene.remove(v.g); removeLabel(v.label); this.views.delete(id); }
+  }
+
+  private create(s: MobState): MobView {
+    const def = MOBS[s.k];
+    const g = new THREE.Group();
+    const body = new THREE.Group();
+    g.add(body);
+    let legs: THREE.Object3D[] = [], wings: THREE.Object3D[] = [], char: Character | undefined;
+    if (s.k === 'wolf') { const w = wolf(); body.add(w.g); legs = w.legs; }
+    else if (s.k === 'bat') { const b = bat(); body.add(b.g); wings = b.wings; }
+    else { const h = humanoid(s.k); body.add(h.g); char = h.c; }
+    body.scale.setScalar(s.k === 'troll' ? def.scale / 1.16 : def.scale);
+    g.position.set(s.x, s.y, s.z);
+    g.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; } });
+    // Status looks are applied with a per-mob material tint.
+    const tintMats: THREE.MeshStandardMaterial[] = [];
+    g.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh && (m.material as THREE.MeshStandardMaterial).isMeshStandardMaterial) {
+        const c = (m.material as THREE.MeshStandardMaterial).clone();
+        m.material = c;
+        tintMats.push(c);
+      }
+    });
+    this.scene.add(g);
+    const el = document.createElement('div');
+    el.className = `tag mob${def.boss ? ' boss' : ''}`;
+    const nm = document.createElement('b'); nm.textContent = `${def.name}`;
+    const lv = document.createElement('small'); lv.textContent = `Level ${def.level}${def.boss ? ' · Boss' : ''}`;
+    const bar = document.createElement('div'); bar.className = 'hpbar';
+    const fill = document.createElement('i'); bar.append(fill);
+    const status = document.createElement('div'); status.className = 'status';
+    el.append(nm, lv, bar, status);
+    const height = (s.k === 'troll' ? 2.2 * def.scale / 1.16 : s.k === 'wolf' ? 1.1 : s.k === 'bat' ? 0.6 : 1.0 * def.scale) + 0.4;
+    const view: MobView = {
+      id: s.id, kind: s.k, g, body, char, legs, wings, target: { x: s.x, y: s.y, z: s.z, yaw: s.yaw }, s, speed: 0, ph: Math.random() * 6, deadT: 0,
+      label: addLabel(el, () => (g.visible ? new THREE.Vector3(g.position.x, g.position.y + height + (s.k === 'bat' ? 1.5 : 0), g.position.z) : null), 34),
+      hpFill: fill, statusEl: status, atkT: 0, tintMats,
+    };
+    this.views.set(s.id, view);
+    return view;
+  }
+
+  setTarget(id: string | null): void {
+    if (id === this.targetId) return;
+    if (this.targetId) this.views.get(this.targetId)?.label.el.classList.remove('targeted');
+    this.targetId = id;
+    if (id) this.views.get(id)?.label.el.classList.add('targeted');
+  }
+
+  update(dt: number): void {
+    for (const v of this.views.values()) {
+      const s = v.s, g = v.g;
+      const dead = !!(s.st & ST_DEAD);
+      const k = Math.min(1, dt * 8);
+      const px = g.position.x, pz = g.position.z;
+      g.position.x += (v.target.x - g.position.x) * k;
+      g.position.z += (v.target.z - g.position.z) * k;
+      const gy = v.kind === 'bat' ? groundAt(g.position.x, g.position.z) + 1.5 + Math.sin(v.ph * 2) * 0.15 : v.target.y;
+      g.position.y += (gy - g.position.y) * k;
+      let dy = v.target.yaw - g.rotation.y;
+      dy = Math.atan2(Math.sin(dy), Math.cos(dy));
+      g.rotation.y += dy * Math.min(1, dt * 10);
+      const sp = Math.hypot(g.position.x - px, g.position.z - pz) / Math.max(dt, 1e-3);
+      v.speed += (sp - v.speed) * Math.min(1, dt * 6);
+      const frozen = !!(s.st & ST_FROZEN);
+      v.ph += dt * (frozen ? 0 : 1) * (v.kind === 'bat' ? 14 : v.speed * 2.4);
+      if (s.act) v.atkT = Math.min(1, v.atkT + dt * 3); else v.atkT = Math.max(0, v.atkT - dt * 4);
+      // Animation per kind.
+      if (v.char) animateCharacter(v.char, frozen ? 0 : v.speed, 0, !!s.act && !frozen, frozen ? 0 : dt);
+      v.legs.forEach((l, i) => (l.rotation.x = Math.sin(v.ph + (i % 2 ? Math.PI : 0) + (i > 1 ? Math.PI / 2 : 0)) * Math.min(0.7, v.speed * 0.15)));
+      if (v.kind === 'wolf') v.body.rotation.x = -v.atkT * 0.35;
+      v.wings.forEach((w, i) => (w.rotation.z = (i ? -1 : 1) * Math.sin(v.ph) * 0.8));
+      if (dead) {
+        v.deadT += dt;
+        v.body.rotation.z = Math.min(Math.PI / 2, v.deadT * 4) * (v.kind === 'bat' ? 0 : 1);
+        if (v.kind === 'bat') g.position.y = Math.max(groundAt(g.position.x, g.position.z) + 0.1, g.position.y - dt * 4);
+        if (v.deadT > 3) g.visible = false;
+      }
+      // Status tint: red-orange glow while burning, icy blue while frozen/slowed.
+      const burn = !!(s.st & ST_BURN), slow = !!(s.st & ST_SLOW);
+      const emis = frozen ? 0x3a6a9a : burn ? 0x7a2a08 : slow ? 0x1a3050 : 0;
+      for (const m of v.tintMats) m.emissive.setHex(emis);
+      v.hpFill.style.width = `${Math.max(0, (s.hp / s.mhp) * 100)}%`;
+      v.label.el.classList.toggle('hurt', s.hp < s.mhp || v.id === this.targetId);
+      const st = [burn ? `Burn ×${s.bs ?? 1}` : '', frozen ? 'Frozen' : slow ? 'Slowed' : ''].filter(Boolean).join(' · ');
+      if (v.statusEl.textContent !== st) v.statusEl.textContent = st;
+    }
+  }
+
+  /** Live mob under the crosshair within `reach` (ray vs. a sphere around the body). */
+  pick(origin: THREE.Vector3, dir: THREE.Vector3, reach: number, slack = 0.9): MobState | null {
+    let best: MobState | null = null, bestT = Infinity;
+    const c = new THREE.Vector3();
+    for (const v of this.views.values()) {
+      if (v.s.st & ST_DEAD) continue;
+      const def = MOBS[v.kind];
+      const r = (v.kind === 'troll' ? 1.2 : v.kind === 'bat' ? 0.5 : 0.55) * (v.kind === 'troll' ? 1 : def.scale) + slack * 0.3;
+      const h = v.kind === 'troll' ? 1.6 : v.kind === 'bat' ? 0 : 0.6;
+      c.set(v.g.position.x, v.g.position.y + h, v.g.position.z).sub(origin);
+      const t = c.dot(dir);
+      if (t < 0 || t > reach + r + 2) continue;
+      const d2 = c.lengthSq() - t * t;
+      if (d2 > r * r * (1 + slack)) continue;
+      if (t < bestT) { bestT = t; best = v.s; }
+    }
+    return best;
+  }
+
+  position(id: string): THREE.Vector3 | null {
+    const v = this.views.get(id);
+    return v ? v.g.position.clone().add(new THREE.Vector3(0, v.kind === 'troll' ? 2 : v.kind === 'bat' ? 0 : 0.8, 0)) : null;
+  }
+
+  get(id: string): MobState | undefined { return this.views.get(id)?.s; }
+
+  all(): MobState[] { return [...this.views.values()].map((v) => v.s); }
+}

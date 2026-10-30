@@ -3,7 +3,7 @@
  * terrain, jump, and slide around tree/rock colliders. The server re-checks every step with the
  * same shared rules (checkStep), so what feels right here is what the server accepts.
  */
-import { GRAVITY, JUMP_VELOCITY, PLAYER_RADIUS, WATER_LEVEL, clampToWorld, heightAt, maxSpeed } from '@kontor/shared';
+import { GRAVITY, JUMP_VELOCITY, PLAYER_RADIUS, WATER_LEVEL, clampToWorld, groundAt as heightAt, inCaveRegion, maxSpeed, walkable } from '@kontor/shared';
 import type { Collider } from '../world/terrain.js';
 
 export interface LocalPlayer {
@@ -28,7 +28,7 @@ export function stepPlayer(p: LocalPlayer, input: MoveInput, colliders: Collider
   const sin = Math.sin(p.yaw), cos = Math.cos(p.yaw);
   const wishX = -sin * f + cos * r, wishZ = -cos * f - sin * r;
   let target = maxSpeed(1, speedBonus); // perks like Pack Mule or Small Frame; the server uses the same cap
-  const inWater = heightAt(p.x, p.z) < WATER_LEVEL - 0.4 && p.y < WATER_LEVEL;
+  const inWater = !inCaveRegion(p.x, p.z) && heightAt(p.x, p.z) < WATER_LEVEL - 0.4 && p.y < WATER_LEVEL;
   if (inWater) target *= 0.55; // wading is slow, never faster than walking
 
   const accel = p.onGround ? 14 : 3;
@@ -59,6 +59,12 @@ export function stepPlayer(p: LocalPlayer, input: MoveInput, colliders: Collider
   const horiz = Math.hypot(nx - p.x, nz - p.z);
   if (p.onGround && horiz > 1e-4 && (ground1 - ground0) / horiz > 1.2) { nx = p.x; nz = p.z; }
 
+  // Cave walls (and the world's edge): slide along instead of walking through.
+  if (!walkable(nx, nz, PLAYER_RADIUS)) {
+    if (walkable(nx, p.z, PLAYER_RADIUS)) nz = p.z;
+    else if (walkable(p.x, nz, PLAYER_RADIUS)) nx = p.x;
+    else { nx = p.x; nz = p.z; }
+  }
   const c = clampToWorld({ x: nx, y: p.y, z: nz });
   p.x = c.x; p.z = c.z;
   p.y += p.vy * dt;

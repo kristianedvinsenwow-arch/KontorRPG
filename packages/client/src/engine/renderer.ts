@@ -39,6 +39,8 @@ export interface Gfx {
   follow(pos: THREE.Vector3): void;
   /** Draw the world (through post-processing when enabled). */
   renderWorld(): void;
+  /** Cave lighting: no sky, dark fog, dim fill light. */
+  setUnderground(on: boolean): void;
 }
 
 /** Low northern sun from the south-west: long shadows, warm light. */
@@ -153,6 +155,19 @@ export function createGfx(container: HTMLElement, quality: Quality): Gfx {
   const sunOffset = sun.position.clone();
   const gfx: Gfx = {
     renderer, scene, cam, vmScene, vmCam, sun, quality,
+    setUnderground(on) {
+      if ((gfx as any)._under === on) return;
+      (gfx as any)._under = on;
+      sky.visible = !on;
+      scene.background = on ? new THREE.Color(0x050506) : null;
+      const fog = scene.fog as THREE.Fog;
+      if (on) { fog.color.setHex(0x07080a); fog.near = 6; fog.far = 34; }
+      else { fog.color.setHex(FOG); fog.near = 80; fog.far = 260; }
+      scene.environmentIntensity = on ? 0.12 : 0.75;
+      sun.intensity = on ? 0.15 : 3.0;
+      hemi.intensity = on ? 0.35 : 0.45;
+      hemi.color.setHex(on ? 0x6a7a90 : 0xcfe0ee);
+    },
     setQuality(q) {
       gfx.quality = q;
       renderer.setPixelRatio(q === 'low' ? 1 : Math.min(window.devicePixelRatio || 1, q === 'high' ? 2 : 1.5));

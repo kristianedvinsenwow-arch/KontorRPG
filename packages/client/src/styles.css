@@ -250,3 +250,129 @@ select:focus { border-color: var(--amber); outline: none; }
   .charside { overflow: visible; }
 }
 @media (max-width: 640px) { .charwrap { grid-template-columns: 1fr; } }
+
+/* ---------- screen-space labels (names, mobs, loot, wear rings, damage numbers) ---------- */
+#labels { position: fixed; inset: 0; pointer-events: none; z-index: 4; overflow: hidden; }
+.lbl3d { position: absolute; left: 0; top: 0; will-change: transform; }
+.tag { display: flex; flex-direction: column; align-items: center; gap: 1px; white-space: nowrap; text-shadow: 0 1px 2px #000, 0 0 3px #000; }
+.tag b { font: 700 15px var(--display); letter-spacing: .03em; }
+.tag small { font-size: 10.5px; color: #d8d4c8; }
+.tag.npc b { color: #ffe9a8; }
+.tag.npc.quest b::after { content: ' !'; color: var(--amber); }
+.tag.station b { color: var(--amber); font-size: 13px; }
+.tag.place b { color: #d8b8ff; font-size: 17px; }
+.tag.door { font: 600 11px var(--mono); color: #ffe9a8; background: rgba(8, 10, 11, .55); padding: 1px 6px; border-radius: 5px; }
+.tag.door.free { color: var(--green); }
+.tag.loot { font: 600 11.5px var(--mono); background: rgba(8, 10, 11, .55); padding: 1px 6px; border-radius: 5px; }
+.tag.mob b { color: #ff9a8a; font-size: 14px; }
+.tag.mob.boss b { color: #ff6a4a; font-size: 18px; }
+.tag.mob.targeted b { color: #fff; }
+.tag .hpbar { width: 70px; height: 5px; border-radius: 3px; background: rgba(0, 0, 0, .6); overflow: hidden; display: none; margin-top: 2px; }
+.tag.boss .hpbar { width: 140px; height: 7px; }
+.tag.hurt .hpbar, .tag.targeted .hpbar { display: block; }
+.tag .hpbar i { display: block; height: 100%; background: #e8554e; }
+.tag.player .hpbar i { background: var(--green); }
+.tag .status { font-size: 10px; color: #ffb070; }
+.float { font: 800 18px var(--display); text-shadow: 0 1px 3px #000, 0 0 2px #000; color: #fff; animation: floatup 1.3s ease-out forwards; }
+.float.crit { color: #ffd84a; font-size: 24px; }
+.float.magic { color: #c8a0ff; }
+.float.burn { color: #ff9a3a; font-size: 14px; }
+.float.heal { color: var(--green); }
+.float.block, .float.dodge { color: #9fc6ff; font-size: 14px; }
+.float.me { color: #ff6a5a; }
+@keyframes floatup { from { opacity: 1; } 70% { opacity: 1; } to { opacity: 0; } }
+.wear { width: 56px; height: 56px; transition: opacity .5s; }
+.wear.gone { opacity: 0; }
+.wear svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.wear circle { fill: none; stroke-width: 4; }
+.wear .bg { stroke: rgba(0, 0, 0, .45); }
+.wear .fg { stroke-linecap: round; transition: stroke-dasharray .25s; filter: drop-shadow(0 0 2px #000); }
+#hurt { position: fixed; inset: 0; pointer-events: none; z-index: 3; opacity: 0; box-shadow: inset 0 0 140px 30px rgba(200, 20, 10, .9); }
+
+/* ---------- tooltip and right-click menu ---------- */
+#tooltip { position: fixed; left: 0; top: 0; z-index: 50; pointer-events: none; max-width: 300px; background: rgba(10, 12, 13, .96); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 3px; font-size: 12px; line-height: 1.4; box-shadow: 0 10px 30px -10px #000; }
+#tooltip .tname { font: 700 17px var(--display); letter-spacing: .02em; }
+#tooltip .ttype { color: var(--muted); font-size: 11px; margin-bottom: 4px; }
+#tooltip .tmain { color: #fff; }
+#tooltip .tbase { color: #d8d4c8; }
+#tooltip .tfx { color: var(--green); }
+#tooltip .tneg { color: #ff8a7a; }
+#tooltip .tspecial { color: #9fc6ff; }
+#tooltip .tblurb { color: var(--muted); font-style: italic; margin-top: 4px; }
+#tooltip .tvalue { color: #f2cc5a; }
+#tooltip .tdim { color: var(--muted); font-size: 11px; }
+#ctxmenu { position: fixed; left: 0; top: 0; z-index: 60; background: rgba(12, 15, 16, .98); border: 1px solid var(--line); border-radius: 9px; padding: 4px; display: flex; flex-direction: column; min-width: 160px; }
+#ctxmenu .ctx { background: none; border: 0; text-align: left; padding: 7px 10px; border-radius: 6px; font-size: 12.5px; }
+#ctxmenu .ctx:hover { background: rgba(242, 162, 58, .15); color: var(--amber); }
+
+/* ---------- hotbar, health, buffs, quest tracker, knocked out ---------- */
+#hotbar { position: absolute; left: 50%; bottom: 44px; transform: translateX(-50%); display: flex; gap: 6px; pointer-events: auto; }
+.hcell { position: relative; width: 58px; height: 58px; background: rgba(8, 10, 11, .7); border: 1px solid var(--line); border-radius: 10px; display: grid; place-items: center; padding: 0; overflow: hidden; }
+.hcell.on { border-color: var(--amber); box-shadow: 0 0 0 1px var(--amber), 0 0 14px -4px var(--amber); }
+.hcell.empty { opacity: .55; }
+.hcell .icon { width: 38px; height: 38px; }
+.hcell kbd { position: absolute; left: 3px; top: 2px; font-size: 9.5px; padding: 0 4px; }
+.hcell small { position: absolute; bottom: 1px; left: 0; right: 0; text-align: center; font-size: 8.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+.hcell .fist { font-size: 22px; filter: grayscale(.5); }
+.hcell .cd { position: absolute; left: 0; right: 0; bottom: 0; height: 0; background: rgba(0, 0, 0, .65); display: grid; place-items: center; font: 800 18px var(--display); color: #fff; pointer-events: none; }
+.hcell.food { margin-left: 8px; }
+#hpbox { position: absolute; left: 50%; bottom: 110px; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; }
+#hpbox .hp { position: relative; width: 300px; height: 14px; background: rgba(0, 0, 0, .6); border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
+#hpbox .hp i { position: absolute; inset: 0 auto 0 0; background: linear-gradient(#e8665e, #b8352e); transition: width .2s; }
+#hpbox .hp.low i { animation: pulse 1s infinite; }
+@keyframes pulse { 50% { filter: brightness(1.5); } }
+#hpbox .hp span { position: relative; display: block; text-align: center; font: 600 10.5px/14px var(--mono); text-shadow: 0 1px 2px #000; }
+.buffs { display: flex; gap: 4px; pointer-events: auto; }
+.buff { font-size: 10.5px; background: rgba(40, 80, 30, .75); border: 1px solid rgba(134, 212, 107, .5); padding: 1px 7px; border-radius: 6px; }
+.buff.bad { background: rgba(90, 20, 20, .75); border-color: rgba(255, 75, 58, .5); }
+#jobbar { bottom: 150px; }
+#tracker { position: absolute; right: 16px; top: 140px; display: flex; flex-direction: column; gap: 6px; max-width: 260px; }
+.tq { background: rgba(8, 10, 11, .6); border-left: 3px solid var(--amber); padding: 5px 9px; border-radius: 6px; display: flex; flex-direction: column; font-size: 11.5px; text-shadow: 0 1px 2px #000; }
+.tq b { font: 700 14px var(--display); letter-spacing: .03em; }
+.tq.done { border-color: var(--green); }
+.tq.done span { color: var(--green); }
+#dead { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(30, 4, 2, .55); }
+#dead h2 { color: #ff8a7a; }
+
+/* ---------- fishing minigame ---------- */
+#fishgame { position: fixed; left: calc(50% + 120px); top: 50%; transform: translateY(-50%); z-index: 6; display: grid; grid-template-columns: 46px 12px; grid-template-rows: 280px auto; gap: 6px 8px; padding: 12px; background: rgba(8, 12, 16, .82); border: 1px solid rgba(159, 198, 255, .4); border-radius: 12px; pointer-events: none; }
+#fishgame .track { position: relative; background: linear-gradient(#1c3a50, #0e2030); border-radius: 8px; overflow: hidden; }
+#fishgame .zone { position: absolute; left: 3px; right: 3px; background: rgba(134, 212, 107, .35); border: 2px solid rgba(134, 212, 107, .8); border-radius: 6px; }
+#fishgame .zone.hit { background: rgba(134, 212, 107, .6); }
+#fishgame .fish { position: absolute; left: 0; right: 0; text-align: center; font-size: 20px; line-height: 24px; height: 24px; }
+#fishgame .meter { position: relative; background: rgba(0, 0, 0, .5); border-radius: 6px; overflow: hidden; }
+#fishgame .meter i { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(#ffd84a, #f2a23a); }
+#fishgame .hint { grid-column: 1 / -1; font-size: 10.5px; color: #cfe0ee; max-width: 80px; }
+
+/* ---------- talents ---------- */
+.pcard.talents { width: min(640px, calc(100% - 32px)); }
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; }
+.tab { background: rgba(255, 255, 255, .04); border: 1px solid var(--line); border-radius: 7px; padding: 5px 9px; font: 700 13px var(--display); text-transform: uppercase; letter-spacing: .04em; }
+.tab.on { border-color: var(--amber); color: var(--amber); }
+.tree { position: relative; margin: 0 auto; max-width: 100%; }
+.tree svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.tree line { stroke: rgba(236, 231, 218, .18); stroke-width: 3; }
+.tree line.on { stroke: var(--amber); }
+.node { position: absolute; transform: translate(-50%, -50%); width: 104px; min-height: 52px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; background: #15191a; border: 2px solid rgba(236, 231, 218, .2); border-radius: 12px; padding: 5px; }
+.node.r1 { border-radius: 50%; width: 92px; height: 92px; border-style: double; border-width: 4px; }
+.node b { font: 700 12.5px/1.05 var(--display); text-transform: uppercase; text-align: center; }
+.node span { font-size: 10.5px; color: var(--muted); }
+.node.can { border-color: rgba(242, 162, 58, .7); cursor: pointer; }
+.node.can:hover { background: #2a2216; }
+.node.some { border-color: var(--amber); }
+.node.max { border-color: var(--green); background: #16210f; }
+.node:not(.can):not(.some):not(.max) { opacity: .5; }
+.tfoot { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+
+/* ---------- map ---------- */
+.pcard.map { width: auto; }
+.mapwrap canvas { display: block; width: min(560px, calc(100vw - 72px)); height: auto; border-radius: 10px; border: 1px solid var(--line); }
+
+/* ---------- NPC dialogs ---------- */
+.pcard.npc { width: min(820px, calc(100% - 32px)); }
+.quests, .inn { display: flex; flex-direction: column; gap: 8px; }
+.quest { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 8px 10px; background: rgba(255, 255, 255, .04); border: 1px solid var(--line); border-radius: 10px; }
+.quest > .rinfo:first-child { grid-column: 1 / 3; }
+.quest.active { border-color: var(--amber); }
+.inn .ract { flex-wrap: wrap; }
+.ware .btn { min-width: 64px; }

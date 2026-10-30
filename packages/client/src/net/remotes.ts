@@ -4,7 +4,8 @@
  * timed by server timestamps so jitter doesn't cause stutter.
  */
 import * as THREE from 'three';
-import { INTERP_DELAY_MS, type PlayerState } from '@kontor/shared';
+import { INTERP_DELAY_MS, PLAYER_COLORS, RACES, type PlayerState } from '@kontor/shared';
+import { addLabel, removeLabel, type Label } from '../engine/labels.js';
 import { makeCharacter, animateCharacter, type Character } from '../entities/character.js';
 import { applyGear } from '../entities/held.js';
 
@@ -17,6 +18,8 @@ interface Remote {
   race: string;
   face: number;
   model: Character;
+  label: Label;
+  hp: HTMLElement;
   buf: Sample[];
   lastSeen: number;
 }
@@ -47,14 +50,22 @@ export class Remotes {
       seen.add(s.id);
       let r = this.map.get(s.id);
       if (!r || r.name !== s.name || r.color !== s.color || r.race !== s.race || r.face !== (s.face ?? 0)) {
-        if (r) this.scene.remove(r.model.g);
+        if (r) { this.scene.remove(r.model.g); removeLabel(r.label); }
         const model = makeCharacter(s.color, s.name, s.race, s.face ?? 0);
         model.g.position.set(s.x, s.y, s.z);
         this.scene.add(model.g);
-        r = { id: s.id, name: s.name, color: s.color, race: s.race, face: s.face ?? 0, model, buf: [], lastSeen: now };
+        const el = document.createElement('div');
+        el.className = 'tag player';
+        const b = document.createElement('b'); b.textContent = s.name; b.style.color = PLAYER_COLORS[s.color % PLAYER_COLORS.length];
+        const bar = document.createElement('div'); bar.className = 'hpbar'; const fill = document.createElement('i'); bar.append(fill);
+        el.append(b, bar);
+        const g = model.g, h = RACES[s.race]?.height ?? 1.85;
+        const label = addLabel(el, () => g.position.clone().setY(g.position.y + h + 0.35), 40);
+        r = { id: s.id, name: s.name, color: s.color, race: s.race, face: s.face ?? 0, model, label, hp: fill, buf: [], lastSeen: now };
         this.map.set(s.id, r);
       }
       applyGear(r.model, s.gear);
+      if (s.hp != null && s.mhp) { r.hp.style.width = `${(s.hp / s.mhp) * 100}%`; r.label.el.classList.toggle('hurt', s.hp < s.mhp); }
       r.buf.push({ at, s });
       if (r.buf.length > 20) r.buf.shift();
       r.lastSeen = now;
@@ -67,6 +78,7 @@ export class Remotes {
     const r = this.map.get(id);
     if (!r) return;
     this.scene.remove(r.model.g);
+    removeLabel(r.label);
     this.map.delete(id);
   }
 
@@ -90,9 +102,12 @@ export class Remotes {
       );
       g.rotation.y = lerpAngle(a.s.yaw, c.s.yaw, t);
       const spd = a.s.spd + (c.s.spd - a.s.spd) * t;
-      animateCharacter(r.model, spd, c.s.pitch, c.s.act === 'swing', dt);
+      animateCharacter(r.model, spd, c.s.pitch, c.s.act === 'swing' || c.s.act === 'spin', dt);
+      if (c.s.act === 'spin') r.model.body.rotation.y += dt * 14; else r.model.body.rotation.y = 0;
     }
   }
 
   get count(): number { return this.map.size; }
 }
+
+export function remotePosition(r: Remotes, id: string): THREE.Vector3 | null { return (r as any).map.get(id)?.model.g.position.clone().add(new THREE.Vector3(0, 1.2, 0)) ?? null; }

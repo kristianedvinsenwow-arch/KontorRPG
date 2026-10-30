@@ -5,7 +5,8 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CHUNK_SIZE, VEINS, WORLD_HALF, WATER_LEVEL, heightAt, mulberry32 } from '@kontor/shared';
+import { CHUNK_SIZE, VEINS, WORLD_HALF, WATER_LEVEL, heightAt, mulberry32, keepClear, treesInChunk } from '@kontor/shared';
+import { registerTrees } from './trees.js';
 import { canvasTex, TEX } from '../engine/procgen.js';
 
 export interface Collider { x: number; z: number; r: number }
@@ -135,7 +136,7 @@ const birchBark = canvasTex((g, s) => {
   }
 }, 128);
 
-const PROP = {
+export const PROP = {
   pineTrunk: { geo: new THREE.CylinderGeometry(0.12, 0.24, 2.4, 7).translate(0, 1.2, 0), mat: new THREE.MeshStandardMaterial({ color: 0x5b4330, map: TEX.bark, bumpMap: TEX.bark, bumpScale: 1.2, roughness: 0.95 }) },
   pineCrown: { geo: pineCrownGeo(), mat: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.88 }) },
   birchTrunk: { geo: new THREE.CylinderGeometry(0.08, 0.14, 3.6, 7).translate(0, 1.8, 0), mat: new THREE.MeshStandardMaterial({ color: 0xffffff, map: birchBark, roughness: 0.8 }) },
@@ -172,33 +173,32 @@ export function buildProps(cx: number, cz: number, colliders: Collider[], dense:
   };
   const inWorld = (x: number, z: number) => Math.abs(x) < WORLD_HALF - 2 && Math.abs(z) < WORLD_HALF - 2;
 
-  // Trees and rocks.
+  // Rocks (decoration only).
   for (let i = 0; i < 70; i++) {
     const x = cx * CHUNK_SIZE + rng() * CHUNK_SIZE, z = cz * CHUNK_SIZE + rng() * CHUNK_SIZE;
     const y = heightAt(x, z);
     normalAt(x, z);
-    if (y < WATER_LEVEL + 0.6 || Math.hypot(x, z) < 18 || !inWorld(x, z) || nearVein(x, z, 2.6)) continue;
+    if (y < WATER_LEVEL + 0.6 || Math.hypot(x, z) < 18 || !inWorld(x, z) || nearVein(x, z, 2.6) || keepClear(x, z)) continue;
     const roll = rng(), ry = rng() * Math.PI * 2, tint = 0.85 + rng() * 0.3;
     if (N.y < 0.8 || y > 16) {
       const s = 0.7 + rng() * 1.3;
       if (roll < 0.6) add(roll < 0.45 ? 'rockA' : 'rockB', x, y + 0.05, z, s, ry, s, tint);
       else continue;
       colliders.push({ x, z, r: 0.75 * s });
-    } else if (roll < 0.55) {
-      const s = 0.75 + rng() * 0.65;
-      add('pineTrunk', x, y - 0.1, z, s, ry);
-      add('pineCrown', x, y - 0.1, z, s, ry, s * (0.9 + rng() * 0.25), tint);
-      colliders.push({ x, z, r: 0.3 * s });
-    } else if (roll < 0.8) {
-      const s = 0.8 + rng() * 0.5;
-      add('birchTrunk', x, y - 0.1, z, s, ry);
-      add('birchCrown', x, y - 0.1, z, s, ry, s, tint);
-      colliders.push({ x, z, r: 0.22 * s });
-    } else if (roll < 0.9) {
+    } else if (roll > 0.9) {
       const s = 0.3 + rng() * 0.5;
-      add(roll < 0.85 ? 'rockA' : 'rockB', x, y + 0.02, z, s, ry, s, tint);
+      add(roll < 0.95 ? 'rockA' : 'rockB', x, y + 0.02, z, s, ry, s, tint);
       if (s > 0.55) colliders.push({ x, z, r: 0.7 * s });
     }
+  }
+  // Trees: every one is a real, fellable tree from shared data (same ids as the server).
+  const treeSlots: { id: string; k: 'pine' | 'birch'; t: number; c: number }[] = [];
+  for (const t of treesInChunk(cx, cz)) {
+    const trunk = t.kind === 'pine' ? 'pineTrunk' : 'birchTrunk', crown = t.kind === 'pine' ? 'pineCrown' : 'birchCrown';
+    treeSlots.push({ id: t.id, k: t.kind, t: items[trunk]?.length ?? 0, c: items[crown]?.length ?? 0 });
+    add(trunk, t.x, t.y - 0.1, t.z, t.s, t.ry);
+    add(crown, t.x, t.y - 0.1, t.z, t.s, t.ry, t.kind === 'pine' ? t.s * 1.05 : t.s, t.tint);
+    colliders.push({ x: t.x, z: t.z, r: (t.kind === 'pine' ? 0.3 : 0.22) * t.s });
   }
 
   // Ground cover: grass everywhere it's green and gentle, flower patches here and there.
@@ -217,14 +217,17 @@ export function buildProps(cx: number, cz: number, colliders: Collider[], dense:
   }
 
   const out: THREE.Object3D[] = [];
+  const meshes: Partial<Record<PropKey, THREE.InstancedMesh>> = {};
   for (const [k, list] of Object.entries(items) as [PropKey, { m: THREE.Matrix4; c: THREE.Color }[]][]) {
     const p = PROP[k];
     const im = new THREE.InstancedMesh(p.geo, p.mat, list.length);
+    meshes[k] = im;
     list.forEach((it, i) => { im.setMatrixAt(i, it.m); im.setColorAt(i, it.c); });
     im.castShadow = !!CASTS[k];
     im.receiveShadow = true;
     im.computeBoundingSphere();
     out.push(im);
   }
+  registerTrees(treeSlots.map((t) => ({ id: t.id, kind: t.k, trunk: meshes[t.k === 'pine' ? 'pineTrunk' : 'birchTrunk']!, crown: meshes[t.k === 'pine' ? 'pineCrown' : 'birchCrown']!, ti: t.t, ci: t.c })));
   return out;
 }

@@ -13,6 +13,7 @@
   <div id="view"></div>
 
   <!-- In-game HUD -->
+  <div id="hurt"></div>
   <div id="hud" hidden>
     <div id="cross"></div>
     <div id="where" class="chip"><b>Mofjellet</b><span id="coords">0, 0</span></div>
@@ -28,7 +29,7 @@
     <div id="jobbar" class="chip" hidden><span id="jobtext"></span><div class="bar"><i id="jobfill"></i></div></div>
     <div id="purse" class="chip"><span class="gold" id="goldtext">0 g</span><span id="bagtext">Bag 0/16</span></div>
     <div id="keys" class="chip">
-      <kbd>WASD</kbd> walk <kbd>Click</kbd> mine <kbd>E</kbd> use <kbd>C</kbd> character &amp; bag <kbd>K</kbd> skills <kbd>Enter</kbd> chat <kbd>F9</kbd> boss key
+      <kbd>Click</kbd> act <kbd>R-click</kbd> special <kbd>E</kbd> use <kbd>1–5</kbd> hotbar <kbd>C</kbd> bag <kbd>K</kbd> skills <kbd>T</kbd> talents <kbd>M</kbd> map <kbd>F9</kbd> boss
     </div>
     <div id="fps"></div>
   </div>
@@ -36,7 +37,7 @@
   <!-- Start menu = character creator. The right-hand window is drawn by the renderer (live preview). -->
   <section id="menu" class="overlay">
     <div class="brief creator">
-      <div class="eyebrow">Create your character · M1 mining &amp; smithing</div>
+      <div class="eyebrow">Create your character</div>
       <h1>Kontor<span>RPG</span></h1>
 
       <div id="account" class="account" hidden></div>
@@ -48,7 +49,7 @@
 
       <div class="sec">
         <span class="lbl">Race</span>
-        <div id="races" class="cards three"></div>
+        <div id="races" class="cards two"></div>
       </div>
 
       <div class="sec">

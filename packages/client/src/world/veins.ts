@@ -22,10 +22,12 @@ interface VeinView {
 const ROCK_MATS = {
   stone: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.88 }),
   iron: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.82 }),
+  silver: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 }),
 };
 const ORE_MATS = {
   stone: new THREE.MeshStandardMaterial({ color: 0xf4efe6, emissive: 0x2a2620, roughness: 0.25, metalness: 0.1, flatShading: true }),
   iron: new THREE.MeshStandardMaterial({ color: 0xa4572c, roughness: 0.45, metalness: 0.7, flatShading: true }),
+  silver: new THREE.MeshStandardMaterial({ color: 0xe8eef6, emissive: 0x303844, roughness: 0.2, metalness: 1, flatShading: true }),
 };
 const RUBBLE_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95 });
 
@@ -56,11 +58,11 @@ export class Veins {
       g.add(rock);
       // Ore showing through the surface: crystals for stone (quartz), knobbly nodules for iron.
       const ore = new THREE.Group();
-      const n = v.type === 'iron' ? 8 : 9;
+      const n = v.type === 'stone' ? 9 : 8;
       for (let i = 0; i < n; i++) {
         const a = (i / n) * Math.PI * 2 + Math.sin(seed + i) * 0.4;
         const up = 0.15 + ((i * 37) % 10) / 22;
-        const geo = v.type === 'iron' ? new THREE.DodecahedronGeometry(0.14 + (i % 3) * 0.03, 0) : new THREE.OctahedronGeometry(0.13 + (i % 3) * 0.04, 0).scale(0.7, 1.9, 0.7);
+        const geo = v.type !== 'stone' ? new THREE.DodecahedronGeometry(0.14 + (i % 3) * 0.03, 0) : new THREE.OctahedronGeometry(0.13 + (i % 3) * 0.04, 0).scale(0.7, 1.9, 0.7);
         const m = new THREE.Mesh(geo, ORE_MATS[v.type]);
         const r = 0.82 * Math.cos(up * 1.2);
         m.position.set(Math.cos(a) * r, 0.35 + up * 0.75, Math.sin(a) * r);

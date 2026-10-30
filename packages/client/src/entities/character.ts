@@ -5,7 +5,7 @@
  */
 import * as THREE from 'three';
 import { PLAYER_COLORS, RACES, type Race } from '@kontor/shared';
-import { mat, bx, ball, limb, mesh, mergeStatic, nameSprite, v3, lerp } from '../engine/procgen.js';
+import { mat, bx, ball, limb, mesh, mergeStatic, v3, lerp } from '../engine/procgen.js';
 
 export interface Character {
   g: THREE.Group;
@@ -21,7 +21,8 @@ export interface Character {
   heldId?: string;
   /** Shoulder tier currently shown (applyGear bookkeeping). */
   userData_sh?: string | null;
-  tag?: THREE.Sprite;
+  /** Armour shown by applyGear (helm, chest plate, shield, greaves). */
+  armour: { chest: THREE.Group; helm: THREE.Group; shield: THREE.Group; legs: THREE.Group[] };
   /** Pauldrons on each shoulder; hidden until something is equipped in the shoulders slot. */
   pauldrons: THREE.Group[];
   race: Race;
@@ -63,7 +64,7 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
     pants: mat(0x5b4a36, 'cloth'),
     belt: mat(0x3a2818, 'leather', { r: 0.7 }),
     buckle: mat(0xc8a860, null, { r: 0.28, m: 0.9 }),
-    skin: mat(0xd1a582, null, { r: 0.55 }),
+    skin: mat(race === 'ogre' ? 0x9fa478 : 0xd1a582, null, { r: 0.55 }),
     boot: mat(0x3b2a1c, 'leather', { r: 0.6 }),
     hood: mat(0x46503f, 'cloth', { r: 0.95 }),
     hair: mat(0x4a3424, null, { r: 0.9 }),
@@ -90,7 +91,7 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
     ball(knee, v3(), 0.073 * W, M.pants, 10);
     limb(knee, v3(), v3(0, -shin, 0), 0.07 * W, 0.06 * W, M.pants);
     bx(knee, 0.13 * W, 0.16, 0.15 * Wz, M.boot, 0, -shin - 0.02, -0.01); // boot shaft
-    const footLen = race === 'gnome' ? 0.37 : 0.26; // gnomes get long, pointy-ish feet
+    const footLen = race === 'gnome' ? 0.37 : race === 'dwarf' ? 0.21 : 0.26; // long gnome feet, stubby dwarf feet
     bx(knee, 0.12 * W, 0.08, footLen * Wz, M.boot, 0, -shin - 0.09, -0.05 - (footLen - 0.26) * 0.5); // foot
     legs.push({ hip, knee });
   }
@@ -106,6 +107,29 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
   bx(upper, 0.42, 0.06, 0.26, M.belt, 0, 0.16, 0);
   bx(upper, 0.07, 0.06, 0.02, M.buckle, 0, 0.16, -0.135);
   bx(upper, 0.12, 0.1, 0.06, M.pack, 0.17, 0.12, -0.08); // belt pouch
+  if (R.belly > 0) {
+    // A round belly (dwarves, and even more for ogres), plus rounded flanks so the torso isn't a box.
+    const b = R.belly;
+    ball(upper, v3(0, 0.27, -0.06 - 0.03 * b), 0.2, M.tunic, 16).scale.set(1.02, 0.95, 0.72 + 0.3 * b);
+    for (const sx of [-1, 1]) ball(upper, v3(sx * 0.12, 0.33, 0), 0.15, M.tunic, 12).scale.set(0.8, 1.2, 1);
+    bx(upper, 0.44, 0.06, 0.2 + 0.18 * b, M.belt, 0, 0.16, -0.04 * b);
+  }
+  // Armour pieces live in their own groups (kept out of merging) and are shown by applyGear.
+  const armour = { chest: new THREE.Group(), helm: new THREE.Group(), shield: new THREE.Group(), legs: [] as THREE.Group[] };
+  {
+    const a = armour.chest;
+    a.userData.keep = true;
+    const plate = new THREE.MeshStandardMaterial({ color: 0x8a8a88, roughness: 0.5, metalness: 0.6 });
+    bx(a, 0.43, 0.42, 0.27, plate, 0, 0.4, 0);
+    if (R.belly > 0) ball(a, v3(0, 0.29, -0.07 - 0.03 * R.belly), 0.205, plate, 14).scale.set(1.02, 0.95, 0.72 + 0.3 * R.belly);
+    bx(a, 0.47, 0.12, 0.28, plate, 0, 0.12, 0);
+    a.traverse((o) => (o.userData.keep = true));
+    a.visible = false;
+    upper.add(a);
+  }
+  if (race === 'ogre') {
+    // Tusks are added on the head below.
+  }
   // Backpack: only shown while a bag is worn in the back slot (bigger bag, bigger pack).
   const pack = new THREE.Group();
   pack.position.set(0, 0.4, 0.19);
@@ -143,6 +167,23 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
     }
     for (const sx of [-1, 1]) bx(head, 0.055, 0.02, 0.025, beardM, sx * 0.03, -0.038, -0.112, 0, 0, sx * -0.35);
   }
+  if (race === 'ogre') for (const sx of [-1, 1]) {
+    const tusk = mesh(new THREE.ConeGeometry(0.012, 0.045, 6), mat(0xf0ead8, null, { r: 0.4 }), head);
+    tusk.position.set(sx * 0.03, -0.055, -0.1); tusk.rotation.x = -0.25;
+  }
+  {
+    // Helm: a domed cap with a nose guard, sized for the head.
+    const h = armour.helm;
+    const plate = new THREE.MeshStandardMaterial({ color: 0x8a8a88, roughness: 0.5, metalness: 0.6 });
+    const dome = mesh(new THREE.SphereGeometry(0.13, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), plate, h);
+    dome.position.y = 0.02; dome.scale.set(1, 1.1, 1.05);
+    bx(h, 0.02, 0.07, 0.02, plate, 0, -0.01, -0.125);
+    const rim = mesh(new THREE.TorusGeometry(0.128, 0.01, 6, 20), plate, h);
+    rim.rotation.x = Math.PI / 2; rim.position.y = 0.0;
+    h.traverse((o) => (o.userData.keep = true));
+    h.visible = false;
+    head.add(h);
+  }
   head.scale.set(H / W, H, H / Wz);
 
   // Arms: shoulder → elbow chain; the right hand carries the tool.
@@ -176,6 +217,31 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
     limb(elbow, v3(), v3(0, -0.24, 0), 0.05, 0.042, M.skin);
     ball(elbow, v3(0, -0.27, 0), 0.048, M.skin, 10);
     arms.push({ shoulder, elbow });
+    if (sd < 0) {
+      // Shield on the left forearm.
+      const sh = armour.shield;
+      const plate = new THREE.MeshStandardMaterial({ color: 0x8a8a88, roughness: 0.5, metalness: 0.6 });
+      const kite = mesh(new THREE.CylinderGeometry(0.2, 0.02, 0.5, 4, 1), plate, sh);
+      kite.rotation.set(0, Math.PI / 4, 0); kite.scale.set(1, 1, 0.15);
+      const boss = mesh(new THREE.SphereGeometry(0.05, 8, 6), plate, sh);
+      boss.position.z = -0.03;
+      sh.position.set(-0.07, -0.16, 0);
+      sh.rotation.set(0, Math.PI / 2, 0);
+      sh.traverse((o) => (o.userData.keep = true));
+      sh.visible = false;
+      elbow.add(sh);
+    }
+  }
+  // Greaves over the shins.
+  for (const leg of legs) {
+    const gr = new THREE.Group();
+    const plate = new THREE.MeshStandardMaterial({ color: 0x8a8a88, roughness: 0.5, metalness: 0.6 });
+    bx(gr, 0.15 * W, shin * 0.8, 0.16 * Wz, plate, 0, -shin * 0.45, -0.005);
+    ball(gr, v3(0, 0, -0.02), 0.08 * W, plate, 10);
+    gr.traverse((o) => (o.userData.keep = true));
+    gr.visible = false;
+    leg.knee.add(gr);
+    armour.legs.push(gr);
   }
   mergeStatic(g);
 
@@ -187,12 +253,8 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
   body.scale.setScalar(scale);
   g.add(body);
 
-  const ch: Character = { g, body, legs, upper, head, arms, tool: null, pack, pauldrons, race, hipY, stride: 1 / (scale * (0.35 + 0.65 * L)), ph: 0, swing: 0 };
-  if (name) {
-    ch.tag = nameSprite(name, col);
-    ch.tag.position.y = R.height + 0.3;
-    g.add(ch.tag);
-  }
+  const ch: Character = { g, body, legs, upper, head, arms, tool: null, pack, pauldrons, armour, race, hipY, stride: 1 / (scale * (0.35 + 0.65 * L)), ph: 0, swing: 0 };
+  void name;
   return ch;
 }
 
@@ -267,6 +329,10 @@ const SWING_ANIM_SEC = 0.62;
 /** Tier colours for metal gear (design doc §6). Leather is the starter look. */
 export const GEAR_COLORS: Record<string, { color: number; metal: number; rough: number }> = {
   leather: { color: 0x8a6a48, metal: 0.05, rough: 0.7 },
+  cloth: { color: 0x6d5f8a, metal: 0, rough: 0.95 },
+  birch: { color: 0xd8d2c0, metal: 0, rough: 0.7 },
+  pine: { color: 0x8a6440, metal: 0, rough: 0.7 },
+  bone: { color: 0xe8e0c8, metal: 0, rough: 0.5 },
   stone: { color: 0x8d8a84, metal: 0, rough: 0.85 },
   iron: { color: 0x7e8288, metal: 0.8, rough: 0.42 },
   steel: { color: 0xb4bac2, metal: 0.9, rough: 0.3 },

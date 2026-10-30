@@ -50,7 +50,7 @@ export function initCreator(onEnter: (name: string, color: number, build: Charac
   function renderRaces() {
     const cur = settingsStore.get().build.race;
     $('races').replaceChildren(...(Object.keys(RACES) as Race[]).map((r) =>
-      optionCard(RACES[r].name, [['', RACES[r].blurb]], r === cur, () => setBuild({ ...build(), race: r }))));
+      optionCard(RACES[r].name, [['', RACES[r].blurb], ['up', `+ ${RACES[r].perks[0]}`], ['up', `+ ${RACES[r].perks[1]}`]], r === cur, () => setBuild({ ...build(), race: r }))));
   }
 
   function renderFaces() {
