@@ -48,12 +48,12 @@ function slopeY(x: number, z: number): number {
 
 /** Dirt paths between camp, Bjørkvik, the quarries, the mine and the goblin camp (polylines). */
 export const PATHS: [number, number][][] = [
-  [[0, 0], [-6, 10], [-14, 22], [-24, 30]],
+  [[0, 0], [-6, 10], [-12, 24], [-15, 35]],
   [[4, -2], [16, -12], [26, -22], [48, -20], [70, -16], [86, -14]],
   [[2, -6], [14, -30], [30, -52], [46, -70], [50, -76]],
   [[6, 4], [22, 22], [30, 44], [28, 70], [30, 90]],
   [[22, 22], [46, 30], [66, 33]],
-  [[-34, 30], [-42, 10], [-50, -20], [-58, -48]],
+  [[-40, 26], [-44, 8], [-50, -20], [-58, -48]],
 ];
 /** Distance (m) to the nearest path centre line. */
 export function pathDist(x: number, z: number): number {

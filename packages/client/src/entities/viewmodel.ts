@@ -114,7 +114,7 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
         // Bow: upright in front of you (slightly canted), string towards you, arrow pointing
         // ahead. The grip frame is tilted for hafts, so undo that tilt for the bow.
         tool.position.set(0, 0, 0);
-        const want = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0.55, -0.12));
+        const want = new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0.2, -0.12));
         tool.quaternion.copy(grip.quaternion.clone().invert().multiply(want));
       } else {
         tool.position.set(0, id?.includes('sword') ? -0.03 : -0.09, 0); // grip near the end of the haft
