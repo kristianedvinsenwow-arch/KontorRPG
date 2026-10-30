@@ -1,0 +1,20 @@
+# Render Blueprint for KontorRPG (https://render.com/docs/blueprint-spec).
+# One web service: the Node server serves the built client, /version, /health and the /ws game socket.
+services:
+  - type: web
+    name: kontor-rpg
+    runtime: node
+    # Free is fine for the M0 spike (it sleeps after 15 idle minutes and has no persistent disk).
+    # Switch to "starter" and add the disk below once the game stores characters (M1).
+    plan: free
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+    # disk:
+    #   name: kontor-data
+    #   mountPath: /var/data
+    #   sizeGB: 1

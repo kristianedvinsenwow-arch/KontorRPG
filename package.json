@@ -1,0 +1,20 @@
+{
+  "name": "kontor-rpg",
+  "private": true,
+  "version": "0.1.0",
+  "description": "KontorRPG — a slow, social sandbox RPG for the office. M0 tech spike.",
+  "packageManager": "pnpm@10.28.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter ./packages/server --filter ./packages/client dev",
+    "build": "pnpm --filter @kontor/client build && pnpm --filter @kontor/server build",
+    "start": "node packages/server/dist/server.js",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  }
+}

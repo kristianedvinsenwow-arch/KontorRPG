@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>KontorRPG</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d1011'/%3E%3Cpath d='M7 23 L16 9 L25 23 Z' fill='%23f2a23a'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@500;700;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet" />
+</head>
+<body>
+  <div id="view"></div>
+
+  <!-- In-game HUD -->
+  <div id="hud" hidden>
+    <div id="cross"></div>
+    <div id="where" class="chip"><b>Mofjellet</b><span id="coords">0, 0</span></div>
+    <div id="netbox" class="chip"><span id="netdot"></span><span id="nettext">Offline</span></div>
+    <div id="roster"></div>
+    <div id="toasts"></div>
+    <div id="chat">
+      <div id="chatlog"></div>
+      <input id="chatin" maxlength="200" placeholder="Say something… (Enter to send, Esc to cancel)" hidden />
+    </div>
+    <div id="keys" class="chip">
+      <kbd>WASD</kbd> walk <kbd>Space</kbd> jump <kbd>Click</kbd> swing <kbd>C</kbd> character <kbd>Enter</kbd> chat <kbd>F9</kbd> boss key
+    </div>
+    <div id="fps"></div>
+  </div>
+
+  <!-- Start menu -->
+  <section id="menu" class="overlay">
+    <div class="brief">
+      <div class="eyebrow">M0 tech spike · Mofjellet</div>
+      <h1>Kontor<span>RPG</span></h1>
+      <p class="note">A slow, social sandbox RPG for the office. This build tests the engine: walk the hills of Mofjellet with your colleagues.</p>
+      <div class="sec">
+        <label for="nameIn">Character name</label>
+        <input id="nameIn" maxlength="16" autocomplete="off" placeholder="Your name" />
+      </div>
+      <div class="sec">
+        <span class="lbl">Colour</span>
+        <div id="swatches"></div>
+      </div>
+      <label class="chk"><input type="checkbox" id="lowGpu" /> Low-GPU mode (no shadows, lower resolution)</label>
+      <button id="enter" class="btn big">Enter the world</button>
+      <p class="note" id="menuNet">Connecting to server…</p>
+    </div>
+  </section>
+
+  <!-- Pause / settings -->
+  <section id="pause" class="overlay" hidden>
+    <div class="card">
+      <h2>Paused</h2>
+      <p class="note">Your character stays in the world while you're here.</p>
+      <label for="sens">Mouse sensitivity</label>
+      <input type="range" id="sens" min="0.2" max="2.5" step="0.05" />
+      <label class="chk"><input type="checkbox" id="lowGpu2" /> Low-GPU mode</label>
+      <button id="resume" class="btn big">Resume</button>
+    </div>
+  </section>
+
+  <!-- Character panel: the left column is a transparent window the renderer draws the preview into -->
+  <section id="charPanel" class="overlay" hidden>
+    <div class="charwrap">
+      <div id="preview" title="Drag to rotate"></div>
+      <div class="charside">
+        <div class="eyebrow">Character</div>
+        <h2 id="charName">Adventurer</h2>
+        <table class="stats">
+          <tr><th>STR</th><td>5</td><th>DEX</th><td>5</td></tr>
+          <tr><th>INT</th><td>5</td><th>STA</th><td>5</td></tr>
+        </table>
+        <p class="note">Attributes and traits are chosen at character creation (milestone M1).</p>
+        <div class="lbl">Equipment</div>
+        <ul class="slots">
+          <li><span>Main hand</span><b>Stone Pickaxe</b><em>Tier 1</em></li>
+          <li><span>Head</span><b>Wool Hood</b><em>—</em></li>
+          <li><span>Body</span><b>Travel Tunic</b><em>—</em></li>
+          <li><span>Feet</span><b>Leather Boots</b><em>—</em></li>
+        </ul>
+        <button id="closeChar" class="btn ghost">Close (C)</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Boss key: one key swaps the game for something that looks like work -->
+  <div id="boss" hidden></div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
