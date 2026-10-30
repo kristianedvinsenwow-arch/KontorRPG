@@ -113,4 +113,4 @@ SQLite persistence.
 
 ## Tools
 
-- `tools/meshy-batch/` generates races, gear, enemies, mounts and NPCs as game-ready `.glb` files with the Meshy API: previews, a local pick page, then texture, rig, animate and compress. See its README.
+- `tools/model-batch/` generates races, gear, enemies, mounts and NPCs as game-ready `.glb` files with Tripo (or Meshy): previews, a local pick page, then texture, rig, animate and compress. See its README.

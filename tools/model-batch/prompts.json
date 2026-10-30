@@ -1,6 +1,19 @@
 {
-  "_readme": "Prompt list for meshy.mjs, taken from the KontorRPG Meshy Prompt Style Guide. Each item's prompt = subject + category extra + style block. Edit freely: add items, change subjects, tune budgets per category.",
+  "_readme": "Prompt list for models.mjs, from the KontorRPG Meshy Prompt Style Guide (works for Tripo and Meshy). prompt = subject + category extra + style. Tripo also gets the negative prompt (max 255 characters). Edit freely.",
   "style": "stylized low-poly game asset, chunky simple shapes, slightly oversized head hands and feet, clean flat-shaded faces, hand-painted flat colour texture with light speckle, muted Nordic palette, no baked lighting, readable silhouette, single object, centered, plain background",
+  "negative": "photorealistic, realistic skin, fine detail, noise, thin parts, loose cloth, hair strands, glossy, metallic shine, baked shadows, text, logo, multiple objects, pedestal, ground plane, gore",
+  "tripoAnimations": {
+    "_note": "Logical animation names used in categories → Tripo presets (max 5 per model). Biped presets: idle, walk, run, dive, climb, jump, slash, shoot, hurt, fall, turn.",
+    "idle": "preset:idle",
+    "walk": "preset:walk",
+    "run": "preset:run",
+    "attack": "preset:slash",
+    "shoot": "preset:shoot",
+    "hit": "preset:hurt",
+    "death": "preset:fall",
+    "jump": "preset:jump",
+    "quadruped:walk": "preset:quadruped:walk"
+  },
   "categories": {
     "races": {
       "_note": "Matches packages/shared/src/character.ts RACES (human 1.85 m, dwarf 1.3 m, gnome 0.95 m).",
@@ -10,9 +23,10 @@
       "rig": "biped",
       "animations": [
         "idle",
+        "walk",
+        "run",
         "attack",
-        "hit",
-        "death"
+        "hit"
       ],
       "extra": ""
     },
@@ -21,21 +35,24 @@
       "polycount": 1200,
       "textureSize": 512,
       "rig": "none",
-      "extra": "single helmet only, empty, no head, no face"
+      "extra": "single helmet only, empty, no head, no face",
+      "negativeExtra": "head, face, mannequin, body"
     },
     "shoulders": {
       "pose": "",
       "polycount": 1000,
       "textureSize": 512,
       "rig": "none",
-      "extra": "single shoulder piece only, no body, no arm"
+      "extra": "single shoulder piece only, no body, no arm",
+      "negativeExtra": "body, arm, mannequin"
     },
     "weapons": {
       "pose": "",
       "polycount": 1500,
       "textureSize": 512,
       "rig": "none",
-      "extra": "single weapon only, no hands, light neutral grey metal"
+      "extra": "single weapon only, no hands, light neutral grey metal",
+      "negativeExtra": "hand, arm, character"
     },
     "enemies": {
       "pose": "t-pose",
@@ -44,6 +61,7 @@
       "rig": "biped",
       "animations": [
         "idle",
+        "walk",
         "attack",
         "hit",
         "death"
@@ -55,14 +73,19 @@
       "polycount": 10000,
       "textureSize": 2048,
       "rig": "none",
-      "extra": ""
+      "extra": "",
+      "animations": [
+        "walk"
+      ]
     },
     "mounts": {
       "pose": "",
       "polycount": 6500,
       "textureSize": 1024,
       "rig": "quadruped",
-      "animations": [],
+      "animations": [
+        "walk"
+      ],
       "extra": ""
     },
     "npcs": {
@@ -72,7 +95,7 @@
       "rig": "biped",
       "animations": [
         "idle",
-        "talk"
+        "walk"
       ],
       "extra": ""
     },
@@ -81,7 +104,8 @@
       "polycount": 2500,
       "textureSize": 1024,
       "rig": "none",
-      "extra": "single object only, no hands, no stand"
+      "extra": "single object only, no hands, no stand",
+      "negativeExtra": "hand, character, stand"
     }
   },
   "items": [

@@ -1,0 +1,23 @@
+{
+  "name": "kontorrpg-model-batch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Generate KontorRPG models with Tripo (default) or Meshy: previews, pick page, texture, rig, animate, compress.",
+  "scripts": {
+    "plan": "node models.mjs plan",
+    "generate": "node models.mjs generate",
+    "pick": "node models.mjs pick",
+    "finish": "node models.mjs finish",
+    "status": "node models.mjs status",
+    "balance": "node models.mjs balance",
+    "mock": "node mock-api.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@gltf-transform/cli": "^4.5.1",
+    "@gltf-transform/core": "^4.5.1",
+    "sharp": "^0.35.5"
+  }
+}
