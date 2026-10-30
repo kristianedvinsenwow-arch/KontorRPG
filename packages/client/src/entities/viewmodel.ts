@@ -53,8 +53,8 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
   vmScene.add(root);
   const sleeve = mat(0x46503f, 'cloth');
   const cuff = mat(0x3a2818, 'leather', { r: 0.7 });
-  const skin = mat(0xd1a582, null, { r: 0.6 });
-  const knuckle = mat(0xc4987a, null, { r: 0.6 });
+  const skin = mat(0xb98364, null, { r: 0.72 });
+  const knuckle = mat(0xa87358, null, { r: 0.72 });
 
   // Elbow pivot sits below and to the right of the screen; everything else hangs from it.
   const elbow = new THREE.Group();

@@ -5,12 +5,15 @@
  */
 import * as THREE from 'three';
 import { CHUNK_SIZE, WORLD_HALF, WATER_LEVEL, heightAt, mulberry32 } from '@kontor/shared';
-import { TEX, mat } from '../engine/procgen.js';
+import { TEX } from '../engine/procgen.js';
+import { buildProps, wind, type Collider } from './props.js';
+import { Water } from './water.js';
+
+export type { Collider };
 
 const SEG = 48; // grid cells per chunk side (~1.33 m)
 const LOAD_RADIUS = 2; // chunks around the player kept loaded
 
-export interface Collider { x: number; z: number; r: number }
 
 interface Chunk {
   key: string;
@@ -27,7 +30,7 @@ const C = {
   snow: new THREE.Color(0xe8eef0),
 };
 
-const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, map: TEX.ground, bumpMap: TEX.ground, bumpScale: 0.5, roughness: 0.95 });
+const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, map: TEX.ground, bumpMap: TEX.ground, bumpScale: 0.8, roughness: 0.96, envMapIntensity: 0.6 });
 
 function normalAt(x: number, z: number, out: THREE.Vector3): THREE.Vector3 {
   const e = 0.6;
@@ -74,102 +77,22 @@ function buildGround(cx: number, cz: number): THREE.Mesh {
   return m;
 }
 
-// ---- props: shared geometries, one InstancedMesh per kind per chunk ----
-const PROP = {
-  pineTrunk: { geo: new THREE.CylinderGeometry(0.12, 0.2, 2.2, 7).translate(0, 1.1, 0), mat: mat(0x5a4330, 'bark') },
-  pineLow: { geo: new THREE.ConeGeometry(1.5, 2.6, 8).translate(0, 2.4, 0), mat: mat(0x2f4a2a, 'ground', { r: 0.95 }) },
-  pineMid: { geo: new THREE.ConeGeometry(1.15, 2.2, 8).translate(0, 3.6, 0), mat: mat(0x34532e, 'ground', { r: 0.95 }) },
-  pineTop: { geo: new THREE.ConeGeometry(0.75, 1.8, 8).translate(0, 4.7, 0), mat: mat(0x3a5c32, 'ground', { r: 0.95 }) },
-  birchTrunk: { geo: new THREE.CylinderGeometry(0.09, 0.14, 3.4, 7).translate(0, 1.7, 0), mat: mat(0xe6e2d8, 'bark') },
-  birchCrown: { geo: new THREE.IcosahedronGeometry(1.3, 1).scale(1, 1.25, 1).translate(0, 3.9, 0), mat: mat(0x6f8f3c, 'ground', { r: 0.95 }) },
-  rock: { geo: new THREE.IcosahedronGeometry(0.8, 1), mat: mat(0x8a8780, 'rock') },
-  ore: { geo: new THREE.IcosahedronGeometry(0.75, 1), mat: mat(0x6d625a, 'rock') },
-  oreFleck: { geo: new THREE.OctahedronGeometry(0.16, 0), mat: mat(0xb0643a, null, { r: 0.4, m: 0.6 }) },
-};
-// Lumpy rocks: displace once, shared by every instance.
-for (const g of [PROP.rock.geo, PROP.ore.geo]) {
-  const p = g.attributes.position;
-  const rng = mulberry32(99);
-  for (let i = 0; i < p.count; i++) {
-    const s = 0.8 + rng() * 0.35;
-    p.setXYZ(i, p.getX(i) * s, p.getY(i) * s * 0.75, p.getZ(i) * s);
-  }
-  g.computeVertexNormals();
-}
-
-type PropKey = keyof typeof PROP;
-
-function buildProps(cx: number, cz: number, colliders: Collider[]): THREE.Object3D[] {
-  const rng = mulberry32((cx * 73856093) ^ (cz * 19349663) ^ 0x5eed);
-  const mats: Partial<Record<PropKey, THREE.Matrix4[]>> = {};
-  const add = (k: PropKey, m: THREE.Matrix4) => (mats[k] ??= []).push(m);
-  const M = (x: number, y: number, z: number, s: number, ry: number, sy = s) =>
-    new THREE.Matrix4().compose(new THREE.Vector3(x, y, z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), ry), new THREE.Vector3(s, sy, s));
-  const N = new THREE.Vector3();
-
-  const tries = 70;
-  for (let i = 0; i < tries; i++) {
-    const x = cx * CHUNK_SIZE + rng() * CHUNK_SIZE, z = cz * CHUNK_SIZE + rng() * CHUNK_SIZE;
-    const y = heightAt(x, z);
-    normalAt(x, z, N);
-    const spawnDist = Math.hypot(x, z);
-    if (y < WATER_LEVEL + 0.6 || spawnDist < 18 || Math.abs(x) > WORLD_HALF - 2 || Math.abs(z) > WORLD_HALF - 2) continue;
-    const roll = rng();
-    const ry = rng() * Math.PI * 2;
-    if (N.y < 0.8 || y > 16) {
-      // Steep or high ground: rocks and the occasional ore vein.
-      const s = 0.7 + rng() * 1.3;
-      if (roll < 0.25 && y > 5) {
-        add('ore', M(x, y + 0.1, z, s, ry));
-        for (let f = 0; f < 4; f++) {
-          const a = rng() * Math.PI * 2;
-          add('oreFleck', M(x + Math.cos(a) * 0.55 * s, y + 0.35 * s + rng() * 0.2, z + Math.sin(a) * 0.55 * s, s * (0.7 + rng() * 0.5), rng() * 3));
-        }
-      } else if (roll < 0.6) add('rock', M(x, y + 0.1, z, s, ry));
-      else continue;
-      colliders.push({ x, z, r: 0.75 * s });
-    } else if (roll < 0.55) {
-      const s = 0.8 + rng() * 0.6;
-      for (const k of ['pineTrunk', 'pineLow', 'pineMid', 'pineTop'] as const) add(k, M(x, y - 0.1, z, s, ry));
-      colliders.push({ x, z, r: 0.3 * s });
-    } else if (roll < 0.8) {
-      const s = 0.8 + rng() * 0.5;
-      add('birchTrunk', M(x, y - 0.1, z, s, ry));
-      add('birchCrown', M(x, y - 0.1, z, s, ry));
-      colliders.push({ x, z, r: 0.22 * s });
-    } else if (roll < 0.9) {
-      const s = 0.3 + rng() * 0.5;
-      add('rock', M(x, y + 0.05, z, s, ry));
-      if (s > 0.55) colliders.push({ x, z, r: 0.7 * s });
-    }
-  }
-
-  const out: THREE.Object3D[] = [];
-  for (const [k, list] of Object.entries(mats) as [PropKey, THREE.Matrix4[]][]) {
-    const p = PROP[k];
-    const im = new THREE.InstancedMesh(p.geo, p.mat, list.length);
-    list.forEach((m, i) => im.setMatrixAt(i, m));
-    im.castShadow = k !== 'oreFleck';
-    im.receiveShadow = true;
-    im.computeBoundingSphere();
-    out.push(im);
-  }
-  return out;
-}
-
 export class Terrain {
   private chunks = new Map<string, Chunk>();
   readonly root = new THREE.Group();
-  private water: THREE.Mesh;
+  private water: Water;
+  /** Fewer grass tufts on low quality. Changing it rebuilds chunks as they stream. */
+  dense = true;
 
   constructor(scene: THREE.Scene) {
     scene.add(this.root);
-    const size = WORLD_HALF * 2 + 400;
-    const waterGeo = new THREE.PlaneGeometry(size, size).rotateX(-Math.PI / 2);
-    this.water = new THREE.Mesh(waterGeo, new THREE.MeshStandardMaterial({ color: 0x2f5c6b, roughness: 0.12, metalness: 0.15, transparent: true, opacity: 0.85 }));
-    this.water.position.y = WATER_LEVEL;
-    this.water.receiveShadow = true;
-    scene.add(this.water);
+    this.water = new Water(scene);
+  }
+
+  /** Wind sway for grass and flowers, ripples on the water. */
+  animate(t: number): void {
+    wind.value = t;
+    this.water.animate(t);
   }
 
   /** Load chunks around (x, z) and drop ones that are far away. Returns how many were built. */
@@ -193,7 +116,7 @@ export class Terrain {
       const group = new THREE.Group();
       const colliders: Collider[] = [];
       group.add(buildGround(cx, cz));
-      for (const o of buildProps(cx, cz, colliders)) group.add(o);
+      for (const o of buildProps(cx, cz, colliders, this.dense)) group.add(o);
       this.root.add(group);
       this.chunks.set(key, { key, group, colliders });
       built++;

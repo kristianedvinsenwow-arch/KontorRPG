@@ -4,13 +4,20 @@
  * and the server can reject a hand-edited character.
  */
 
-export type Race = 'human' | 'gnome';
+export type Race = 'human' | 'dwarf' | 'gnome';
 export type AttrKey = 'str' | 'dex' | 'int' | 'sta';
 export type Attrs = Record<AttrKey, number>;
 
-export const RACES: Record<Race, { name: string; scale: number; blurb: string }> = {
-  human: { name: 'Human', scale: 1, blurb: 'The standard adventurer.' },
-  gnome: { name: 'Gnome', scale: 0.6, blurb: 'Same adventurer, a lot closer to the ground. Purely cosmetic: same stats, same reach.' },
+/**
+ * Body shape per race. Cosmetic only (same stats). `legs` shortens thighs and shins, `width` makes
+ * the body stockier, `head` enlarges the head, `scale` sizes the whole figure. `eye` is the
+ * first-person camera height in metres; `height` is the approximate standing height.
+ */
+export interface RaceDef { name: string; blurb: string; scale: number; legs: number; width: number; head: number; eye: number; height: number }
+export const RACES: Record<Race, RaceDef> = {
+  human: { name: 'Human', blurb: 'The standard adventurer. About 1.85 m.', scale: 1, legs: 1, width: 1, head: 1, eye: 1.62, height: 1.85 },
+  dwarf: { name: 'Dwarf', blurb: 'Thick, broad and bearded on short legs. About 1.3 m.', scale: 0.88, legs: 0.55, width: 1.38, head: 1.1, eye: 1.16, height: 1.3 },
+  gnome: { name: 'Gnome', blurb: 'Even smaller: tiny legs and a big head. About 0.95 m.', scale: 0.66, legs: 0.48, width: 1.05, head: 1.22, eye: 0.84, height: 0.95 },
 };
 
 export const ATTRS: { key: AttrKey; short: string; name: string; desc: string }[] = [
@@ -73,8 +80,8 @@ export const MAJOR_PERKS: Perk[] = [
 ];
 
 export const MINOR_PERKS: Perk[] = [
-  { id: 'morning_person', name: 'Morning Person', kind: 'minor', plus: '+10% XP 07:00–11:00', minus: '−5% XP after 15:00', mods: {} },
-  { id: 'overtime', name: 'Overtime', kind: 'minor', plus: '+10% XP after 16:00', minus: '−5% XP before 10:00', mods: {} },
+  { id: 'morning_person', name: 'Morning Person', kind: 'minor', plus: '+10% XP 07:00–16:00', minus: '−5% XP 16:00–20:00', mods: {} },
+  { id: 'overtime', name: 'Overtime', kind: 'minor', plus: '+10% XP 16:00–01:00', minus: '−5% XP 08:00–12:00', mods: {} },
   { id: 'coffee_addict', name: 'Coffee Addict', kind: 'minor', plus: '+10% speed for 10 min after a drink', minus: '−3% all stats without a drink buff', mods: {} },
   { id: 'thick_skin', name: 'Thick Skin', kind: 'minor', plus: '+5 max HP', minus: '−3% move speed', mods: { hpFlat: 5, speedPct: -0.03 } },
   { id: 'steady_hands', name: 'Steady Hands', kind: 'minor', plus: '+5% masterwork chance when smithing', minus: '−5% smithing speed', mods: { masterworkPct: 0.05 } },
@@ -82,6 +89,25 @@ export const MINOR_PERKS: Perk[] = [
   { id: 'haggler', name: 'Haggler', kind: 'minor', plus: '+5% gold from vendors', minus: '−5% Scales from the fishmonger', mods: { sellPct: 0.05, scalesPct: -0.05 } },
   { id: 'light_sleeper', name: 'Light Sleeper', kind: 'minor', plus: '+25% rested XP', minus: 'Rested bonus builds 25% slower', mods: { restedPct: 0.25 } },
 ];
+
+/**
+ * XP time windows for the clock perks, in server time (Europe/Oslo). [from, to) hours; a window may
+ * wrap past midnight (16 → 1 means 16:00–01:00). Used by the XP system from M1.
+ */
+export const XP_WINDOWS: Record<string, { bonus: [number, number]; malus: [number, number] }> = {
+  morning_person: { bonus: [7, 16], malus: [16, 20] },
+  overtime: { bonus: [16, 1], malus: [8, 12] },
+};
+
+/** XP multiplier from clock perks at a given server hour (0–23.99). */
+export function clockXpMult(perkId: string, hour: number): number {
+  const w = XP_WINDOWS[perkId];
+  if (!w) return 1;
+  const inside = ([a, b]: [number, number]) => (a <= b ? hour >= a && hour < b : hour >= a || hour < b);
+  if (inside(w.bonus)) return 1.1;
+  if (inside(w.malus)) return 0.95;
+  return 1;
+}
 
 export const PERKS: Record<string, Perk> = Object.fromEntries([...MAJOR_PERKS, ...MINOR_PERKS].map((p) => [p.id, p]));
 

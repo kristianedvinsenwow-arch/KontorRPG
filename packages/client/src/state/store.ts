@@ -47,7 +47,8 @@ export interface Settings {
   name: string;
   color: number;
   sensitivity: number;
-  lowGpu: boolean;
+  /** Graphics quality: low = no shadows or post-processing (thin laptops), high = ambient occlusion too. */
+  quality: 'low' | 'medium' | 'high';
   /** Character build from the creator. Kept in the browser until M1 stores characters on the server. */
   build: CharacterBuild;
 }
@@ -56,11 +57,14 @@ const SETTINGS_KEY = 'kontorrpg.settings';
 
 /** Settings are a per-browser convenience, so localStorage is the right home (wrapped: it can throw). */
 export function loadSettings(): Settings {
-  const d: Settings = { name: '', color: Math.floor(Math.random() * 8), sensitivity: 1, lowGpu: false, build: defaultBuild() };
+  const d: Settings = { name: '', color: Math.floor(Math.random() * 8), sensitivity: 1, quality: 'high', build: defaultBuild() };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) {
-      const s = { ...d, ...JSON.parse(raw) } as Settings;
+      const parsed = JSON.parse(raw);
+      const s = { ...d, ...parsed } as Settings;
+      if (parsed.lowGpu === true && !parsed.quality) s.quality = 'low'; // older saved setting
+      if (!['low', 'medium', 'high'].includes(s.quality)) s.quality = 'high';
       if (validateBuild(s.build)) s.build = defaultBuild(); // rules changed since it was saved
       return s;
     }

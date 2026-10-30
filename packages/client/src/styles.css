@@ -142,3 +142,7 @@ kbd { font: 600 11px var(--mono); background: rgba(255, 255, 255, .08); border: 
 #preview { height: 520px; }
 @media (max-width: 900px) { .previewcol { display: none; } .brief.creator { width: 100%; } }
 @media (max-width: 520px) { .cards.two { grid-template-columns: 1fr; } .derived { grid-template-columns: repeat(2, 1fr); } }
+select { width: 100%; background: rgba(255, 255, 255, .045); border: 1px solid var(--line); color: var(--fg); font: 13px var(--mono); padding: 9px 10px; border-radius: var(--r); }
+select:focus { border-color: var(--amber); outline: none; }
+.cards.three { grid-template-columns: repeat(3, 1fr); }
+@media (max-width: 520px) { .cards.three { grid-template-columns: 1fr; } }

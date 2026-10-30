@@ -21,7 +21,7 @@ const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls?: string, text?: 
 export function initCreator(onEnter: (name: string, color: number, build: CharacterBuild) => void, onChange: () => void) {
   const nameIn = $<HTMLInputElement>('nameIn');
   const enter = $<HTMLButtonElement>('enter');
-  const lowGpu = $<HTMLInputElement>('lowGpu');
+  const quality = $<HTMLSelectElement>('quality');
   const menuNet = $('menuNet');
   nameIn.value = settingsStore.get().name;
   nameIn.maxLength = MAX_NAME_LEN;
@@ -123,8 +123,8 @@ export function initCreator(onEnter: (name: string, color: number, build: Charac
   renderSwatches();
   render();
 
-  settingsStore.subscribe((st) => { lowGpu.checked = st.lowGpu; });
-  lowGpu.onchange = () => settingsStore.set({ lowGpu: lowGpu.checked });
+  settingsStore.subscribe((st) => { quality.value = st.quality; });
+  quality.onchange = () => settingsStore.set({ quality: quality.value as 'low' | 'medium' | 'high' });
   nameIn.oninput = () => { settingsStore.set({ name: nameIn.value.slice(0, MAX_NAME_LEN) }); onChange(); };
 
   const go = () => {

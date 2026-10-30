@@ -42,7 +42,7 @@
 
       <div class="sec">
         <span class="lbl">Race</span>
-        <div id="races" class="cards two"></div>
+        <div id="races" class="cards three"></div>
       </div>
 
       <div class="sec">
@@ -71,7 +71,14 @@
         <div id="derived" class="derived"></div>
       </div>
 
-      <label class="chk"><input type="checkbox" id="lowGpu" /> Low-GPU mode (no shadows, lower resolution)</label>
+      <div class="sec">
+        <label for="quality">Graphics</label>
+        <select id="quality">
+          <option value="high">High — shadows, ambient occlusion, bloom</option>
+          <option value="medium">Medium — shadows and bloom</option>
+          <option value="low">Low — for thin laptops</option>
+        </select>
+      </div>
       <button id="enter" class="btn big">Enter the world</button>
       <p class="note" id="menuNet">Pick a name and enter the world.</p>
     </div>
@@ -88,7 +95,12 @@
       <p class="note">Your character stays in the world while you're here.</p>
       <label for="sens">Mouse sensitivity</label>
       <input type="range" id="sens" min="0.2" max="2.5" step="0.05" />
-      <label class="chk"><input type="checkbox" id="lowGpu2" /> Low-GPU mode</label>
+      <label for="quality2">Graphics</label>
+      <select id="quality2">
+        <option value="high">High</option>
+        <option value="medium">Medium</option>
+        <option value="low">Low</option>
+      </select>
       <button id="resume" class="btn big">Resume</button>
     </div>
   </section>

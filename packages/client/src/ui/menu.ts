@@ -5,11 +5,11 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 
 export function initPause(onResume: () => void) {
   const pause = $('pause');
-  const lowGpu2 = $<HTMLInputElement>('lowGpu2');
+  const quality2 = $<HTMLSelectElement>('quality2');
   const sens = $<HTMLInputElement>('sens');
   sens.value = String(settingsStore.get().sensitivity);
-  settingsStore.subscribe((st) => { lowGpu2.checked = st.lowGpu; });
-  lowGpu2.onchange = () => settingsStore.set({ lowGpu: lowGpu2.checked });
+  settingsStore.subscribe((st) => { quality2.value = st.quality; });
+  quality2.onchange = () => settingsStore.set({ quality: quality2.value as 'low' | 'medium' | 'high' });
   sens.oninput = () => settingsStore.set({ sensitivity: Number(sens.value) });
   $('resume').onclick = onResume;
   uiStore.subscribe((u) => { pause.hidden = u.panel !== 'pause'; });

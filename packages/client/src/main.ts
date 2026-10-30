@@ -18,11 +18,12 @@ import { initCreator } from './ui/creator.js';
 import { CharacterPreview, fillCharacterPanel } from './ui/characterPanel.js';
 
 const view = document.getElementById('view')!;
-const gfx = createGfx(view, settingsStore.get().lowGpu);
+const gfx = createGfx(view, settingsStore.get().quality);
 const { renderer, scene, cam, vmScene, vmCam } = gfx;
-settingsStore.subscribe((s) => gfx.setLowGpu(s.lowGpu));
+settingsStore.subscribe((s) => { if (s.quality !== gfx.quality) gfx.setQuality(s.quality); });
 
 const terrain = new Terrain(scene);
+terrain.dense = settingsStore.get().quality !== 'low';
 terrain.update(0, 0, 99); // build the spawn area up front
 const input = new Input(renderer.domElement);
 const viewmodel = makeViewmodel(vmScene);
@@ -49,7 +50,7 @@ initCreator(
   (name, color, build) => {
     myBuild = build;
     speedBonus = derive(build).speedBonus;
-    eyeHeight = EYE_HEIGHT * RACES[build.race].scale;
+    eyeHeight = RACES[build.race].eye;
     net.connect(name, color, build);
     preview.setCharacter(color, build.race);
     fillCharacterPanel(name, build);
@@ -181,8 +182,8 @@ function frame() {
 
   renderer.setScissorTest(false);
   renderer.setClearColor(0x000000, 1);
-  renderer.clear();
-  renderer.render(scene, cam);
+  terrain.animate(clock.elapsedTime);
+  gfx.renderWorld();
   if (me && u.panel !== 'character') {
     renderer.clearDepth();
     renderer.render(vmScene, vmCam);

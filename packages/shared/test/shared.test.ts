@@ -71,3 +71,22 @@ test('perks change derived stats', () => {
   const tough = derive({ ...defaultBuild(), minor: 'thick_skin' });
   assert.equal(tough.maxHp, 30);
 });
+
+import { clockXpMult, RACES } from '../src/index.js';
+
+test('clock perks use the agreed hours', () => {
+  assert.equal(clockXpMult('morning_person', 7), 1.1);
+  assert.equal(clockXpMult('morning_person', 15.9), 1.1);
+  assert.equal(clockXpMult('morning_person', 16), 0.95);
+  assert.equal(clockXpMult('morning_person', 21), 1);
+  assert.equal(clockXpMult('overtime', 16), 1.1);
+  assert.equal(clockXpMult('overtime', 0.5), 1.1); // wraps past midnight
+  assert.equal(clockXpMult('overtime', 1), 1);
+  assert.equal(clockXpMult('overtime', 9), 0.95);
+});
+
+test('three races, from tallest to smallest', () => {
+  assert.deepEqual(Object.keys(RACES), ['human', 'dwarf', 'gnome']);
+  assert.ok(RACES.human.height > RACES.dwarf.height && RACES.dwarf.height > RACES.gnome.height);
+  assert.ok(RACES.dwarf.width > RACES.human.width);
+});
