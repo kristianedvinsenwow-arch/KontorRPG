@@ -290,10 +290,24 @@ export class Mobs {
       const dead = !!(v.s.st & ST_DEAD);
       if (corpses ? !(dead && v.s.sk) : dead) continue;
       const def = MOBS[v.kind];
-      const r = (isOgre(v.kind) ? 0.45 * def.scale : def.flying ? 0.38 : quad(v.kind) ? 0.5 * def.scale : isUndead(v.kind) ? 0.4 * def.scale : 0.42 * def.scale) * (1 + slack) + (corpses ? 0.25 : 0);
-      const h = corpses ? 0.25 : isOgre(v.kind) ? 0.7 * def.scale : def.flying ? 0 : quad(v.kind) ? 0.6 : isUndead(v.kind) ? 0.95 * def.scale : 0.55 * def.scale;
-      c.set(v.g.position.x, v.g.position.y + h, v.g.position.z).sub(origin);
-      const t = c.dot(dir);
+      const r = (isOgre(v.kind) ? 0.55 * def.scale : def.flying ? 0.38 : quad(v.kind) ? 0.5 * def.scale : isUndead(v.kind) ? 0.4 * def.scale : 0.42 * def.scale) * (1 + slack) + (corpses ? 0.25 : 0);
+      // Live bodies are an upright capsule from the feet to the top of the head (so a tall troll can
+      // be hit anywhere on its body, not just at one point); corpses are a low sphere.
+      const top = corpses ? 0 : isOgre(v.kind) ? 2.2 * def.scale / 1.16 : quad(v.kind) ? 0.9 : def.flying ? 0 : isUndead(v.kind) ? 1.85 * def.scale : 1.0 * def.scale;
+      const y0 = v.g.position.y + (corpses ? 0.25 : def.flying ? 0 : Math.min(r, top / 2)), y1 = v.g.position.y + (corpses || def.flying ? (corpses ? 0.25 : 0) : Math.max(top - r * 0.6, top / 2));
+      // Closest approach between the ray and the vertical segment (x, y0..y1, z).
+      c.set(v.g.position.x - origin.x, 0, v.g.position.z - origin.z);
+      const hx = c.x, hz = c.z;
+      const dxz = dir.x * dir.x + dir.z * dir.z;
+      let t: number, y: number;
+      if (dxz < 1e-6) { t = 0; y = origin.y; } else {
+        t = (hx * dir.x + hz * dir.z) / dxz; // ray param where it's horizontally nearest the axis
+        y = origin.y + dir.y * t;
+      }
+      const yc = Math.max(y0, Math.min(y1, y));
+      // Re-solve t against the clamped point on the axis.
+      c.set(v.g.position.x, yc, v.g.position.z).sub(origin);
+      t = c.dot(dir);
       if (t < 0 || t > reach + r + 0.5) continue;
       const d2 = c.lengthSq() - t * t;
       if (d2 > r * r) continue;

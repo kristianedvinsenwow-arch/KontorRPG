@@ -27,7 +27,7 @@ export interface Stats {
   cdr: number;            // right-click cooldown reduction
   specialDmg: number;     // right-click damage
   burnDmg: number;        // fire burn ticks and Ignite
-  frostPower: number;     // slow/freeze duration
+  frostPower: number;     // freeze duration; half of it as frostbolt damage
   arrowSave: number;      // chance not to use an arrow
   // gathering
   miningSpeed: number;
@@ -78,7 +78,7 @@ export const STAT_LABEL: Record<StatKey, [string, 'pct' | 'flat' | 'pts']> = {
   block: ['block chance', 'pct'], thorns: ['thorns damage', 'flat'],
   meleeDmg: ['melee damage', 'pct'], rangedDmg: ['ranged damage', 'pct'], magicDmg: ['magic damage', 'pct'], allDmg: ['all damage', 'pct'],
   crit: ['critical chance', 'pct'], cdr: ['right-click cooldown reduction', 'pct'], specialDmg: ['right-click damage', 'pct'],
-  burnDmg: ['burn and Ignite damage', 'pct'], frostPower: ['frost slow/freeze duration', 'pct'], arrowSave: ['chance to save an arrow', 'pct'],
+  burnDmg: ['burn and Ignite damage', 'pct'], frostPower: ['freeze duration (and half as much frostbolt damage)', 'pct'], arrowSave: ['chance to save an arrow', 'pct'],
   miningSpeed: ['mining speed', 'pct'], woodSpeed: ['woodcutting speed', 'pct'], fishSpeed: ['bite speed', 'pct'],
   luck: ['luck', 'pts'], gemChance: ['gem find chance', 'pct'], doubleYield: ['double yield chance', 'pct'], rareFish: ['rare catch chance', 'pct'],
   fishEase: ['catch bar size', 'pct'], burnChance: ['less burnt food', 'pct'], craftSpeed: ['crafting speed', 'pct'], nodeSave: ['chance a hit doesn’t deplete', 'pct'],

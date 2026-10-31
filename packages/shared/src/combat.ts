@@ -24,11 +24,12 @@ export const SPECIALS: Record<WeaponClass | 'fists', Special> = {
   battleaxe: { name: 'Executioner', cd: 18, mult: 4, kind: 'single', blurb: '4× damage to one target.' },
   bow: { name: 'Power Shot', cd: 10, mult: 3, kind: 'shot', blurb: '3× damage arrow.' },
   staff: { name: 'Bonk', cd: 6, mult: 1.8, kind: 'single', blurb: 'A clumsy two-handed bonk.' },
-  fireStaff: { name: 'Ignite', cd: 12, mult: 1, kind: 'ignite', radius: 22, blurb: 'Every burning enemy within 22 m takes a hit, +33/66/100% for 1/2/3 burn stacks.' },
+  fireStaff: { name: 'Ignite', cd: 12, mult: 0.45, kind: 'ignite', radius: 22, blurb: 'Every burning enemy within 22 m takes 45% of a firebolt per burn stack (up to 135% at 3 stacks).' },
   frostStaff: { name: 'Frost Nova', cd: 15, mult: 0.8, kind: 'nova', radius: 6, blurb: 'Freeze everything within 6 m for 2.5 s.' },
 };
 
-export const BURN = { maxStacks: 3, perStackPerSec: 0.15, sec: 4 };
+/** Burn: per stack, per second, as a share of one firebolt. 3 stacks ≈ as much damage as the bolts themselves. */
+export const BURN = { maxStacks: 3, perStackPerSec: 0.16, sec: 4 };
 export const SLOW = { pct: 0.25, sec: 3 };
 export const FREEZE_SEC = 2.5;
 export const PROJECTILE_SPEED = 30;

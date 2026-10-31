@@ -194,7 +194,8 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
   const flight = (t: Mob) => (Math.hypot(t.x - p.state.x, t.z - p.state.z) / PROJECTILE_SPEED) * 1000;
 
   if (!sp || sp.kind === 'single' || sp.kind === 'shot') {
-    const mult = sp ? sp.mult : 1;
+    // Frost power: longer freezes, and frostbolts hit harder (half the bonus).
+    const mult = (sp ? sp.mult : 1) * (cls === 'frostStaff' ? 1 + s.frostPower / 2 : 1);
     if (style === 'melee') return strike(m, mult);
     const kind = cls === 'bow' ? 'arrow' : cls === 'fireStaff' ? 'firebolt' : 'frostbolt';
     w.broadcastNear(p.state, { t: 'fx', kind, from: p.state.id, to: m.id });
@@ -205,7 +206,7 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
           const per = outgoing(main, undefined, s, 1) * BURN.perStackPerSec * (1 + s.burnDmg);
           const stacks = Math.min(BURN.maxStacks, (t.burn && t.burn.until > w.now() ? t.burn.stacks : 0) + 1);
           t.burn = { stacks, until: w.now() + BURN.sec * 1000, perSec: per, by: p.state.id, nextTick: t.burn?.nextTick ?? w.now() + 1000 };
-        } else if (cls === 'frostStaff') t.slowUntil = w.now() + SLOW.sec * 1000 * (1 + s.frostPower);
+        }
       });
     });
     return;
@@ -221,7 +222,7 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
     const burning = near(sp.radius ?? 22).filter((x) => x.burn && x.burn.until > now);
     if (!burning.length) { p.nextSpecialAt = now + 1000; p.client.send({ t: 'cooldown', until: Date.now() + 1000 }); return w.notice(p, 'Nothing is burning — hit them with firebolts first.', 'error'); }
     w.broadcastNear(p.state, { t: 'fx', kind: 'ignite', from: p.state.id });
-    for (const t of burning) strike(t, sp.mult * (1 + 0.33 * t.burn!.stacks) * (1 + s.burnDmg));
+    for (const t of burning) strike(t, sp.mult * t.burn!.stacks * (1 + s.burnDmg));
   }
 }
 

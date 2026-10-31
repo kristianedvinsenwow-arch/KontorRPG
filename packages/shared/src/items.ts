@@ -278,9 +278,9 @@ const ARMOUR_MULT = [1, 1.8, 2.6, 3.4];
 
 // weapons: [class, dps per tier, interval, range, twoHanded]
 const W: Record<'sword' | 'longsword' | 'battleaxe', { name: string; dps: number[]; interval: number; range: number; two: boolean; blurb: string }> = {
-  sword: { name: 'sword', dps: [7, 11, 15, 19], interval: 1.6, range: 2.6, two: false, blurb: 'One-handed. Right click: Heavy Strike (2.5× damage, 8 s).' },
-  longsword: { name: 'longsword', dps: [9, 14, 19, 24.5], interval: 2.3, range: 3.0, two: true, blurb: 'Two-handed. Right click: Whirlwind — spin and hit everything around you (12 s).' },
-  battleaxe: { name: 'battleaxe', dps: [9.5, 15, 20.5, 26.5], interval: 2.5, range: 2.8, two: true, blurb: 'Two-handed. Right click: Executioner (4× damage, 18 s).' },
+  sword: { name: 'sword', dps: [6.5, 10, 13.5, 17.5], interval: 1.6, range: 2.6, two: false, blurb: 'One-handed. Right click: Heavy Strike (2.5× damage, 8 s).' },
+  longsword: { name: 'longsword', dps: [8, 12.5, 17, 22], interval: 2.3, range: 3.0, two: true, blurb: 'Two-handed. Right click: Whirlwind — spin and hit everything around you (12 s).' },
+  battleaxe: { name: 'battleaxe', dps: [8, 12.5, 17, 22], interval: 2.5, range: 2.8, two: true, blurb: 'Two-handed. Right click: Executioner (4× damage, 18 s).' },
 };
 for (const [cls, w] of Object.entries(W) as [keyof typeof W, typeof W.sword][]) {
   METALS.forEach((t, i) => add({
@@ -290,12 +290,12 @@ for (const [cls, w] of Object.entries(W) as [keyof typeof W, typeof W.sword][]) 
   }));
 }
 add({ id: 'birch_shortbow', name: 'Birch shortbow', kind: 'weapon', stack: 1, tier: 1, look: 'birch', slot: 'mainHand', weapon: 'bow', dps: 6, interval: 2.0, range: 28, twoHanded: true, sellValue: 3, blurb: 'Needs arrows in the ammo slot. Right click: Power Shot (3×, 10 s).' });
-add({ id: 'pine_longbow', name: 'Pine longbow', kind: 'weapon', stack: 1, tier: 2, look: 'pine', slot: 'mainHand', weapon: 'bow', dps: 10, interval: 2.2, range: 34, twoHanded: true, sellValue: 7, blurb: 'Needs arrows in the ammo slot. Right click: Power Shot (3×, 10 s).' });
+add({ id: 'pine_longbow', name: 'Pine longbow', kind: 'weapon', stack: 1, tier: 2, look: 'pine', slot: 'mainHand', weapon: 'bow', dps: 9, interval: 2.2, range: 34, twoHanded: true, sellValue: 7, blurb: 'Needs arrows in the ammo slot. Right click: Power Shot (3×, 10 s).' });
 for (const [wood, tier, dps] of [['birch', 1, 3], ['pine', 2, 5]] as const) {
   const W2 = wood[0].toUpperCase() + wood.slice(1);
   add({ id: `${wood}_staff`, name: `${W2} staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'staff', dps, interval: 1.8, range: 2.6, twoHanded: true, sellValue: tier * 2, blurb: 'A clumsy club until the Imbuer in Bjørkvik makes it magical.' });
-  add({ id: `${wood}_fire_staff`, name: `${W2} fire staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'fireStaff', dps: tier === 1 ? 8 : 12, interval: 1.8, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Firebolts add a burn (stacks to 3). Right click: Ignite — every burning enemy nearby takes damage, +33/66/100% by stacks (12 s).' });
-  add({ id: `${wood}_frost_staff`, name: `${W2} frost staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'frostStaff', dps: tier === 1 ? 7 : 11, interval: 1.8, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Frostbolts slow by 25%. Right click: Frost Nova — freeze everything within 6 m for 2.5 s (15 s).' });
+  add({ id: `${wood}_fire_staff`, name: `${W2} fire staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'fireStaff', dps: tier === 1 ? 4.5 : 7, interval: 1.8, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Light firebolts that set a burn (stacks to 3, most of the damage is in the burn). Right click: Ignite — every burning enemy nearby takes 45% of a firebolt per burn stack (12 s).' });
+  add({ id: `${wood}_frost_staff`, name: `${W2} frost staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'frostStaff', dps: tier === 1 ? 7.5 : 12, interval: 2.6, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Slow, heavy frostbolts. Right click: Frost Nova — freeze everything within 6 m for 2.5 s (15 s).' });
 }
 
 // armour. Metal is smithed (stone uses shaped stone, iron uses bars); leather and cloth are sold for now.
