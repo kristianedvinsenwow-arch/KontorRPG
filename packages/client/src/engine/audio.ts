@@ -56,7 +56,8 @@ class Audio {
   setVolumes(v: { master: number; sfx: number; amb: number }): void { this.vols = v; this.applyVolumes(); }
   private applyVolumes(): void {
     if (!this.ctx) return;
-    this.master.gain.value = this.vols.master;
+    // Overall level: 60% of the original mix (it was too loud at the office).
+    this.master.gain.value = this.vols.master * 0.6;
     this.sfx.gain.value = this.vols.sfx;
     this.amb.gain.value = this.vols.amb;
   }
