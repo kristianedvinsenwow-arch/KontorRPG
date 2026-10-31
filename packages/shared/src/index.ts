@@ -13,3 +13,4 @@ export * from './mobs.js';
 export * from './combat.js';
 export * from './quests.js';
 export * from './player.js';
+export * from './houses.js';

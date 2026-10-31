@@ -24,8 +24,16 @@ export class Input {
   }
 
   get locked(): boolean { return document.pointerLockElement === this.canvas; }
-  lock(): void { if (!this.locked) this.canvas.requestPointerLock?.(); }
-  unlock(): void { if (this.locked) document.exitPointerLock(); }
+  /** When we last asked for or gave up the pointer lock (performance.now ms). */
+  lastLockChange = 0;
+  lock(): void {
+    if (this.locked) return;
+    this.lastLockChange = performance.now();
+    // Browsers refuse (or grant and then drop) a re-lock right after one was released; that's fine,
+    // the next click locks again. Swallow the rejection so it doesn't surface as an error.
+    try { const r = this.canvas.requestPointerLock?.() as unknown as Promise<void> | undefined; r?.catch?.(() => {}); } catch { /* ignored */ }
+  }
+  unlock(): void { if (this.locked) { this.lastLockChange = performance.now(); document.exitPointerLock(); } }
 
   onKey(f: (code: string, e: KeyboardEvent) => void): void { this.keyListeners.push(f); }
 

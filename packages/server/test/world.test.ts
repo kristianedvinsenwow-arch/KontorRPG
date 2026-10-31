@@ -187,7 +187,7 @@ test('bad tokens are rejected and a second login replaces the first', async () =
 
 // ------------------------------------------------------------------ gameplay systems
 import { ITEMS, NPC_BY_ID, STATION_BY_ID, VEIN_BY_ID, VEIN_TYPES, TREE_BY_ID, MOBS, INN, CAVE_ENTRANCE, CAVE_START, QUEST_BY_ID, countItem, xpForLevel, isFishable, LAKE, heightAt as h } from '@kontor/shared';
-import { PORTAL_BY_ID, regionAt, STATIONS, HOMES, innDoor, innRoomAt } from '@kontor/shared';
+import { PORTAL_BY_ID, regionAt, STATIONS, HOMES, innDoor, innRoomAt, homeAt } from '@kontor/shared';
 import { damageMob } from '../src/combat.js';
 
 function game(random: () => number = () => 0.5, store?: MemoryStore) {
@@ -566,14 +566,12 @@ test('world state survives a restart: depleted nodes, boss timers, ground items'
   assert.ok([...fresh.ground.values()].some((g) => g.item.id === 'stone' && g.item.qty === 3));
 });
 
-test('Gruben: the pass needs level 12, then takes you there and back', () => {
+test('Gruben: anyone can take the pass (low levels get a warning), and come back', () => {
   const { world, c, p, place, last } = game();
   const pass = PORTAL_BY_ID.get('gruben')!;
   place(pass.at.x, pass.at.z);
   world.handle(c, { t: 'travel', portal: 'gruben' });
-  assert.match(last('notice')!.text, /level 12/);
-  p.xp.combat = xpForLevel(12);
-  world.handle(c, { t: 'travel', portal: 'gruben' });
+  assert.match(last('notice')!.text, /Careful/);
   assert.equal(regionAt(p.state.x, p.state.z), 'gruben');
   const back = PORTAL_BY_ID.get('gruben_out')!;
   place(back.at.x, back.at.z);
@@ -617,7 +615,9 @@ test('housing: rent a cottage at its door, move your chest from the lodge, rest 
   assert.equal(gold - p.gold, cot.price);
   assert.equal(countItem(p.storage, 'stone'), 5, 'the chest moved too');
   assert.equal(world.rooms.filter(Boolean).length, 1, 'the lodge room was given up');
-  // Cottage chests hold more than lodge rooms.
+  // The cottage chest is inside, by the bed; cottage chests hold more than lodge rooms.
+  place(cot.chest.x, cot.chest.z);
+  assert.equal(homeAt(p.state.x, p.state.z), cot.id);
   for (let i = 0; i < 30; i++) { p.bag[0] = { id: 'iron_sword', qty: 1, r: 1 }; world.handle(c, { t: 'storage', op: 'put', index: 0, qty: 1 }); }
   assert.ok(p.storage.filter(Boolean).length > 24);
   world.handle(c, { t: 'rest' });

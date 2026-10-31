@@ -7,6 +7,7 @@ import { CHUNK_SIZE, SPIKE_CHUNKS, WATER_LEVEL } from './constants.js';
 import { heightAt, mulberry32, VILLAGE, LAKE, PIER, GRUBEN, GRUBEN_SPOTS, inGruben } from './terrain.js';
 import { CAVE, CAVE_ENTRANCE, CHUNK_RANGES, GRUBEN_PASS, caveClearance, caveFloor, caveRoomCentre, inBounds } from './cave.js';
 import { ARMOUR_PIECES, ITEMS, JEWELS } from './items.js';
+import { HOUSES, houseAt, toWorld, type HouseFrame } from './houses.js';
 import type { SkillId } from './skills.js';
 
 // ------------------------------------------------------------------ resource nodes
@@ -294,6 +295,19 @@ export function inInnRoom(n: number, x: number, z: number, margin = 0): boolean 
   const r = innRoom(n);
   return x > r.x0 - margin && x < r.x1 + margin && z > r.z0 - margin && z < r.z1 + margin;
 }
+/** Which home's inside (x, z) is in — a lodge room or a house — or -1. */
+export function homeAt(x: number, z: number): number {
+  const r = innRoomAt(x, z);
+  if (r >= 0) return r;
+  return houseAt(x, z)?.id ?? -1;
+}
+/** Where a home's door is (the opening in its wall), for collisions and the door model. */
+export function homeDoorway(id: number): { x: number; z: number } {
+  if (id < INN.rooms) { const d = innDoor(id); return { x: d.x, z: INN.z + INN.d / 2 }; }
+  const f = HOUSES.find((h) => h.id === id)!;
+  return toWorld(f, 0, -f.d / 2);
+}
+
 /** Which lodge room (x, z) is in, or -1. */
 export function innRoomAt(x: number, z: number): number {
   if (Math.abs(z - INN.z) > INN.d / 2 || Math.abs(x - INN.x) > INN.w / 2) return -1;
@@ -318,18 +332,15 @@ export interface Home {
 }
 export const STORAGE_MAX = 48;
 const ROOM_REST = { xp: 0.05, regen: 1 }, HOUSE_REST = { xp: 0.1, regen: 2 };
-function house(id: number, kind: HomeKind, name: string, x: number, z: number, faceX: number, faceZ: number, price: number, storage: number): Home {
-  const d = Math.hypot(faceX - x, faceZ - z), off = kind === 'hut' ? 1.9 : 2.3;
-  const door = { x: x + ((faceX - x) / d) * off, z: z + ((faceZ - z) / d) * off };
-  return { id, kind, name, door, chest: door, house: { x, z, faceX, faceZ }, price, storage, rest: HOUSE_REST };
+function houseHome(f: HouseFrame, price: number, storage: number): Home {
+  return {
+    id: f.id, kind: f.kind, name: f.name, door: toWorld(f, 0, -f.d / 2 - 0.6), chest: toWorld(f, f.chest.x, f.chest.z),
+    house: { x: f.x, z: f.z, faceX: f.x + Math.sin(f.ry + Math.PI), faceZ: f.z + Math.cos(f.ry + Math.PI) }, price, storage, rest: HOUSE_REST,
+  };
 }
 export const HOMES: Home[] = [
   ...Array.from({ length: INN.rooms }, (_, n): Home => ({ id: n, kind: 'room', name: `Room ${n + 1}`, door: innDoor(n), chest: innRoom(n).chest, price: INN.pricePerWeek, storage: 24, rest: ROOM_REST })),
-  house(8, 'cottage', 'Green cottage', V.x + 17, V.z - 4, V.x, V.z, 60, 48),
-  house(9, 'cottage', 'Brook cottage', V.x + 17, V.z + 12, V.x, V.z, 60, 48),
-  house(10, 'cottage', 'Lakeview cottage', V.x + 8, V.z + 17, V.x, V.z, 60, 48),
-  house(11, 'hut', 'East miners’ hut', G.x + 13, G.z + 59, G.x, G.z + 54, 40, 36),
-  house(12, 'hut', 'West miners’ hut', G.x - 12, G.z + 47, G.x, G.z + 54, 40, 36),
+  ...HOUSES.map((f) => (f.kind === 'cottage' ? houseHome(f, 60, 48) : houseHome(f, 40, 36))),
 ];
 /** Who rents which home, as the server sends it: one name (or null) per home. */
 export const homeLabel = (h: Home) => (h.kind === 'room' ? `Lodge room ${h.id + 1}` : h.name);

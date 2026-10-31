@@ -5,7 +5,7 @@
  * It never touches sockets: each player has a `send` function, so tests drive it without a network.
  */
 import {
-  AOI_CHUNKS, PORTAL_BY_ID, HOMES, homeLabel, innDoor, innRoomAt, type Home, CHUNK_SIZE, IMBUE, INN, ITEMS, MAX_CHAT_LEN, MAX_NAME_LEN,
+  AOI_CHUNKS, PORTAL_BY_ID, HOMES, homeAt, homeDoorway, homeLabel, type Home, CHUNK_SIZE, IMBUE, INN, ITEMS, MAX_CHAT_LEN, MAX_NAME_LEN,
   NPC_BY_ID, PLAYER_COLORS, PROTOCOL_VERSION, QUEST_BY_ID, RECIPE_BY_ID, START_GOLD, STATION_BY_ID, TICK_HZ, USE_RANGE,
   EAT_LOCK_MS, addStack, burnChance, knifeRepair, knifeUses, STATIONS, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
   questAvailable, r2, r3, recipeAt, removeItem, resizeBag, respecCost, rollCraftRarity, rollEffects, rollsRarity,
@@ -377,9 +377,9 @@ export class World {
       if (p.strikes > 40) p.client.close('too_many_invalid_moves');
       return;
     }
-    // Nobody walks into someone else's closed lodge room.
-    const room = innRoomAt(next.x, next.z);
-    if (room >= 0 && !this.doorsOpen.has(room) && !this.ownsRoom(p, room) && innRoomAt(p.lastValid.x, p.lastValid.z) !== room) {
+    // Nobody walks into someone else's closed home.
+    const room = homeAt(next.x, next.z);
+    if (room >= 0 && !this.doorsOpen.has(room) && !this.ownsRoom(p, room) && homeAt(p.lastValid.x, p.lastValid.z) !== room) {
       const lv = p.lastValid;
       p.client.send({ t: 'correct', seq: msg.seq, x: r2(lv.x), y: r2(lv.y), z: r2(lv.z), reason: 'locked' });
       return;
@@ -716,13 +716,12 @@ export class World {
 
   /** By your chest: inside your lodge room, or at a house's door. */
   private atHome(p: ServerPlayer, h: Home): boolean {
-    if (h.kind === 'room') return innRoomAt(p.state.x, p.state.z) === h.id;
-    return Math.hypot(p.state.x - h.chest.x, p.state.z - h.chest.z) <= 3.5;
+    return homeAt(p.state.x, p.state.z) === h.id;
   }
 
   /** Where you can rent a home: at its door (lodge rooms also from Hilde). */
   private canRent(p: ServerPlayer, h: Home): boolean {
-    if (Math.hypot(p.state.x - h.door.x, p.state.z - h.door.z) <= 3.5 || innRoomAt(p.state.x, p.state.z) === h.id) return true;
+    if (Math.hypot(p.state.x - h.door.x, p.state.z - h.door.z) <= 3.5 || homeAt(p.state.x, p.state.z) === h.id) return true;
     return h.kind === 'room' && this.near(p, NPC_BY_ID.get('hilde')!, 1);
   }
 
@@ -732,12 +731,12 @@ export class World {
     return !!r && r.until > this.now() && r.key === this.roomKey(p);
   }
 
-  /** Open or close your own room's door (only the tenant can). */
+  /** Open or close your own home's door (only the tenant can). */
   private toggleDoor(p: ServerPlayer, n: number): void {
-    if (HOMES[n]?.kind !== 'room') return;
+    if (!HOMES[n]) return;
     if (!this.ownsRoom(p, n)) return this.notice(p, 'It’s locked. Only the tenant has the key.', 'error');
-    const d = innDoor(n);
-    if (Math.hypot(p.state.x - d.x, p.state.z - d.z) > 3 && innRoomAt(p.state.x, p.state.z) !== n) return this.notice(p, 'Stand by the door.', 'error');
+    const d = homeDoorway(n);
+    if (Math.hypot(p.state.x - d.x, p.state.z - d.z) > 3 && homeAt(p.state.x, p.state.z) !== n) return this.notice(p, 'Stand by the door.', 'error');
     if (this.doorsOpen.has(n)) this.doorsOpen.delete(n); else this.doorsOpen.add(n);
     this.broadcast({ t: 'doors', open: [...this.doorsOpen] });
   }
@@ -788,14 +787,14 @@ export class World {
     const date = new Date(until).toLocaleDateString('en-GB', { timeZone: 'Europe/Oslo', day: 'numeric', month: 'short' });
     this.notice(p, target.kind === 'room'
       ? `Room ${target.id + 1} is yours until ${date}. Only you can open its door; your chest is at the foot of the bed, and resting in bed gives a Rested bonus.`
-      : `The ${homeLabel(target).toLowerCase()} is yours until ${date}. Your chest is by the door — rest there for a Rested bonus.`);
+      : `The ${homeLabel(target).toLowerCase()} is yours until ${date}. Only you can open its door; your chest and bed are inside.`);
   }
 
   /** Sleep at your own door: Rested (more XP, faster regen) for 30 minutes. */
   private rest(p: ServerPlayer): void {
     const h = this.home(p);
     if (!h) return this.notice(p, 'You need a home to rest in. Rent a room from Hilde, or a cottage or hut at its door.', 'error');
-    if (!this.atHome(p, h)) return this.notice(p, h.kind === 'room' ? `Your bed is in room ${h.id + 1} at the lodge.` : `Your bed is at the ${homeLabel(h).toLowerCase()}.`, 'error');
+    if (!this.atHome(p, h)) return this.notice(p, h.kind === 'room' ? `Your bed is in room ${h.id + 1} at the lodge.` : `Your bed is inside the ${homeLabel(h).toLowerCase()}.`, 'error');
     if (p.lastHurtAt > this.now() - EAT_LOCK_MS) return this.notice(p, 'You can’t rest mid-fight.', 'error');
     p.buffs = p.buffs.filter((b) => b.name !== 'Rested');
     p.buffs.push({ name: 'Rested', stats: { xp: h.rest.xp, regen: h.rest.regen }, until: this.now() + 30 * 60_000 });
@@ -809,7 +808,7 @@ export class World {
   private storageMove(p: ServerPlayer, op: 'put' | 'take', index: number, qty: number): void {
     const h = this.home(p);
     if (!h) return this.notice(p, 'Rent a home to use a storage chest.', 'error');
-    if (!this.atHome(p, h)) return this.notice(p, h.kind === 'room' ? `Your chest is in room ${h.id + 1} at the lodge, at the foot of the bed.` : `Your chest is at the ${homeLabel(h).toLowerCase()}.`, 'error');
+    if (!this.atHome(p, h)) return this.notice(p, h.kind === 'room' ? `Your chest is in room ${h.id + 1} at the lodge, at the foot of the bed.` : `Your chest is inside the ${homeLabel(h).toLowerCase()}, at the foot of the bed.`, 'error');
     const s = (op === 'put' ? p.bag : p.storage)[index];
     if (!s) return;
     const k = Math.min(qty, s.qty);
@@ -835,10 +834,10 @@ export class World {
     if (!portal) return;
     if (Math.hypot(p.state.x - portal.at.x, p.state.z - portal.at.z) > portal.at.r + 3) return this.notice(p, `Walk into ${portal.name.toLowerCase()}.`, 'error');
     const lvl = levelOf(p.xp, 'combat');
-    if (portal.level && lvl < portal.level) return this.notice(p, `The pass is deadly below level ${portal.level} (you’re ${lvl}). Train up first.`, 'error');
     this.teleport(p, portal.to.x, portal.to.z);
     if (id === 'cave') this.notice(p, 'The Old Mine. It’s cold, and something is breathing down here.');
     if (id === 'gruben') this.notice(p, 'Gruben. The old mine valley. Lights move in the bog, and the dead still work the row.');
+    if (portal.level && lvl < portal.level) this.notice(p, `Careful: the monsters here are level 13–22, and you’re level ${lvl}.`, 'error');
     p.job = null;
   }
 

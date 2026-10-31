@@ -5,6 +5,7 @@
  */
 import { heightAt, pierDeck, GRUBEN, inGruben } from './terrain.js';
 import { CHUNK_SIZE, WORLD_HALF } from './constants.js';
+import { houseFloor } from './houses.js';
 
 export const CAVE = { x: 0, z: 1000 };
 /** Overworld entrance (a rock arch in the north-eastern hills) and where you appear on leaving. */
@@ -58,8 +59,8 @@ export function caveFloor(x: number, z: number): number {
 /** Ground height anywhere: overworld terrain or cave floor. */
 export function groundAt(x: number, z: number): number {
   if (inCaveRegion(x, z)) return caveFloor(x, z);
-  const h = heightAt(x, z), deck = pierDeck(x, z);
-  return deck != null ? Math.max(h, deck) : h;
+  const h = heightAt(x, z), deck = pierDeck(x, z), floor = houseFloor(x, z);
+  return Math.max(h, deck ?? -Infinity, floor ?? -Infinity);
 }
 
 /** Can a player stand here? Overworld bounds or inside the cave. */
@@ -92,6 +93,7 @@ export const regionAt = (x: number, z: number): Region => (inCaveRegion(x, z) ? 
  * Walk-in portals between regions: step into `at` and you appear at `to`.
  * The Gruben pass is in the eastern mountains past the wolf pack.
  */
+/** `level` is only a recommendation (shown as a warning); anyone can walk through. */
 export interface Portal { id: string; name: string; at: { x: number; z: number; r: number }; to: { x: number; z: number }; level?: number }
 export const GRUBEN_PASS = { x: 99, z: 49.5, r: 2.6 };
 export const PORTALS: Portal[] = [

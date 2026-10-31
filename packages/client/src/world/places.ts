@@ -5,7 +5,7 @@
  * checks the same spots.
  */
 import * as THREE from 'three';
-import { CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, HOMES, INN, innRoom, innRoomAt, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
+import { CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
 import { mat, bx, mesh, canvasTex } from '../engine/procgen.js';
 import { makeCharacter, animateCharacter, type Character } from '../entities/character.js';
 import { applyGear } from '../entities/held.js';
@@ -41,7 +41,7 @@ export class Places {
   private npcs: { c: Character; n: Npc; g: THREE.Group }[] = [];
   private t = 0;
   private doorTags: HTMLElement[] = [];
-  private roomDoors: { hinge: THREE.Group; open: boolean; angle: number; col: Collider; home: { x: number; z: number } }[] = [];
+  private roomDoors: { hinge: THREE.Group; open: boolean; angle: number; col: Collider; home: { x: number; z: number }; outward?: boolean }[] = [];
 
   constructor(scene: THREE.Scene) {
     scene.add(this.group);
@@ -57,8 +57,8 @@ export class Places {
     this.signpost(24, 26, [['North Scree', 30, 94], ['Wolf pack ⚠', 66, 33], ['Camp', 0, 0]]);
     this.signpost(-38, 22, [['Goblin camp ⚠', -62, -60], ['Bjørkvik', VILLAGE.x, VILLAGE.z]]);
     this.caveMouth();
-    this.signpost(86, 40, [['Gruben pass ⚠ 12+', GRUBEN_PASS.x, GRUBEN_PASS.z], ['Wolf pack ⚠', 66, 33], ['Camp', 0, 0]]);
-    this.passGate(GRUBEN_PASS.x, GRUBEN_PASS.z, 70, 34, 'Pass to Gruben', 'Walk through · levels 12–22 · the Mine King');
+    this.signpost(86, 40, [['Gruben pass ⚠', GRUBEN_PASS.x, GRUBEN_PASS.z], ['Wolf pack ⚠', 66, 33], ['Camp', 0, 0]]);
+    this.passGate(GRUBEN_PASS.x, GRUBEN_PASS.z, 70, 34, 'Pass to Gruben', 'Walk through · monsters level 13–22 · the Mine King');
     this.gruben();
   }
 
@@ -305,7 +305,7 @@ export class Places {
 
   /** Lodge room doors: which stand open (from the server). */
   setDoors(open: number[]): void {
-    this.roomDoors.forEach((d, n) => (d.open = open.includes(n)));
+    this.roomDoors.forEach((d, n) => { if (d) d.open = open.includes(n); });
   }
 
   /**
@@ -313,9 +313,10 @@ export class Places {
    * someone who's inside a room that isn't theirs (they can always get out).
    */
   updateDoors(dt: number, meX: number, meZ: number, myRoom: number | null): void {
-    const inside = innRoomAt(meX, meZ);
+    const inside = homeAt(meX, meZ);
     this.roomDoors.forEach((d, n) => {
-      const want = d.open ? -1.45 : 0;
+      if (!d) return;
+      const want = d.open ? (d.outward ? 1.45 : -1.45) : 0;
       d.angle += (want - d.angle) * Math.min(1, dt * 6);
       d.hinge.rotation.y = d.angle;
       const blocks = !d.open && !(inside === n && myRoom !== n);
@@ -344,29 +345,84 @@ export class Places {
     addLabel(el, () => new THREE.Vector3(h.door.x, heightAt(h.door.x, h.door.z) + y, h.door.z), 16);
   }
 
-  /** A rentable cottage (turf roof) or miners' hut (stone and planks), door towards its yard. */
+  /**
+   * A rentable cottage (plank walls, turf roof) or miners' hut (stone and planks). Inside: a bed
+   * against the back wall, the chest at its foot, a hearth, and (cottages) a table with stools.
+   * The door works like the lodge rooms': only the tenant opens it.
+   */
   private house(h: Home): void {
-    const { x, z, faceX, faceZ } = h.house!;
-    const hut = h.kind === 'hut';
-    const [w, d] = hut ? [3.4, 2.8] : [4.2, 3.4];
-    const g = this.place(x, z, faceX, faceZ, [w, d]);
-    const ry = g.rotation.y;
-    if (hut) {
-      bx(g, w, 0.9, d, M.stone, 0, 0.45, 0);
-      bx(g, w, 1.3, d, M.plank, 0, 1.55, 0);
-      for (const sz of [-1, 1]) bx(g, w + 0.4, 0.14, d * 0.66, M.roof, 0, 2.55, sz * d * 0.26, sz * 0.5, 0, 0);
-      mesh(new THREE.CylinderGeometry(0.16, 0.2, 1.4, 7).translate(w * 0.32, 3.0, d * 0.2), M.dark, g);
-    } else {
-      bx(g, w, 2.2, d, M.plank, 0, 1.1, 0);
-      for (const sz of [-1, 1]) bx(g, w + 0.4, 0.16, 2.2, M.turf, 0, 2.65, sz * 0.9, sz * 0.6, 0, 0);
-      bx(g, 0.6, 0.5, 0.06, mat(0xe8d8a8, null, { r: 0.3 }), 1.3, 1.3, -d / 2 - 0.02);
+    const f = HOUSES.find((x) => x.id === h.id)!;
+    const hut = f.kind === 'hut', { w, d, doorW } = f;
+    const H = hut ? 2.2 : 2.4, T = 0.16;
+    const g = new THREE.Group();
+    g.position.set(f.x, f.floor, f.z); g.rotation.y = f.ry;
+    this.group.add(g);
+    // Plinth down to the lowest ground under the footprint.
+    let lo = f.floor;
+    for (const lx of [-w / 2, 0, w / 2]) for (const lz of [-d / 2, 0, d / 2]) { const p = toWorld(f, lx, lz); lo = Math.min(lo, heightAt(p.x, p.z)); }
+    if (f.floor - lo > 0.04) bx(g, w + 0.5, f.floor - lo + 0.3, d + 0.5, M.stone, 0, -(f.floor - lo + 0.3) / 2 + 0.02, 0);
+    const wallM = hut ? M.plank : M.plank;
+    bx(g, w, 0.08, d, M.darkWood, 0, 0.04, 0);
+    // Walls: back, sides, and the front around the doorway.
+    const wall = (x: number, z: number, ww: number, dd: number, y0 = 0, hh = H) => {
+      if (hut && y0 < 0.9) { const sh = Math.min(hh, 0.9 - y0); bx(g, ww, sh, dd, M.stone, x, y0 + sh / 2, z); if (hh > sh) bx(g, ww, hh - sh, dd, wallM, x, y0 + sh + (hh - sh) / 2, z); }
+      else bx(g, ww, hh, dd, wallM, x, y0 + hh / 2, z);
+    };
+    wall(0, d / 2, w + T, T);
+    for (const sx of [-1, 1]) wall(sx * w / 2, 0, T, d + T);
+    const side = (w - doorW) / 2;
+    for (const sx of [-1, 1]) wall(sx * (doorW / 2 + side / 2), -d / 2, side + T / 2, T);
+    wall(0, -d / 2, doorW, T, 2.05, H - 2.05);
+    // Window on the right-hand wall.
+    bx(g, 0.06, 0.6, 0.8, mat(0xe8d8a8, null, { r: 0.3 }), w / 2 + 0.05, 1.45, -0.3);
+    bx(g, 0.06, 0.6, 0.8, mat(0xe8d8a8, null, { r: 0.3 }), w / 2 - 0.05, 1.45, -0.3);
+    // Ceiling and roof.
+    bx(g, w, 0.06, d, M.darkWood, 0, H + 0.03, 0);
+    for (const sx of [-1, 1]) bx(g, w * 0.62, 0.16, d + 0.6, hut ? M.roof : M.turf, sx * w * 0.24, H + 0.55, 0, 0, 0, -sx * 0.55);
+    // Gable ends: stacked boards, narrowing to the ridge.
+    for (const sz of [-1, 1]) for (let i = 0; i < 4; i++) bx(g, w * (1 - i * 0.24), 0.22, 0.06, M.wood, 0, H + 0.12 + i * 0.22, sz * (d / 2 + T / 2));
+    // Door on a hinge.
+    const hinge = new THREE.Group(); hinge.position.set(-doorW / 2, 0, -d / 2); g.add(hinge);
+    bx(hinge, doorW, 2.0, 0.07, M.darkWood, doorW / 2, 1.02, 0);
+    for (const hy of [0.4, 1.6]) bx(hinge, doorW * 0.9, 0.07, 0.09, M.iron, doorW / 2, hy, 0);
+    const knob = mesh(new THREE.SphereGeometry(0.04, 6, 4), M.iron, hinge); knob.position.set(doorW - 0.14, 1.0, -0.06);
+    const dw = toWorld(f, 0, -d / 2);
+    const col: Collider = { x: dw.x, z: dw.z, r: 0.5 };
+    this.colliders.push(col);
+    this.roomDoors[h.id] = { hinge, open: false, angle: 0, col, home: { x: dw.x, z: dw.z }, outward: true };
+    // Furniture.
+    const linen = mat(0xe8e2d4, 'cloth', { r: 0.95 });
+    const bed = new THREE.Group(); bed.position.set(f.bed.x, 0.08, f.bed.z); bed.rotation.y = Math.PI; g.add(bed);
+    bx(bed, 1.0, 0.3, 2.0, M.darkWood, 0, 0.25, 0);
+    bx(bed, 0.92, 0.16, 1.9, linen, 0, 0.48, 0);
+    bx(bed, 0.94, 0.06, 1.3, mat(hut ? 0x6a5a3a : 0x7a3a32, 'cloth', { r: 1 }), 0, 0.58, 0.3);
+    bx(bed, 0.6, 0.12, 0.32, linen, 0, 0.62, -0.75);
+    bx(bed, 1.0, 0.75, 0.08, M.darkWood, 0, 0.45, -1.0);
+    const ch = new THREE.Group(); ch.position.set(f.chest.x, 0.08, f.chest.z); g.add(ch);
+    if (hut) ch.rotation.y = Math.PI / 2;
+    bx(ch, 0.8, 0.42, 0.46, M.wood, 0, 0.21, 0);
+    bx(ch, 0.84, 0.08, 0.5, M.iron, 0, 0.44, 0);
+    // Hearth with a fire, and a chimney through the roof.
+    const he = new THREE.Group(); he.position.set(f.hearth.x, 0.08, f.hearth.z); g.add(he);
+    bx(he, 0.9, 0.9, 0.7, M.stone, 0, 0.45, 0.1);
+    const fm = new THREE.MeshStandardMaterial({ color: 0x1a0a04, emissive: 0xff6a1a, emissiveIntensity: 2.2, roughness: 1 });
+    this.fires.push({ light: new THREE.PointLight(0, 0), mats: [fm], base: 1 });
+    const fl = mesh(new THREE.PlaneGeometry(0.45, 0.3), fm, he, false); fl.position.set(0, 0.3, -0.26); fl.rotation.y = Math.PI;
+    bx(he, 0.4, H + 1.2, 0.4, M.dark, 0.1, (H + 1.2) / 2 + 0.6, 0.2);
+    if (f.table) {
+      const t = new THREE.Group(); t.position.set(f.table.x, 0.08, f.table.z); g.add(t);
+      bx(t, 1.1, 0.07, 0.7, M.plank, 0, 0.75, 0);
+      for (const [px, pz] of [[-0.45, -0.28], [0.45, -0.28], [-0.45, 0.28], [0.45, 0.28]]) bx(t, 0.07, 0.72, 0.07, M.darkWood, px, 0.36, pz);
+      for (const sx of [-1, 1]) { const st = mesh(new THREE.CylinderGeometry(0.17, 0.17, 0.45, 10).translate(0, 0.225, 0), M.wood, t); st.position.set(sx * 0.8, 0, 0); }
+      const mug = mesh(new THREE.CylinderGeometry(0.05, 0.045, 0.1, 8), M.iron, t); mug.position.set(0.2, 0.84, 0.1);
+      const p = toWorld(f, f.table.x, f.table.z); this.colliders.push({ x: p.x, z: p.z, r: 0.5 });
     }
-    bx(g, 0.8, 1.6, 0.08, M.darkWood, 0, 0.8, -d / 2 - 0.02);
-    // Chest by the door.
-    bx(g, 0.55, 0.38, 0.38, M.wood, -1.1, 0.19, -d / 2 - 0.45);
-    bx(g, 0.58, 0.06, 0.4, M.iron, -1.1, 0.4, -d / 2 - 0.45);
-    for (const dx of [-w / 2 + 0.6, 0, w / 2 - 0.6]) for (const dz of [-d / 2 + 0.6, 0, d / 2 - 0.6]) this.colliders.push({ x: x + dx * Math.cos(ry) + dz * Math.sin(ry), z: z - dx * Math.sin(ry) + dz * Math.cos(ry), r: 0.95 });
-    this.doorTag(h, hut ? 2.6 : 2.9);
+    // Colliders: walls (leaving the doorway), furniture.
+    const push = (lx: number, lz: number, r: number) => { const p = toWorld(f, lx, lz); this.colliders.push({ x: p.x, z: p.z, r }); };
+    for (let lx = -w / 2; lx <= w / 2 + 1e-6; lx += 0.35) { push(lx, d / 2, 0.18); if (Math.abs(lx) > doorW / 2 + 0.15) push(lx, -d / 2, 0.18); }
+    for (let lz = -d / 2; lz <= d / 2 + 1e-6; lz += 0.35) for (const sx of [-1, 1]) push(sx * w / 2, lz, 0.18);
+    push(f.bed.x, f.bed.z + 0.45, 0.5); push(f.bed.x, f.bed.z - 0.5, 0.5); push(f.chest.x, f.chest.z, 0.42); push(f.hearth.x, f.hearth.z, 0.5);
+    this.doorTag(h, H + 1.2);
   }
 
   /** A couple of turf-roofed cottages and a well around the green. */
@@ -490,7 +546,7 @@ export class Places {
       this.colliders.push({ x: sx, z: sz, r: 2.2 });
     }
     tag('The pit', 'The Mine King · level 22 boss', 'place', new THREE.Vector3(px, heightAt(px, pz) + 8.4, pz), 60);
-    tag('Gruben', 'Old mine valley · levels 12–22', 'place', new THREE.Vector3(cx, heightAt(cx, cz) + 5, cz - 14), 50);
+    tag('Gruben', 'Old mine valley · monsters level 13–22', 'place', new THREE.Vector3(cx, heightAt(cx, cz) + 5, cz - 14), 50);
   }
 
   /** A signpost with boards pointing at places. */

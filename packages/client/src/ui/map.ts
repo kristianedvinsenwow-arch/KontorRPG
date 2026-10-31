@@ -90,7 +90,7 @@ export function drawMap(): HTMLElement {
       mark(VILLAGE.x, VILLAGE.z, 'Bjørkvik', '#f2a23a', 7);
       for (const s of MINING_SPOTS) mark(s.x, s.z, `⛏ ${s.name}`, '#b0b4bc');
       mark(CAVE_ENTRANCE.x, CAVE_ENTRANCE.z, 'The Old Mine (lv 5–12)', '#b77be8', 6);
-      mark(GRUBEN_PASS.x, GRUBEN_PASS.z, 'Pass to Gruben (lv 12+)', '#b77be8', 6);
+      mark(GRUBEN_PASS.x, GRUBEN_PASS.z, 'Pass to Gruben (monsters lv 13–22)', '#b77be8', 6);
     } else {
       const S = GRUBEN_SPOTS;
       mark(GRUBEN.x + S.arrival.x, GRUBEN.z + S.arrival.z, 'Gruben camp', '#f2a23a', 7);

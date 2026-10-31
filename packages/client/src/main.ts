@@ -6,7 +6,7 @@
 import './styles.css';
 import * as THREE from 'three';
 import {
-  CAST_RANGE, HOMES, PORTALS, regionAt, innDoor, innRoom, innRoomAt, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS,
+  CAST_RANGE, HOMES, HOUSES, PORTALS, regionAt, homeAt, homeDoorway, innRoom, toWorld, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS,
   STATIONS, TREE_BY_ID, TREE_TYPES, USE_RANGE, VEIN_BY_ID, VEIN_TYPES, WATER_LEVEL,
   MOBS, groundAt, attackInterval, attackRange, computeStats, faceOf, inCaveRegion, isFishable, levelFromXp, r2, r3, swingSeconds, weaponClass,
   type CharacterBuild, type HoldSlot, type MobState, type PlayerStats, type Tree, type Vein,
@@ -127,9 +127,19 @@ renderer.domElement.addEventListener('mousedown', (e) => {
   if (e.button === 2 && input.locked && uiStore.get().panel === 'none') special();
 });
 
+/**
+ * Pause only when the player let go of the mouse themselves (Escape). Closing a menu re-locks the
+ * mouse, and browsers sometimes refuse or immediately drop that re-lock — that must not pause the
+ * game; a click on the world picks the mouse back up.
+ */
 document.addEventListener('pointerlockchange', () => {
   const u = uiStore.get();
-  if (!input.locked && u.panel === 'none' && !u.chatOpen && !u.bossKey && me && !gameStore.get().dead) uiStore.set({ panel: 'pause' });
+  if (input.locked || u.panel !== 'none' || u.chatOpen || u.bossKey || !me || gameStore.get().dead) return;
+  if (performance.now() - input.lastLockChange < 1500) { hud.toast('Click to look around', 1600); return; }
+  uiStore.set({ panel: 'pause' });
+});
+document.addEventListener('pointerlockerror', () => {
+  if (uiStore.get().panel === 'none' && me) hud.toast('Click to look around', 1600);
 });
 
 input.onKey((code) => {
@@ -305,10 +315,10 @@ let aimed: Aim = null;
 let nextSwingAt = 0, swingUntil = 0, nextAttackAt = 0, spinT = 0, travelAt = 0;
 const fwd = new THREE.Vector3();
 
-/** The lodge room you rent right now, if any. */
+/** The home (lodge room, cottage or hut) you rent right now, if any. */
 function myRoom(): number | null {
   const l = gameStore.get().lease;
-  return l.room != null && l.room < 8 && (l.until ?? 0) > Date.now() ? l.room : null;
+  return l.room != null && (l.until ?? 0) > Date.now() ? l.room : null;
 }
 
 function use() {
@@ -393,20 +403,16 @@ function interact(now: number, playing: boolean) {
     // Homes. Lodge rooms: the door (open/close or rent), and inside your room the chest and bed.
     // Cottages and huts: the door.
     for (const h of HOMES) {
-      if (h.kind === 'room') {
-        const d = innDoor(h.id);
-        const td = look(d.x, d.z - 0.2, 0.55, 0, 2.2);
-        if (td < best) { best = td; near = { kind: 'door', id: h.id, name: `room ${h.id + 1}` }; }
-        if (innRoomAt(me.x, me.z) !== h.id) continue;
-        const r = innRoom(h.id);
-        const tc = look(r.chest.x, r.chest.z, 0.45, -0.3, 0.7);
-        if (tc < best) { best = tc; near = { kind: 'home', id: h.id, name: 'chest' }; }
-        const tb = look(r.bed.x, r.bed.z, 0.6, -0.3, 0.8);
-        if (tb < best) { best = tb; near = { kind: 'bed', id: h.id, name: 'bed' }; }
-      } else {
-        const t = look(h.door.x, h.door.z, 0.6, 0, 2.2);
-        if (t < best) { best = t; near = { kind: 'home', id: h.id, name: h.name.toLowerCase() }; }
-      }
+      const d = homeDoorway(h.id);
+      const td = look(d.x, d.z, 0.55, 0, 2.2);
+      if (td < best) { best = td; near = { kind: 'door', id: h.id, name: h.kind === 'room' ? `room ${h.id + 1}` : `the ${h.name.toLowerCase()}` }; }
+      if (homeAt(me.x, me.z) !== h.id) continue;
+      const f = h.kind === 'room' ? innRoom(h.id) : null, hf = HOUSES.find((x) => x.id === h.id);
+      const chest = f ? f.chest : h.chest, bed = f ? f.bed : toWorld(hf!, hf!.bed.x, hf!.bed.z);
+      const tc = look(chest.x, chest.z, 0.45, -0.3, 0.7);
+      if (tc < best) { best = tc; near = { kind: 'home', id: h.id, name: 'chest' }; }
+      const tb = look(bed.x, bed.z, 0.6, -0.3, 0.8);
+      if (tb < best) { best = tb; near = { kind: 'bed', id: h.id, name: 'bed' }; }
     }
   }
   // Portals (the mine, the Gruben pass): walk in.
