@@ -43,6 +43,8 @@ export interface CharacterStore extends AccountStore {
   load(userId: string): Promise<StoredCharacter | null>;
   create(c: StoredCharacter): Promise<void>;
   save(userId: string, p: Progress): Promise<void>;
+  /** Delete the character (reset / reroll). The account stays. */
+  remove(userId: string): Promise<void>;
   /** Every current inn lease (so rooms rented by offline players stay taken). */
   leases(): Promise<{ userId: string; name: string; lease: Lease }[]>;
   /** Shared world state (depleted nodes, respawn timers, ground items), kept across restarts. */
@@ -188,6 +190,11 @@ export class SupabaseStore implements CharacterStore {
     if (!r.ok) throw new Error(`save character: ${r.status} ${await r.text()}`);
   }
 
+  async remove(userId: string): Promise<void> {
+    const r = await fetch(`${this.url}/rest/v1/characters?user_id=eq.${encodeURIComponent(userId)}`, { method: 'DELETE', headers: this.headers({ Prefer: 'return=minimal' }) });
+    if (!r.ok) throw new Error(`delete character: ${r.status} ${await r.text()}`);
+  }
+
   async leases() {
     const r = await fetch(`${this.url}/rest/v1/characters?lease=not.is.null&select=user_id,name,lease`, { headers: this.headers() });
     if (!r.ok) throw new Error(`load leases: ${r.status} ${await r.text()}`);
@@ -229,6 +236,7 @@ export class MemoryStore implements CharacterStore {
   async load(userId: string) { const r = this.rows.get(userId); return r ? cleanCharacter(structuredClone(r)) : null; }
   async create(c: StoredCharacter) { this.rows.set(c.userId, structuredClone(c)); }
   async save(userId: string, p: Progress) { const r = this.rows.get(userId); if (r) Object.assign(r, structuredClone(p)); }
+  async remove(userId: string) { this.rows.delete(userId); }
   world: WorldSnapshot | null = null;
   async loadWorld() { return this.world ? cleanSnapshot(structuredClone(this.world)) : null; }
   async saveWorld(s: WorldSnapshot) { this.world = structuredClone(s); }

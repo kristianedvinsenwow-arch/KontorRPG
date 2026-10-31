@@ -15,6 +15,7 @@ export function initAccount(auth: Auth): void {
   box.hidden = false;
   let mode: 'login' | 'create' = auth.remembered ? 'login' : 'create';
   let msg = '';
+  let resetting = false;
 
   function render() {
     box.replaceChildren(el('div', 'lbl', 'Account'));
@@ -76,7 +77,7 @@ export function initAccount(auth: Auth): void {
     setEnterBlocked(null);
     const who = el('p', 'note', `Logged in as ${auth.username}. `);
     const out = el('button', 'linkbtn', 'Log out');
-    out.onclick = () => { auth.signOut(); mode = 'login'; };
+    out.onclick = () => { resetting = false; auth.signOut(); mode = 'login'; };
     who.append(out);
     box.append(who);
     const saved = auth.character;
@@ -84,6 +85,34 @@ export function initAccount(auth: Auth): void {
       settingsStore.set({ name: saved.name, color: saved.color, build: saved.build });
       setCreatorLocked({ name: saved.name });
       box.append(el('p', 'note welcome', `Welcome back, ${saved.name}. Your progress is saved to your account.`));
+      if (!resetting) {
+        const r = el('button', 'linkbtn', 'Reset character…');
+        r.onclick = () => { resetting = true; msg = ''; render(); };
+        const p = el('p', 'note'); p.append(r);
+        box.append(p);
+      } else {
+        box.append(el('p', 'note bad', `This deletes ${saved.name} for good: levels, items, gold, home and achievements. Your username stays, and you make a new character below. Enter your PIN to confirm.`));
+        const row = el('div', 'loginrow');
+        const pin = el('input'); pin.type = 'password'; pin.inputMode = 'numeric'; pin.maxLength = 6; pin.placeholder = 'PIN'; pin.autocomplete = 'current-password';
+        pin.oninput = () => { pin.value = pin.value.replace(/\D/g, '').slice(0, 6); };
+        const go = el('button', 'btn danger', 'Delete & start over');
+        const cancel = el('button', 'linkbtn', 'Cancel');
+        cancel.onclick = () => { resetting = false; msg = ''; render(); };
+        go.onclick = async () => {
+          if (!/^\d{4,6}$/.test(pin.value)) { msg = 'Your PIN is 4 to 6 digits.'; return render(); }
+          go.disabled = true;
+          const e = await auth.resetCharacter(pin.value);
+          go.disabled = false;
+          msg = e ?? '';
+          if (!e) resetting = false;
+          render();
+        };
+        pin.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') go.click(); });
+        row.append(pin, go);
+        box.append(row, el('p', 'note bad', msg));
+        const c = el('p', 'note'); c.append(cancel); box.append(c);
+        setTimeout(() => pin.focus(), 0);
+      }
     } else {
       setCreatorLocked(null);
       box.append(el('p', 'note', 'No character yet — the one you create below is saved to your account when you enter the world.'));

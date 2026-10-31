@@ -59,6 +59,7 @@ const server = createServer((req, res) => {
     return;
   }
   if (path === '/api/login' && req.method === 'POST') { void login(req, res); return; }
+  if (path === '/api/reset' && req.method === 'POST') { void reset(req, res); return; }
   if (statics(req, res)) return;
   res.writeHead(404, { 'content-type': 'text/plain' });
   res.end('Not found');
@@ -81,6 +82,28 @@ async function login(req: import('node:http').IncomingMessage, res: import('node
     reply(200, { token: r.token, username: r.username, character: c ? { name: c.name, color: c.color, build: c.build } : null });
   } catch (e) {
     log('login failed', e);
+    reply(500, { error: 'Something went wrong. Try again.' });
+  }
+}
+
+/** POST /api/reset {token, user, pin}: delete your character (after the PIN again) so you can make a new one. */
+async function reset(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse): Promise<void> {
+  const reply = (code: number, body: unknown) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
+  if (!accounts || !store) return reply(404, { error: 'Accounts are off on this server.' });
+  let raw = '';
+  for await (const chunk of req) { raw += chunk; if (raw.length > 2000) return reply(413, { error: 'Too long.' }); }
+  let b: { token?: unknown; user?: unknown; pin?: unknown };
+  try { b = JSON.parse(raw); } catch { return reply(400, { error: 'Bad request.' }); }
+  const ip = String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '').split(',')[0].trim();
+  try {
+    const r = await accounts.confirm(String(b.token ?? ''), String(b.user ?? ''), String(b.pin ?? ''), ip);
+    if ('error' in r) return reply(r.error.startsWith('Too many') ? 429 : 400, r);
+    world.forget(r.accountId);
+    await store.remove(r.accountId);
+    log(`character reset for ${String(b.user)}`);
+    reply(200, { ok: true });
+  } catch (e) {
+    log('reset failed', e);
     reply(500, { error: 'Something went wrong. Try again.' });
   }
 }

@@ -809,3 +809,25 @@ test('accounts: username + PIN, hashed; wrong PINs lock the name; tokens log int
   await world.handle(c, { t: 'hello', name: 'Kari', color: 0, proto: PROTOCOL_VERSION, build: defaultBuild(), token });
   assert.ok(c.inbox.some((m) => m.t === 'welcome'));
 });
+
+test('reset: PIN confirmed only for the token’s own account; character removed and home freed', async () => {
+  const { Accounts } = await import('../src/accounts.js');
+  const { MemoryStore } = await import('../src/persistence.js');
+  const store = new MemoryStore();
+  const acc = new Accounts(store, 'secret');
+  const a = await acc.login('Kari', '1234', true, 'ip');
+  const b = await acc.login('Ola', '5678', true, 'ip');
+  if ('error' in a || 'error' in b) throw new Error('create failed');
+  assert.deepEqual(await acc.confirm(a.token, 'Kari', '1234', 'ip'), { accountId: a.accountId });
+  assert.deepEqual(await acc.confirm(a.token, 'Kari', '0000', 'ip'), { error: 'Wrong PIN.' });
+  assert.deepEqual(await acc.confirm(a.token, 'Ola', '5678', 'ip'), { error: 'Wrong PIN.' });
+  assert.ok('error' in (await acc.confirm('junk', 'Kari', '1234', 'ip')));
+
+  const w = new World({ build: 'test', store });
+  w.rooms[2] = { key: a.accountId, name: 'Kari', until: Date.now() + 1e9 };
+  await store.create({ userId: a.accountId, name: 'Kari' } as any);
+  w.forget(a.accountId);
+  await store.remove(a.accountId);
+  assert.equal(w.rooms[2], null);
+  assert.equal(await store.load(a.accountId), null);
+});

@@ -119,6 +119,21 @@ export class World {
     }
   }
 
+  /** A character was deleted (reset): drop it from the world without saving, and free its home. */
+  forget(userId: string): void {
+    for (const [id, p] of this.players) {
+      if (p.userId !== userId) continue;
+      p.userId = null; // so the disconnect below doesn't write it back
+      p.client.send({ t: 'system', text: 'Character reset.' });
+      p.client.close('reset');
+      this.disconnect(p.client);
+      void id;
+    }
+    let freed = false;
+    for (let i = 0; i < this.rooms.length; i++) if (this.rooms[i]?.key === userId) { this.rooms[i] = null; freed = true; }
+    if (freed) this.broadcast({ t: 'rooms', taken: this.roomNames() });
+  }
+
   /** Returns a promise only for hello with a store; everything else is synchronous. */
   handle(client: Client, msg: ClientMsg): void | Promise<void> {
     if (msg.t === 'ping') return client.send({ t: 'pong', at: msg.at });

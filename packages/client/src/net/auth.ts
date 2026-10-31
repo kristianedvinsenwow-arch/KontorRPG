@@ -55,6 +55,21 @@ export class Auth {
     }
   }
 
+  /** Delete your character (PIN asked again). Returns an error message, or null. */
+  async resetCharacter(pin: string): Promise<string | null> {
+    if (!this.tokenValue || !this.username) return 'Log in first.';
+    try {
+      const r = await fetch('/api/reset', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token: this.tokenValue, user: this.username, pin }) });
+      const b = await r.json();
+      if (!r.ok || !b.ok) return b.error ?? 'Reset failed.';
+      this.character = null;
+      this.emit();
+      return null;
+    } catch {
+      return 'Can’t reach the server.';
+    }
+  }
+
   signOut(): void {
     this.tokenValue = undefined;
     this.username = null;

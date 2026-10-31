@@ -75,6 +75,15 @@ export class Accounts {
     map.set(key, f);
   }
 
+  /** Check the PIN again for a logged-in account (before something destructive, like a reset). */
+  async confirm(token: string, username: string, pin: string, ip: string): Promise<{ accountId: string } | { error: string }> {
+    const id = this.verify(token);
+    if (!id) return { error: 'Your login ran out. Log in again.' };
+    const r = await this.login(username, pin, false, ip);
+    if ('error' in r) return r;
+    return r.accountId === id ? { accountId: id } : { error: 'Wrong PIN.' };
+  }
+
   /** Log in (or create the account first). Returns a token and the account id, or an error for the player. */
   async login(username: string, pin: string, create: boolean, ip: string): Promise<{ token: string; accountId: string; username: string } | { error: string }> {
     username = username.trim();

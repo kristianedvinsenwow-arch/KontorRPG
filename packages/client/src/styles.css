@@ -157,6 +157,7 @@ select:focus { border-color: var(--amber); outline: none; }
 .loginrow input { background: rgba(255, 255, 255, .045); border: 1px solid var(--line); color: var(--fg); font: 14px var(--mono); padding: 9px 11px; border-radius: var(--r); }
 .loginrow input:focus { border-color: var(--amber); outline: none; }
 .linkbtn { background: none; border: 0; padding: 0; color: var(--amber); text-decoration: underline; font: inherit; }
+.btn.danger { background: var(--red); color: #fff; }
 .note.welcome { color: var(--fg); }
 .creator.locked #races, .creator.locked #swatches, .creator.locked #attrs, .creator.locked #majors, .creator.locked #minors { pointer-events: none; opacity: .55; }
 
