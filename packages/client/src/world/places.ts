@@ -5,13 +5,15 @@
  * checks the same spots.
  */
 import * as THREE from 'three';
-import { CAVE_ENTRANCE, INN, NPCS, PIER, STATIONS, VILLAGE, heightAt, innDoor, type Npc, type Station } from '@kontor/shared';
+import { CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, HOMES, INN, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, innDoor, type Home, type Npc, type Station } from '@kontor/shared';
 import { mat, bx, mesh, canvasTex } from '../engine/procgen.js';
 import { makeCharacter, animateCharacter, type Character } from '../entities/character.js';
 import { applyGear } from '../entities/held.js';
 import { addLabel } from '../engine/labels.js';
 import { rockGeo } from './props.js';
 import type { Collider } from './props.js';
+
+const GRUBEN_CAMP = { x: GRUBEN.x + GRUBEN_SPOTS.arrival.x, z: GRUBEN.z + GRUBEN_SPOTS.arrival.z };
 
 const M = {
   stone: mat(0x7d7a73, 'rock'),
@@ -54,6 +56,9 @@ export class Places {
     this.signpost(24, 26, [['North Scree', 30, 94], ['Wolf pack ⚠', 66, 33], ['Camp', 0, 0]]);
     this.signpost(-38, 22, [['Goblin camp ⚠', -62, -60], ['Bjørkvik', VILLAGE.x, VILLAGE.z]]);
     this.caveMouth();
+    this.signpost(86, 40, [['Gruben pass ⚠ 12+', GRUBEN_PASS.x, GRUBEN_PASS.z], ['Wolf pack ⚠', 66, 33], ['Camp', 0, 0]]);
+    this.passGate(GRUBEN_PASS.x, GRUBEN_PASS.z, 70, 34, 'Pass to Gruben', 'Walk through · levels 12–22 · the Mine King');
+    this.gruben();
   }
 
   /**
@@ -88,7 +93,7 @@ export class Places {
   }
 
   private station(s: Station): void {
-    const centre = s.id.startsWith('camp') ? { x: 0, z: 0 } : VILLAGE;
+    const centre = s.id.startsWith('camp') ? { x: 0, z: 0 } : s.id.startsWith('gruben') ? GRUBEN_CAMP : VILLAGE;
     const foot: Record<string, [number, number]> = { furnace: [2.2, 2.2], anvil: [1.2, 1.2], workbench: [2, 1], stove: [1.4, 1], tanning: [2.2, 1] };
     const g = this.place(s.x, s.z, centre.x, centre.z, foot[s.kind]);
     let h = 1.6;
@@ -169,12 +174,13 @@ export class Places {
     const c = makeCharacter(n.color, undefined, n.race, n.face);
     const g = this.place(n.x, n.z, n.id === 'ingrid' ? 0 : n.x + (n.x > VILLAGE.x - 20 && n.z > 20 ? VILLAGE.x - n.x : -n.x) * 0.1, n.z + 1);
     // Face towards the middle of camp / the village green.
-    const centre = Math.hypot(n.x, n.z) < 30 ? { x: 0, z: 0 } : { x: VILLAGE.x, z: VILLAGE.z };
+    const centre = n.x > 600 ? GRUBEN_CAMP : Math.hypot(n.x, n.z) < 30 ? { x: 0, z: 0 } : { x: VILLAGE.x, z: VILLAGE.z };
     g.rotation.y = Math.atan2(n.x - centre.x, n.z - centre.z);
     g.add(c.g);
     const look: Record<string, Parameters<typeof applyGear>[1]> = {
       ingrid: { b: 'leather_backpack' }, mats: { h: 'iron_pickaxe', hd: 'stone_helm' }, sigrid: { h: 'iron_sword', c: 'iron_breastplate' },
       halvard: { h: 'pine_longbow', c: 'leather_breastplate' }, tor: { h: 'iron_hatchet' }, frida: { h: 'pine_rod' }, ragna: { h: 'birch_frost_staff' },
+      johan: { h: 'steel_pickaxe', hd: 'iron_helm', c: 'leather_breastplate' },
     };
     applyGear(c, look[n.id] ?? {});
     this.npcs.push({ c, n, g });
@@ -236,10 +242,7 @@ export class Places {
       plate.position.set(lx, 2.6, lz + 0.09);
       // Storage chest beside the door.
       bx(g, 0.5, 0.35, 0.35, M.wood, lx + 0.75, 0.6, lz + 0.35);
-      const el = document.createElement('div');
-      el.className = 'tag door';
-      this.doorTags.push(el);
-      addLabel(el, () => new THREE.Vector3(d.x, heightAt(d.x, d.z) + 2.9, d.z), 14);
+      this.doorTag(HOMES[n], 2.9);
     }
     // Lodge sign.
     const sign = canvasTex((c, s) => { c.fillStyle = '#5a3d24'; c.fillRect(0, 0, s, s / 3); c.fillStyle = '#f0e2c0'; c.font = `700 ${s * 0.15}px "Saira Condensed", sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('BJØRKVIK LODGE', s / 2, s / 6); }, 256);
@@ -255,24 +258,52 @@ export class Places {
   /** Names on the room doors (from the server's room list). */
   setRooms(names: (string | null)[]): void {
     this.doorTags.forEach((el, i) => {
-      el.textContent = names[i] ? `Room ${i + 1} · ${names[i]}` : `Room ${i + 1} · free`;
+      const h = HOMES[i];
+      if (!h) return;
+      const label = h.kind === 'room' ? `Room ${i + 1}` : h.name;
+      el.textContent = names[i] ? `${label} · ${names[i]}` : `${label} · free · ${h.price} g/wk`;
       el.classList.toggle('free', !names[i]);
     });
   }
 
+  /** A door tag for a home (filled in by setRooms). */
+  private doorTag(h: Home, y: number): void {
+    const el = document.createElement('div');
+    el.className = 'tag door free';
+    el.textContent = h.kind === 'room' ? `Room ${h.id + 1}` : h.name;
+    this.doorTags[h.id] = el;
+    addLabel(el, () => new THREE.Vector3(h.door.x, heightAt(h.door.x, h.door.z) + y, h.door.z), 16);
+  }
+
+  /** A rentable cottage (turf roof) or miners' hut (stone and planks), door towards its yard. */
+  private house(h: Home): void {
+    const { x, z, faceX, faceZ } = h.house!;
+    const hut = h.kind === 'hut';
+    const [w, d] = hut ? [3.4, 2.8] : [4.2, 3.4];
+    const g = this.place(x, z, faceX, faceZ, [w, d]);
+    const ry = g.rotation.y;
+    if (hut) {
+      bx(g, w, 0.9, d, M.stone, 0, 0.45, 0);
+      bx(g, w, 1.3, d, M.plank, 0, 1.55, 0);
+      for (const sz of [-1, 1]) bx(g, w + 0.4, 0.14, d * 0.66, M.roof, 0, 2.55, sz * d * 0.26, sz * 0.5, 0, 0);
+      mesh(new THREE.CylinderGeometry(0.16, 0.2, 1.4, 7).translate(w * 0.32, 3.0, d * 0.2), M.dark, g);
+    } else {
+      bx(g, w, 2.2, d, M.plank, 0, 1.1, 0);
+      for (const sz of [-1, 1]) bx(g, w + 0.4, 0.16, 2.2, M.turf, 0, 2.65, sz * 0.9, sz * 0.6, 0, 0);
+      bx(g, 0.6, 0.5, 0.06, mat(0xe8d8a8, null, { r: 0.3 }), 1.3, 1.3, -d / 2 - 0.02);
+    }
+    bx(g, 0.8, 1.6, 0.08, M.darkWood, 0, 0.8, -d / 2 - 0.02);
+    // Chest by the door.
+    bx(g, 0.55, 0.38, 0.38, M.wood, -1.1, 0.19, -d / 2 - 0.45);
+    bx(g, 0.58, 0.06, 0.4, M.iron, -1.1, 0.4, -d / 2 - 0.45);
+    for (const dx of [-w / 2 + 0.6, 0, w / 2 - 0.6]) for (const dz of [-d / 2 + 0.6, 0, d / 2 - 0.6]) this.colliders.push({ x: x + dx * Math.cos(ry) + dz * Math.sin(ry), z: z - dx * Math.sin(ry) + dz * Math.cos(ry), r: 0.95 });
+    this.doorTag(h, hut ? 2.6 : 2.9);
+  }
+
   /** A couple of turf-roofed cottages and a well around the green. */
   private village(): void {
-    // Cottages on the flat east side of the green, doors facing the middle.
-    const spots = [[VILLAGE.x + 17, VILLAGE.z - 4], [VILLAGE.x + 17, VILLAGE.z + 12], [VILLAGE.x + 8, VILLAGE.z + 17]];
-    for (const [x, z] of spots) {
-      const g = this.place(x, z, VILLAGE.x, VILLAGE.z, [4.2, 3.4]);
-      const ry = g.rotation.y;
-      bx(g, 4.2, 2.2, 3.4, M.plank, 0, 1.1, 0);
-      for (const sz of [-1, 1]) bx(g, 4.6, 0.16, 2.2, M.turf, 0, 2.65, sz * 0.9, sz * 0.6, 0, 0);
-      bx(g, 0.8, 1.6, 0.08, M.darkWood, 0, 0.8, -1.72);
-      bx(g, 0.6, 0.5, 0.06, mat(0xe8d8a8, null, { r: 0.3 }), 1.3, 1.3, -1.72);
-      for (const dx of [-1.6, 0, 1.6]) for (const dz of [-1.2, 0, 1.2]) this.colliders.push({ x: x + dx * Math.cos(ry) + dz * Math.sin(ry), z: z - dx * Math.sin(ry) + dz * Math.cos(ry), r: 1 });
-    }
+    // Rentable cottages on the flat east side of the green, doors facing the middle.
+    for (const h of HOMES) if (h.kind === 'cottage') this.house(h);
     const wx = VILLAGE.x + 4, wz = VILLAGE.z + 3;
     const well = this.place(wx, wz, VILLAGE.x, VILLAGE.z, [1.6, 1.6]);
     mesh(new THREE.CylinderGeometry(0.7, 0.75, 0.8, 12, 1, true).translate(0, 0.4, 0), M.stone, well);
@@ -329,6 +360,68 @@ export class Places {
         this.colliders.push({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2, r: 0.3 });
       }
     }
+  }
+
+  /** A stone gate with a lantern: where you walk through to another region. */
+  private passGate(x: number, z: number, faceX: number, faceZ: number, name: string, sub: string): void {
+    const g = this.place(x, z, faceX, faceZ);
+    const rock = mat(0x6d6a63, null);
+    for (const sx of [-1, 1]) {
+      const p = mesh(rockGeo(70 + sx, 0.8), rock, g); p.scale.set(1.1, 2.6, 1.1); p.position.set(sx * 1.7, 1.6, 0);
+      bx(g, 0.3, 3.2, 0.3, M.darkWood, sx * 1.15, 1.6, -0.3);
+    }
+    bx(g, 2.8, 0.3, 0.34, M.darkWood, 0, 3.2, -0.3);
+    for (let i = 0; i < 5; i++) { const c = mesh(rockGeo(80 + i, 0.5), rock, g); c.scale.setScalar(0.35); c.position.set(-0.6 + i * 0.3, 3.45 + (i % 2) * 0.12, -0.3); }
+    const lamp = new THREE.PointLight(0xffb060, 3, 8, 2); lamp.position.set(1.4, 2.6, -0.8); g.add(lamp);
+    this.fires.push({ light: lamp, mats: [], base: 3 });
+    const glow = mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshStandardMaterial({ color: 0xffd080, emissive: 0xffa040, emissiveIntensity: 2 }), g, false);
+    glow.position.copy(lamp.position);
+    tag(name, sub, 'place', new THREE.Vector3(x, heightAt(x, z) + 4.2, z), 40);
+    for (const sx of [-1, 1]) this.colliders.push({ x: x + sx * 1.7 * Math.cos(g.rotation.y), z: z - sx * 1.7 * Math.sin(g.rotation.y), r: 1.1 });
+  }
+
+  /** Gruben: the arrival camp (tent, huts, forge), the way back, the dead miners' row and the pit. */
+  private gruben(): void {
+    const G = GRUBEN, cx = GRUBEN_CAMP.x, cz = GRUBEN_CAMP.z;
+    for (const h of HOMES) if (h.kind === 'hut') this.house(h);
+    const back = PORTAL_BY_ID.get('gruben_out')!.at;
+    this.passGate(back.x, back.z, back.x, back.z - 5, 'Back to the valley', 'Walk through to the pass');
+    // Johan's tent.
+    const t = this.place(cx - 2, cz - 10, cx, cz, [3, 3]);
+    const canvas = new THREE.MeshStandardMaterial({ color: 0xb8a684, roughness: 1, side: THREE.DoubleSide });
+    const tent = mesh(new THREE.ConeGeometry(2, 2.4, 4, 1, true).translate(0, 1.2, 0), canvas, t); tent.rotation.y = Math.PI / 4;
+    this.colliders.push({ x: cx - 2, z: cz - 10, r: 1.4 });
+    this.signpost(cx + 3, cz - 4, [['Dead miners’ row ⚠', G.x + GRUBEN_SPOTS.village.x, G.z + GRUBEN_SPOTS.village.z], ['The pit ⚠ Boss', G.x + GRUBEN_SPOTS.pit.x, G.z + GRUBEN_SPOTS.pit.z], ['Lantern bog ⚠', G.x - 42, G.z - 46], ['Lynx slopes', G.x - 46, G.z + 30]]);
+    // Dead miners' row: roofless, broken houses.
+    const vx = G.x + GRUBEN_SPOTS.village.x, vz = G.z + GRUBEN_SPOTS.village.z;
+    for (let i = 0; i < 5; i++) {
+      const a = (i / 5) * Math.PI * 2 + 0.4, hx = vx + Math.cos(a) * 9, hz = vz + Math.sin(a) * 9;
+      const g = this.place(hx, hz, vx, vz, [3.6, 3]);
+      for (const [sx, sz, w, dd] of [[0, -1.5, 3.6, 0.3], [0, 1.5, 3.6, 0.3], [-1.8, 0, 0.3, 3], [1.8, 0, 0.3, 3]] as const) {
+        const hgt = 0.6 + ((i * 7 + sx * 3 + sz * 5) % 3 + 3) % 3 * 0.55;
+        bx(g, w, hgt, dd, M.dark, sx, hgt / 2, sz);
+      }
+      const beam = bx(g, 0.18, 0.18, 3.4, M.darkWood, 0.4, 1.4, 0, 0.3, 0, 0.5); void beam;
+      this.colliders.push({ x: hx, z: hz, r: 1.8 });
+    }
+    // The pit: a timber headframe over the old shaft, slag heaps around.
+    const px = G.x + GRUBEN_SPOTS.pit.x, pz = G.z + GRUBEN_SPOTS.pit.z - 13;
+    const hf = this.place(px, pz, px, pz + 10, [4, 4]);
+    for (const [sx, sz] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]]) {
+      const leg = bx(hf, 0.3, 7, 0.3, M.darkWood, sx * 0.8, 3.5, sz * 0.8, sz * -0.08, 0, sx * 0.08); void leg;
+    }
+    bx(hf, 3, 0.3, 0.3, M.darkWood, 0, 6.9, 0);
+    const wheel = mesh(new THREE.TorusGeometry(1, 0.08, 6, 18), M.iron, hf); wheel.position.set(0, 7.4, 0);
+    const shaft = mesh(new THREE.CircleGeometry(1.4, 16), new THREE.MeshBasicMaterial({ color: 0x050403 }), hf, false); shaft.rotation.x = -Math.PI / 2; shaft.position.y = 0.05;
+    this.colliders.push({ x: px, z: pz, r: 2.2 });
+    for (let i = 0; i < 6; i++) {
+      const a = i * 1.1 + 0.3, sx = G.x + GRUBEN_SPOTS.pit.x + Math.cos(a) * 19, sz = G.z + GRUBEN_SPOTS.pit.z + Math.sin(a) * 19;
+      const heap = mesh(new THREE.ConeGeometry(2.4 + (i % 3), 2 + (i % 2), 7), mat(0x3a3836, 'rock', { r: 1 }), this.group);
+      heap.position.set(sx, heightAt(sx, sz) + 0.8, sz);
+      this.colliders.push({ x: sx, z: sz, r: 2.2 });
+    }
+    tag('The pit', 'The Mine King · level 22 boss', 'place', new THREE.Vector3(px, heightAt(px, pz) + 8.4, pz), 60);
+    tag('Gruben', 'Old mine valley · levels 12–22', 'place', new THREE.Vector3(cx, heightAt(cx, cz) + 5, cz - 14), 50);
   }
 
   /** A signpost with boards pointing at places. */

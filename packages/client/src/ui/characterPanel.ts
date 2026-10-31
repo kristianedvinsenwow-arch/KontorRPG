@@ -15,7 +15,9 @@ export class CharacterPreview {
   private cam = new THREE.PerspectiveCamera(30, 1, 0.1, 20);
   private model: Character | null = null;
   private key = '';
-  private yaw = 0.5;
+  private yaw = 0;
+  /** When the player last let go after dragging; the model turns back to face you a moment later. */
+  private releasedAt = 0;
   private dragging = false;
   private readonly el: HTMLElement;
 
@@ -36,7 +38,8 @@ export class CharacterPreview {
     this.scene.add(post);
 
     this.el.addEventListener('pointerdown', (e) => { this.dragging = true; this.el.setPointerCapture(e.pointerId); });
-    this.el.addEventListener('pointerup', () => (this.dragging = false));
+    this.el.addEventListener('pointerup', () => { this.dragging = false; this.releasedAt = performance.now(); });
+    this.el.addEventListener('pointercancel', () => { this.dragging = false; this.releasedAt = performance.now(); });
     this.el.addEventListener('pointermove', (e) => { if (this.dragging) this.yaw += e.movementX * 0.012; });
   }
 
@@ -85,7 +88,11 @@ export class CharacterPreview {
     if (r.width < 2 || r.height < 2) return;
     const zoomed = performance.now() < this.zoomUntil;
     this.zoom += ((zoomed ? 1 : 0) - this.zoom) * Math.min(1, dt * 5);
-    if (!this.dragging) this.yaw = zoomed ? this.yaw + (Math.round(this.yaw / (Math.PI * 2)) * Math.PI * 2 - this.yaw) * Math.min(1, dt * 4) : this.yaw + dt * 0.35;
+    // Face the viewer. Dragging turns the model; let go and it eases back after a moment.
+    if (!this.dragging && (zoomed || performance.now() - this.releasedAt > 1500)) {
+      const home = Math.round(this.yaw / (Math.PI * 2)) * Math.PI * 2;
+      this.yaw += (home - this.yaw) * Math.min(1, dt * 4);
+    }
     this.model.g.rotation.y = this.yaw;
     animateCharacter(this.model, this.speed, 0, this.swinging, dt);
     this.cam.aspect = r.width / r.height;

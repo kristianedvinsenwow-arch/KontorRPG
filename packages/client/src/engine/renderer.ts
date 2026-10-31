@@ -41,6 +41,8 @@ export interface Gfx {
   renderWorld(): void;
   /** Cave lighting: no sky, dark fog, dim fill light. */
   setUnderground(on: boolean): void;
+  /** Outdoor mood per region: Gruben is greyer, colder and mistier. */
+  setRegion(r: 'valley' | 'cave' | 'gruben'): void;
 }
 
 /** Low northern sun from the south-west: long shadows, warm light. */
@@ -167,6 +169,19 @@ export function createGfx(container: HTMLElement, quality: Quality): Gfx {
       sun.intensity = on ? 0.15 : 3.0;
       hemi.intensity = on ? 0.35 : 0.45;
       hemi.color.setHex(on ? 0x6a7a90 : 0xcfe0ee);
+    },
+    setRegion(r) {
+      if ((gfx as any)._region === r) return;
+      (gfx as any)._region = r;
+      if (r === 'cave') return;
+      const grim = r === 'gruben';
+      const fog = scene.fog as THREE.Fog;
+      fog.color.setHex(grim ? 0x9aa3a8 : FOG); fog.near = grim ? 40 : 80; fog.far = grim ? 170 : 260;
+      sun.intensity = grim ? 2.1 : 3.0;
+      sun.color.setHex(grim ? 0xdfe4ea : 0xfff0d8);
+      hemi.intensity = grim ? 0.55 : 0.45;
+      grade.uniforms.saturation.value = grim ? 0.82 : 1.08;
+      grade.uniforms.warmth.value = grim ? -0.01 : 0.025;
     },
     setQuality(q) {
       gfx.quality = q;

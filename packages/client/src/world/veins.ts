@@ -23,16 +23,19 @@ const ROCK_MATS = {
   stone: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.88 }),
   iron: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.82 }),
   silver: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 }),
+  coal: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 }),
 };
 const ORE_MATS = {
   stone: new THREE.MeshStandardMaterial({ color: 0xf4efe6, emissive: 0x2a2620, roughness: 0.25, metalness: 0.1, flatShading: true }),
   iron: new THREE.MeshStandardMaterial({ color: 0xa4572c, roughness: 0.45, metalness: 0.7, flatShading: true }),
   silver: new THREE.MeshStandardMaterial({ color: 0xe8eef6, emissive: 0x303844, roughness: 0.2, metalness: 1, flatShading: true }),
+  coal: new THREE.MeshStandardMaterial({ color: 0x15151a, roughness: 0.35, metalness: 0.3, flatShading: true }),
 };
 const RUBBLE_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.95 });
 
 function rockFor(v: Vein, seed: number): THREE.BufferGeometry {
   const g = new THREE.IcosahedronGeometry(0.9, 1).scale(1.15, 0.78, 1);
+  if (v.type === 'coal') return faceted(g, seed, 0.42, new THREE.Color(0x3a3734), new THREE.Color(0x5e5a54), -0.6, 0.6, new THREE.Color(0x4a5232));
   return v.type === 'iron'
     ? faceted(g, seed, 0.42, new THREE.Color(0x4a403a), new THREE.Color(0x7a6a5e), -0.6, 0.6, new THREE.Color(0x5d6a3a))
     : faceted(g, seed, 0.42, new THREE.Color(0x4f4d49), new THREE.Color(0x77736b), -0.6, 0.6, new THREE.Color(0x56683a));

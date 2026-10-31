@@ -37,26 +37,75 @@ function swapSkin(root: THREE.Object3D, from: number, to: THREE.Material) {
   });
 }
 
+const quad = (k: MobKind) => k === 'wolf' || k === 'lynx';
+const OGRES: MobKind[] = ['troll', 'hill_troll'];
+const isOgre = (k: MobKind) => OGRES.includes(k);
+const isUndead = (k: MobKind) => k === 'draug' || k === 'mine_king';
+
 function humanoid(kind: MobKind): { g: THREE.Group; c: Character } {
-  const race = kind === 'troll' ? 'ogre' : 'gnome';
-  const color = kind === 'cave_shaman' ? 4 : kind === 'troll' ? 7 : kind === 'cave_goblin' ? 0 : 3;
-  const c = makeCharacter(color, undefined, race, kind === 'troll' ? 3 : 1);
-  const skin = kind === 'troll' ? mat(0x7d8790, null, { r: 0.8 }) : mat(kind === 'cave_goblin' ? 0x5f7a48 : 0x7a9a4a, null, { r: 0.6 });
+  const race = isOgre(kind) ? 'ogre' : isUndead(kind) ? 'human' : 'gnome';
+  const color = kind === 'cave_shaman' ? 4 : kind === 'troll' ? 7 : kind === 'hill_troll' ? 3 : kind === 'cave_goblin' ? 0 : isUndead(kind) ? 7 : 3;
+  const c = makeCharacter(color, undefined, race, isOgre(kind) ? 3 : 1);
+  const skinHex = kind === 'troll' ? 0x7d8790 : kind === 'hill_troll' ? 0x8a7a62 : isUndead(kind) ? 0x8fa3a8 : kind === 'cave_goblin' ? 0x5f7a48 : 0x7a9a4a;
+  const skin = mat(skinHex, null, { r: 0.7 });
   swapSkin(c.g, race === 'ogre' ? 0x9fa478 : 0xd1a582, skin);
   // Goblin ears.
-  if (kind !== 'troll') for (const sx of [-1, 1]) {
+  if (race === 'gnome') for (const sx of [-1, 1]) {
     const ear = mesh(new THREE.ConeGeometry(0.035, 0.16, 5), skin, c.head);
     ear.position.set(sx * 0.12, 0.03, 0.01); ear.rotation.z = -sx * 1.2;
   }
-  applyGear(c, kind === 'troll' ? { h: 'stone_battleaxe' } : kind === 'cave_shaman' ? { h: 'birch_fire_staff' } : { h: kind === 'cave_goblin' ? 'iron_sword' : 'stone_sword', hd: kind === 'cave_goblin' ? 'stone_helm' : undefined });
+  // The dead have cold, glowing eyes.
+  if (isUndead(kind)) for (const sx of [-1, 1]) {
+    const eye = ball(c.head, v3(sx * 0.05, 0.03, -0.13), 0.02, new THREE.MeshStandardMaterial({ color: 0x9fe8ff, emissive: 0x6fd8ff, emissiveIntensity: 3 }), 6);
+    void eye;
+  }
+  if (kind === 'mine_king') {
+    // A rusted crown.
+    const gold = new THREE.MeshStandardMaterial({ color: 0xb08a3a, metalness: 0.9, roughness: 0.45 });
+    const crown = mesh(new THREE.CylinderGeometry(0.13, 0.12, 0.07, 10, 1, true), gold, c.head); crown.position.y = 0.16;
+    for (let i = 0; i < 6; i++) { const sp = mesh(new THREE.ConeGeometry(0.025, 0.08, 4), gold, c.head); const a = (i / 6) * Math.PI * 2; sp.position.set(Math.cos(a) * 0.125, 0.23, Math.sin(a) * 0.125); }
+  }
+  const gear: Record<string, Parameters<typeof applyGear>[1]> = {
+    troll: { h: 'stone_battleaxe' }, hill_troll: { h: 'stone_longsword' }, cave_shaman: { h: 'birch_fire_staff' },
+    cave_goblin: { h: 'iron_sword', hd: 'stone_helm' }, goblin: { h: 'stone_sword' },
+    draug: { h: 'iron_pickaxe', hd: 'iron_helm', c: 'stone_breastplate' },
+    mine_king: { h: 'silversteel_longsword', c: 'steel_breastplate', s: 'steel_pauldrons' },
+  };
+  applyGear(c, gear[kind] ?? {});
   const g = new THREE.Group();
   g.add(c.g);
   return { g, c };
 }
 
-function wolf(): { g: THREE.Group; legs: THREE.Object3D[] } {
+function lynx(): { g: THREE.Group; legs: THREE.Object3D[] } {
+  const { g, legs } = wolf(0xa8875a, 0x5a4630);
+  // Spots, short tail, tufted ears.
+  const spot = mat(0x4a3826, null);
+  for (let i = 0; i < 10; i++) ball(g, v3(((i * 37) % 7 - 3) * 0.05, 0.72 + (i % 3) * 0.04, -0.3 + i * 0.07), 0.035, spot, 5);
+  const tail = g.children.find((o) => (o as THREE.Mesh).geometry instanceof THREE.ConeGeometry && o.position.z > 0.5);
+  if (tail) tail.scale.set(0.8, 0.35, 0.8);
+  return { g, legs };
+}
+
+function wisp(): { g: THREE.Group; wings: THREE.Object3D[] } {
   const g = new THREE.Group();
-  const fur = mat(0x7a756c, 'cloth', { r: 1 }), dark = mat(0x4a4640, 'cloth', { r: 1 }), nose = mat(0x1a1816, null);
+  const core = new THREE.MeshStandardMaterial({ color: 0xd8f4ff, emissive: 0x8fdcff, emissiveIntensity: 3, roughness: 0.2 });
+  const halo = new THREE.MeshBasicMaterial({ color: 0x8fdcff, transparent: true, opacity: 0.25, depthWrite: false });
+  ball(g, v3(), 0.14, core, 10);
+  const h = new THREE.Mesh(new THREE.SphereGeometry(0.34, 12, 8), halo); g.add(h);
+  // Two little motes that circle it (animated like wings).
+  const wings: THREE.Object3D[] = [];
+  for (const sx of [-1, 1]) {
+    const w = new THREE.Group(); g.add(w);
+    const m = ball(w, v3(sx * 0.3, 0.05, 0), 0.04, core, 6); void m;
+    wings.push(w);
+  }
+  return { g, wings };
+}
+
+function wolf(furHex = 0x7a756c, darkHex = 0x4a4640): { g: THREE.Group; legs: THREE.Object3D[] } {
+  const g = new THREE.Group();
+  const fur = mat(furHex, 'cloth', { r: 1 }), dark = mat(darkHex, 'cloth', { r: 1 }), nose = mat(0x1a1816, null);
   const body = ball(g, v3(0, 0.62, 0), 0.28, fur, 12); body.scale.set(0.8, 0.85, 1.9);
   const chest = ball(g, v3(0, 0.66, -0.35), 0.25, fur, 10); chest.scale.set(0.9, 1, 1);
   const head = new THREE.Group(); head.position.set(0, 0.85, -0.62); g.add(head);
@@ -125,9 +174,11 @@ export class Mobs {
     g.add(body);
     let legs: THREE.Object3D[] = [], wings: THREE.Object3D[] = [], char: Character | undefined;
     if (s.k === 'wolf') { const w = wolf(); body.add(w.g); legs = w.legs; }
+    else if (s.k === 'lynx') { const w = lynx(); body.add(w.g); legs = w.legs; }
     else if (s.k === 'bat') { const b = bat(); body.add(b.g); wings = b.wings; }
+    else if (s.k === 'wisp') { const b = wisp(); body.add(b.g); wings = b.wings; }
     else { const h = humanoid(s.k); body.add(h.g); char = h.c; }
-    body.scale.setScalar(s.k === 'troll' ? def.scale / 1.16 : def.scale);
+    body.scale.setScalar(isOgre(s.k) ? def.scale / 1.16 : def.scale);
     g.position.set(s.x, s.y, s.z);
     g.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; } });
     // Status looks are applied with a per-mob material tint.
@@ -149,10 +200,10 @@ export class Mobs {
     const fill = document.createElement('i'); bar.append(fill);
     const status = document.createElement('div'); status.className = 'status';
     el.append(nm, lv, bar, status);
-    const height = (s.k === 'troll' ? 2.2 * def.scale / 1.16 : s.k === 'wolf' ? 1.1 : s.k === 'bat' ? 0.6 : 1.0 * def.scale) + 0.4;
+    const height = (isOgre(s.k) ? 2.2 * def.scale / 1.16 : quad(s.k) ? 1.1 : def.flying ? 0.6 : isUndead(s.k) ? 1.85 * def.scale : 1.0 * def.scale) + 0.4;
     const view: MobView = {
       id: s.id, kind: s.k, g, body, char, legs, wings, target: { x: s.x, y: s.y, z: s.z, yaw: s.yaw }, s, speed: 0, ph: Math.random() * 6, deadT: 0,
-      label: addLabel(el, () => (g.visible ? new THREE.Vector3(g.position.x, g.position.y + height + (s.k === 'bat' ? 1.5 : 0), g.position.z) : null), 34),
+      label: addLabel(el, () => (g.visible ? new THREE.Vector3(g.position.x, g.position.y + height + (def.flying ? 1.5 : 0), g.position.z) : null), def.boss ? 50 : 34),
       hpFill: fill, statusEl: status, atkT: 0, tintMats,
     };
     this.views.set(s.id, view);
@@ -174,7 +225,8 @@ export class Mobs {
       const px = g.position.x, pz = g.position.z;
       g.position.x += (v.target.x - g.position.x) * k;
       g.position.z += (v.target.z - g.position.z) * k;
-      const gy = v.kind === 'bat' ? groundAt(g.position.x, g.position.z) + 1.5 + Math.sin(v.ph * 2) * 0.15 : v.target.y;
+      const fly = MOBS[v.kind].flying;
+      const gy = fly ? groundAt(g.position.x, g.position.z) + 1.5 + Math.sin(v.ph * (v.kind === 'wisp' ? 0.3 : 2)) * (v.kind === 'wisp' ? 0.4 : 0.15) : v.target.y;
       g.position.y += (gy - g.position.y) * k;
       let dy = v.target.yaw - g.rotation.y;
       dy = Math.atan2(Math.sin(dy), Math.cos(dy));
@@ -182,17 +234,19 @@ export class Mobs {
       const sp = Math.hypot(g.position.x - px, g.position.z - pz) / Math.max(dt, 1e-3);
       v.speed += (sp - v.speed) * Math.min(1, dt * 6);
       const frozen = !!(s.st & ST_FROZEN);
-      v.ph += dt * (frozen ? 0 : 1) * (v.kind === 'bat' ? 14 : v.speed * 2.4);
+      v.ph += dt * (frozen ? 0 : 1) * (v.kind === 'bat' ? 14 : v.kind === 'wisp' ? 5 : v.speed * 2.4);
       if (s.act) v.atkT = Math.min(1, v.atkT + dt * 3); else v.atkT = Math.max(0, v.atkT - dt * 4);
       // Animation per kind.
       if (v.char) animateCharacter(v.char, frozen ? 0 : v.speed, 0, !!s.act && !frozen, frozen ? 0 : dt);
       v.legs.forEach((l, i) => (l.rotation.x = Math.sin(v.ph + (i % 2 ? Math.PI : 0) + (i > 1 ? Math.PI / 2 : 0)) * Math.min(0.7, v.speed * 0.15)));
-      if (v.kind === 'wolf') v.body.rotation.x = -v.atkT * 0.35;
-      v.wings.forEach((w, i) => (w.rotation.z = (i ? -1 : 1) * Math.sin(v.ph) * 0.8));
+      if (quad(v.kind)) v.body.rotation.x = -v.atkT * 0.35;
+      if (v.kind === 'wisp') v.wings.forEach((w, i) => (w.rotation.y = v.ph + i * Math.PI));
+      else v.wings.forEach((w, i) => (w.rotation.z = (i ? -1 : 1) * Math.sin(v.ph) * 0.8));
       if (dead) {
         v.deadT += dt;
-        v.body.rotation.z = Math.min(Math.PI / 2, v.deadT * 4) * (v.kind === 'bat' ? 0 : 1);
-        if (v.kind === 'bat') g.position.y = Math.max(groundAt(g.position.x, g.position.z) + 0.1, g.position.y - dt * 4);
+        v.body.rotation.z = Math.min(Math.PI / 2, v.deadT * 4) * (fly ? 0 : 1);
+        if (v.kind === 'wisp') v.body.scale.setScalar(Math.max(0.01, 1 - v.deadT * 2));
+        if (fly) g.position.y = Math.max(groundAt(g.position.x, g.position.z) + 0.1, g.position.y - dt * 4);
         // Skinnable bodies stay until skinned or until the server lets them go (30 s).
         if (v.deadT > 3 && !s.sk) g.visible = false;
         else if (s.sk) g.visible = true;
@@ -221,8 +275,8 @@ export class Mobs {
       const dead = !!(v.s.st & ST_DEAD);
       if (corpses ? !(dead && v.s.sk) : dead) continue;
       const def = MOBS[v.kind];
-      const r = (v.kind === 'troll' ? 1.0 : v.kind === 'bat' ? 0.38 : v.kind === 'wolf' ? 0.5 : 0.42 * def.scale) * (1 + slack) + (corpses ? 0.25 : 0);
-      const h = corpses ? 0.25 : v.kind === 'troll' ? 1.6 : v.kind === 'bat' ? 0 : v.kind === 'wolf' ? 0.6 : 0.55 * def.scale;
+      const r = (isOgre(v.kind) ? 0.45 * def.scale : def.flying ? 0.38 : quad(v.kind) ? 0.5 * def.scale : isUndead(v.kind) ? 0.4 * def.scale : 0.42 * def.scale) * (1 + slack) + (corpses ? 0.25 : 0);
+      const h = corpses ? 0.25 : isOgre(v.kind) ? 0.7 * def.scale : def.flying ? 0 : quad(v.kind) ? 0.6 : isUndead(v.kind) ? 0.95 * def.scale : 0.55 * def.scale;
       c.set(v.g.position.x, v.g.position.y + h, v.g.position.z).sub(origin);
       const t = c.dot(dir);
       if (t < 0 || t > reach + r + 0.5) continue;
@@ -235,7 +289,8 @@ export class Mobs {
 
   position(id: string): THREE.Vector3 | null {
     const v = this.views.get(id);
-    return v ? v.g.position.clone().add(new THREE.Vector3(0, v.kind === 'troll' ? 2 : v.kind === 'bat' ? 0 : 0.8, 0)) : null;
+    const def = v ? MOBS[v.kind] : null;
+    return v ? v.g.position.clone().add(new THREE.Vector3(0, isOgre(v.kind) ? 0.9 * def!.scale : def!.flying ? 0 : isUndead(v.kind) ? 1.1 * def!.scale : 0.8, 0)) : null;
   }
 
   get(id: string): MobState | undefined { return this.views.get(id)?.s; }

@@ -187,6 +187,8 @@ test('bad tokens are rejected and a second login replaces the first', async () =
 
 // ------------------------------------------------------------------ gameplay systems
 import { ITEMS, NPC_BY_ID, STATION_BY_ID, VEIN_BY_ID, VEIN_TYPES, TREE_BY_ID, MOBS, INN, CAVE_ENTRANCE, CAVE_START, QUEST_BY_ID, countItem, xpForLevel, isFishable, LAKE, heightAt as h } from '@kontor/shared';
+import { PORTAL_BY_ID, regionAt, STATIONS, HOMES } from '@kontor/shared';
+import { damageMob } from '../src/combat.js';
 
 function game(random: () => number = () => 0.5, store?: MemoryStore) {
   let t = 2_000_000;
@@ -388,7 +390,7 @@ test('talents need levels; the root needs 3 ranks first', () => {
 test('the cave: walk into the entrance to travel', () => {
   const { world, c, p, place } = game();
   place(CAVE_ENTRANCE.x, CAVE_ENTRANCE.z + 1);
-  world.handle(c, { t: 'travel', to: 'cave' });
+  world.handle(c, { t: 'travel', portal: 'cave' });
   assert.ok(Math.hypot(p.state.x - CAVE_START.x, p.state.z - CAVE_START.z) < 0.1);
 });
 
@@ -527,4 +529,98 @@ test('no eating to heal for 10 s after taking damage', () => {
   advance(10_500);
   world.handle(c, { t: 'eat', index: 0 });
   assert.ok(p.hp > 5);
+});
+
+test('loot is free for all: another player can pick up a monster drop straight away', () => {
+  const { world, c, p, place } = game();
+  const wolf = [...world.mobs.values()].find((m) => m.def.kind === 'wolf')!;
+  place(wolf.x + 1, wolf.z);
+  damageMob(world, wolf, 9999, p.state.id, world.now());
+  const c2 = fakeClient();
+  world.connect(c2);
+  world.handle(c2, { t: 'hello', name: 'Other', color: 1, proto: PROTOCOL_VERSION, build: defaultBuild() });
+  const q = world.inspect((c2.inbox.find((m) => m.t === 'welcome') as any).id)!;
+  const g = [...world.ground.values()][0];
+  assert.ok(g, 'the wolf dropped something');
+  Object.assign(q.state, { x: g.x, z: g.z, y: g.y });
+  const gold = q.gold, bagBefore = q.bag.filter(Boolean).length;
+  world.handle(c2, { t: 'pickup', id: g.id });
+  assert.ok(!world.ground.has(g.id));
+  assert.ok(q.gold > gold || q.bag.filter(Boolean).length > bagBefore);
+});
+
+test('world state survives a restart: depleted nodes, boss timers, ground items', async () => {
+  const store = new MemoryStore();
+  const { world, p } = game(() => 0.5, store);
+  world.nodes.set('camp-0', { left: 0, total: 5, until: world.now() + 3_600_000 });
+  const knut = world.mobs.get('knut')!;
+  damageMob(world, knut, 99999, p.state.id, world.now());
+  world.spawnGround({ id: 'stone', qty: 3 }, 1, 2, 300);
+  await world.saveWorld();
+  const fresh = new World({ build: 'test', store, now: () => world.now() + 1000 });
+  await fresh.loadWorld();
+  assert.equal(fresh.nodes.get('camp-0')?.left, 0);
+  assert.ok(fresh.mobs.get('knut')!.dead);
+  assert.equal(fresh.mobs.get('knut')!.respawnAt, knut.respawnAt);
+  assert.ok([...fresh.ground.values()].some((g) => g.item.id === 'stone' && g.item.qty === 3));
+});
+
+test('Gruben: the pass needs level 12, then takes you there and back', () => {
+  const { world, c, p, place, last } = game();
+  const pass = PORTAL_BY_ID.get('gruben')!;
+  place(pass.at.x, pass.at.z);
+  world.handle(c, { t: 'travel', portal: 'gruben' });
+  assert.match(last('notice')!.text, /level 12/);
+  p.xp.combat = xpForLevel(12);
+  world.handle(c, { t: 'travel', portal: 'gruben' });
+  assert.equal(regionAt(p.state.x, p.state.z), 'gruben');
+  const back = PORTAL_BY_ID.get('gruben_out')!;
+  place(back.at.x, back.at.z);
+  world.handle(c, { t: 'travel', portal: 'gruben_out' });
+  assert.equal(regionAt(p.state.x, p.state.z), 'valley');
+});
+
+test('steel: smelt iron ore with coal', () => {
+  const { world, c, p, place, advance } = game();
+  p.xp.smithing = xpForLevel(16);
+  p.bag[0] = { id: 'iron_ore', qty: 2 }; p.bag[1] = { id: 'coal', qty: 2 };
+  const f = STATIONS.find((s) => s.kind === 'furnace')!;
+  place(f.x + 1.5, f.z);
+  world.handle(c, { t: 'craft', recipe: 'steel_bar', count: 1, station: f.id });
+  for (let i = 0; i < 40; i++) { advance(100); world.step(); }
+  assert.equal(countItem(p.bag, 'steel_bar'), 1);
+});
+
+test('housing: rent a cottage at its door, move your chest from the lodge, rest for a buff', () => {
+  const { world, c, p, at, place, last } = game();
+  p.gold = 500;
+  at('hilde');
+  world.handle(c, { t: 'rent', weeks: 1 });
+  assert.equal(HOMES[p.lease!.room].kind, 'room');
+  p.bag[0] = { id: 'stone', qty: 5 };
+  world.handle(c, { t: 'storage', op: 'put', index: 0, qty: 5 });
+  assert.equal(countItem(p.storage, 'stone'), 5);
+  const cot = HOMES.find((h) => h.kind === 'cottage')!;
+  // Must be at the cottage, and pay its price.
+  world.handle(c, { t: 'rent', weeks: 1, home: cot.id });
+  assert.match(last('notice')!.text, /Go to the/);
+  place(cot.door.x, cot.door.z);
+  const gold = p.gold;
+  world.handle(c, { t: 'rent', weeks: 1, home: cot.id });
+  assert.equal(p.lease!.room, cot.id);
+  assert.equal(gold - p.gold, cot.price);
+  assert.equal(countItem(p.storage, 'stone'), 5, 'the chest moved too');
+  assert.equal(world.rooms.filter(Boolean).length, 1, 'the lodge room was given up');
+  // Cottage chests hold more than lodge rooms.
+  for (let i = 0; i < 30; i++) { p.bag[0] = { id: 'iron_sword', qty: 1, r: 1 }; world.handle(c, { t: 'storage', op: 'put', index: 0, qty: 1 }); }
+  assert.ok(p.storage.filter(Boolean).length > 24);
+  world.handle(c, { t: 'rest' });
+  assert.ok(p.buffs.some((b) => b.name === 'Rested' && b.stats.xp === cot.rest.xp));
+  // Someone else can't take it.
+  const c2 = fakeClient(); world.connect(c2);
+  world.handle(c2, { t: 'hello', name: 'Other', color: 1, proto: PROTOCOL_VERSION, build: defaultBuild() });
+  const q = world.inspect((c2.inbox.find((m) => m.t === 'welcome') as any).id)!;
+  q.gold = 500; Object.assign(q.state, { x: cot.door.x, z: cot.door.z });
+  world.handle(c2, { t: 'rent', weeks: 1, home: cot.id });
+  assert.notEqual(q.lease?.room, cot.id);
 });

@@ -47,8 +47,36 @@ export const VILLAGE = { x: -28, z: 38, r: 21, h: 2.0 };
 /** Where the spike's lake sits (south-west of spawn). */
 export const LAKE = { x: -62, z: 58, r: 34, depth: 7 };
 
+/**
+ * Gruben: the second region, an old mining valley beyond the eastern pass. It lives in its own
+ * patch of the map (3 × 3 chunks around GRUBEN.x/z), reached through the pass (see regions.ts).
+ * Local layout: you arrive at the south end; the Mine King's pit is at the north end.
+ */
+export const GRUBEN = { x: 1056, z: -32, half: 96, name: 'Gruben' };
+/** Points of interest in Gruben, local to its centre. */
+export const GRUBEN_SPOTS = {
+  arrival: { x: 0, z: 54, r: 12, h: 9 },
+  pit: { x: 0, z: -58, r: 15, h: 4 },
+  village: { x: 44, z: 14, r: 13, h: 9.5 },
+};
+export const inGruben = (x: number, z: number) => Math.abs(x - GRUBEN.x) < GRUBEN.half + 60 && Math.abs(z - GRUBEN.z) < GRUBEN.half + 60;
+
+function grubenHeight(x: number, z: number): number {
+  const lx = x - GRUBEN.x, lz = z - GRUBEN.z;
+  // A valley running north–south: low in the middle, rising to the sides.
+  let h = 7 + (fbm(x / 46, z / 46) - 0.45) * 16 + (fbm(x / 15 + 9, z / 15 - 3, 3) - 0.5) * 2.5;
+  h += Math.max(0, Math.abs(lx) - 30) * 0.12;
+  for (const p of Object.values(GRUBEN_SPOTS)) h = h + (p.h - h) * (1 - smooth(p.r, p.r + 12, Math.hypot(lx - p.x, lz - p.z)));
+  // The pit is a bowl, a little lower in the middle.
+  h -= 2 * (1 - smooth(0, GRUBEN_SPOTS.pit.r, Math.hypot(lx - GRUBEN_SPOTS.pit.x, lz - GRUBEN_SPOTS.pit.z)));
+  const edge = Math.max(Math.abs(lx), Math.abs(lz));
+  h += smooth(GRUBEN.half - 30, GRUBEN.half - 4, edge) * 30;
+  return Math.max(1, h);
+}
+
 /** Ground height in metres at world position (x, z). */
 export function heightAt(x: number, z: number): number {
+  if (x > 600) return grubenHeight(x, z);
   // Rolling hills.
   let h = (fbm(x / 70, z / 70) - 0.42) * 18 + (fbm(x / 22 + 40, z / 22 - 17, 3) - 0.5) * 3;
   h += 3;

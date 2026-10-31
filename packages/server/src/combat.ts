@@ -6,7 +6,7 @@
  */
 import {
   BURN, CORPSE_SEC, FREEZE_SEC, ITEMS, knifeBonus, knifeUses, levelOf, MOBS, PROJECTILE_SPEED, SLOW, SPAWNS, SPECIALS, ST_ANGRY, ST_BURN, ST_DEAD, ST_FROZEN, ST_SLOW,
-  attackInterval, attackRange, groundAt, incoming, inCaveRegion, mitigate, outgoing, r2, r3, rollCraftRarity, rollEffects,
+  attackInterval, attackRange, groundAt, incoming, inCaveRegion, regionAt, mitigate, outgoing, r2, r3, rollCraftRarity, rollEffects,
   specialCooldown, styleOf, weaponClass, type Drop, type MobState, type Rarity, type Stack,
 } from '@kontor/shared';
 import type { Mob, ServerPlayer } from './types.js';
@@ -46,7 +46,7 @@ export function mobState(m: Mob, now: number): MobState {
   return { id: m.id, k: m.def.kind, x: r2(m.x), y: r2(m.y), z: r2(m.z), yaw: r3(m.yaw), hp: Math.ceil(m.hp), mhp: m.def.hp, st, bs: m.burn && m.burn.until > now ? m.burn.stacks : undefined, act: now < m.actUntil ? m.act : undefined, sk };
 }
 
-const sameRegion = (a: { x: number; z: number }, b: { x: number; z: number }) => inCaveRegion(a.x, a.z) === inCaveRegion(b.x, b.z);
+const sameRegion = (a: { x: number; z: number }, b: { x: number; z: number }) => regionAt(a.x, a.z) === regionAt(b.x, b.z);
 
 // ------------------------------------------------------------------ mob AI
 
@@ -276,7 +276,7 @@ function dropLoot(w: World, m: Mob, owner: ServerPlayer | undefined): void {
   }
   items.forEach((it, i) => {
     const a = (i / Math.max(1, items.length)) * Math.PI * 2;
-    w.spawnGround(it, m.x + Math.cos(a) * 0.8, m.z + Math.sin(a) * 0.8, owner?.state.id, m.def.boss ? 120 : 45);
+    w.spawnGround(it, m.x + Math.cos(a) * 0.8, m.z + Math.sin(a) * 0.8, m.def.boss ? 120 : 45);
   });
 }
 

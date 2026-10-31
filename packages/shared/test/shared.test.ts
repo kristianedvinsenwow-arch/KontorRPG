@@ -101,6 +101,7 @@ test('shoulders are an equipment slot and full armour costs 48 bars', () => {
 });
 
 import { addItem, removeItem, countItem, emptyBag, roomFor, resizeBag, levelFromXp, xpForLevel, VEINS, VEIN_TYPES, RECIPES, ITEMS, swingSeconds, sanitiseBag } from '../src/index.js';
+import { PORTALS, PORTAL_BY_ID, regionAt, GRUBEN, groundAt, SPAWNS, RECIPE_BY_ID, recipeGroup , walkable, TREE_BY_ID } from '../src/index.js';
 
 test('bag stacks ores to 10 and gems to 5', () => {
   const bag = emptyBag(16);
@@ -132,14 +133,37 @@ test('XP curve: 10 × L² per level', () => {
 });
 
 test('veins exist, are on land, and include a starter cluster near camp', () => {
-  const over = VEINS.filter((v) => !v.id.startsWith('c-'));
+  const over = VEINS.filter((v) => !v.id.startsWith('c-') && !v.id.startsWith('g-'));
   assert.ok(over.filter((v) => v.type === 'stone').length >= 10);
   assert.ok(over.filter((v) => v.type === 'iron').length >= 6);
   assert.ok(over.length < 45, `fewer veins than M1 (${over.length})`);
   assert.ok(VEINS.some((v) => v.id.startsWith('camp-')));
   assert.ok(VEINS.some((v) => v.type === 'silver'));
   for (const v of over) assert.ok(v.y > 0.5);
-  for (const t of Object.values(VEIN_TYPES)) assert.ok(ITEMS[t.item] && ITEMS[t.gem!.item]);
+  for (const t of Object.values(VEIN_TYPES)) assert.ok(ITEMS[t.item] && (!t.gem || ITEMS[t.gem.item]));
+  // Coal: some in the home valley's far hotspots, more in the mine and in Gruben.
+  assert.ok(over.some((v) => v.type === 'coal'));
+  assert.ok(VEINS.filter((v) => v.id.startsWith('g-') && v.type === 'coal').length >= 8);
+});
+
+test('Gruben: its own walkable valley with portals both ways, veins, trees and monsters', () => {
+  for (const p of PORTALS) { assert.ok(walkable(p.to.x, p.to.z), p.id); if (regionAt(p.to.x, p.to.z) !== 'cave') assert.ok(groundAt(p.to.x, p.to.z) > 0, p.id); }
+  assert.equal(regionAt(PORTAL_BY_ID.get('gruben')!.to.x, PORTAL_BY_ID.get('gruben')!.to.z), 'gruben');
+  assert.equal(regionAt(PORTAL_BY_ID.get('gruben_out')!.to.x, PORTAL_BY_ID.get('gruben_out')!.to.z), 'valley');
+  assert.ok(!walkable(GRUBEN.x + GRUBEN.half + 1, GRUBEN.z));
+  assert.ok([...TREE_BY_ID.values()].some((t) => regionAt(t.x, t.z) === 'gruben'));
+  for (const k of ['lynx', 'draug', 'wisp', 'hill_troll', 'mine_king']) assert.ok(SPAWNS.some((s) => s.kind === k && regionAt(s.x, s.z) === 'gruben'), k);
+  for (const v of VEINS.filter((x) => x.id.startsWith('g-'))) assert.equal(regionAt(v.x, v.z), 'gruben');
+});
+
+test('metal tiers: steel from iron + coal, silversteel from steel + silver, jewellery from silver', () => {
+  assert.deepEqual(RECIPE_BY_ID.get('steel_bar')!.inputs.map((i) => i.item).sort(), ['coal', 'iron_ore']);
+  assert.deepEqual(RECIPE_BY_ID.get('silversteel_bar')!.inputs.map((i) => i.item).sort(), ['silver_bar', 'steel_bar']);
+  for (const t of ['steel', 'silversteel']) for (const k of ['sword', 'longsword', 'battleaxe', 'pickaxe', 'hatchet', 'skinning_knife', 'helm', 'breastplate', 'kite_shield']) assert.ok(RECIPE_BY_ID.get(`${t}_${k}`), `${t}_${k}`);
+  assert.ok(ITEMS.steel_sword.dps! > ITEMS.iron_sword.dps! && ITEMS.silversteel_sword.dps! > ITEMS.steel_sword.dps!);
+  assert.ok(ITEMS.silversteel_breastplate.armour! > ITEMS.steel_breastplate.armour! && ITEMS.silversteel_breastplate.ward! > 0);
+  for (const id of ['silver_ring', 'garnet_necklace', 'sapphire_ring']) { assert.ok(RECIPE_BY_ID.get(id)!.inputs.some((i) => i.item === 'silver_bar')); assert.equal(recipeGroup(RECIPE_BY_ID.get(id)!), 'Jewellery'); }
+  assert.equal(recipeGroup(RECIPE_BY_ID.get('silversteel_sword')!), 'Silversteel');
 });
 
 test('every recipe uses real items; iron recipes need a lower-tier part', () => {
@@ -158,7 +182,7 @@ test('stored bags are sanitised', () => {
   assert.equal(bag.filter(Boolean).length, 1);
 });
 
-import { rollCraftRarity, rollEffects, itemStats, computeStats, canLearn, sanitiseTalents, periodKey, caveClearance, CAVE_START, walkable, outgoing, incoming, emptyStats, TREE_BY_ID, isFishable } from '../src/index.js';
+import { rollCraftRarity, rollEffects, itemStats, computeStats, canLearn, sanitiseTalents, periodKey, caveClearance, CAVE_START, outgoing, incoming, emptyStats, isFishable } from '../src/index.js';
 
 test('crafted gear rolls rarity; luck raises the odds; effects come from the right groups', () => {
   let seed = 1;

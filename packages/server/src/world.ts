@@ -5,7 +5,7 @@
  * It never touches sockets: each player has a `send` function, so tests drive it without a network.
  */
 import {
-  AOI_CHUNKS, CAVE_ENTRANCE, CAVE_EXIT, CAVE_EXIT_OUT, CAVE_START, CHUNK_SIZE, IMBUE, INN, ITEMS, MAX_CHAT_LEN, MAX_NAME_LEN,
+  AOI_CHUNKS, PORTAL_BY_ID, HOMES, homeLabel, type Home, CHUNK_SIZE, IMBUE, INN, ITEMS, MAX_CHAT_LEN, MAX_NAME_LEN,
   NPC_BY_ID, PLAYER_COLORS, PROTOCOL_VERSION, QUEST_BY_ID, RECIPE_BY_ID, START_GOLD, STATION_BY_ID, TICK_HZ, USE_RANGE,
   EAT_LOCK_MS, addStack, burnChance, knifeRepair, knifeUses, STATIONS, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
   questAvailable, r2, r3, recipeAt, removeItem, resizeBag, respecCost, rollCraftRarity, rollEffects, rollsRarity,
@@ -13,7 +13,7 @@ import {
   type Buff, type ClientMsg, type HoldSlot, type MobKind, type PlayerState, type ServerMsg, type SkillId, type Slot,
   type Stack, type TreeId,
 } from '@kontor/shared';
-import { STORAGE_SLOTS, type CharacterStore, type StoredCharacter } from './persistence.js';
+import { STORAGE_SLOTS, type CharacterStore, type StoredCharacter, type WorldSnapshot } from './persistence.js';
 import { cast, gather, reel, stepFishing, stopFishing } from './gather.js';
 import { attack, createMobs, mobState, skin, stepMobs } from './combat.js';
 import type { Client, Ground, Lease, Mob, NodeState, ServerPlayer } from './types.js';
@@ -46,8 +46,8 @@ export class World {
   readonly nodes = new Map<string, NodeState>();
   readonly mobs: Map<string, Mob>;
   readonly ground = new Map<number, Ground>();
-  /** Inn rooms: who holds each (by user id or, for guests, player id) and until when. */
-  readonly rooms: ({ key: string; name: string; until: number } | null)[] = Array.from({ length: INN.rooms }, () => null);
+  /** Homes (lodge rooms, cottages, huts): who holds each (by user id or, for guests, player id) and until when. */
+  readonly rooms: ({ key: string; name: string; until: number } | null)[] = HOMES.map(() => null);
   private pending = new Map<Client, true>();
   private timers: { at: number; fn: () => void }[] = [];
   tick = 0;
@@ -68,6 +68,38 @@ export class World {
   async loadLeases(): Promise<void> {
     if (!this.opts.store) return;
     for (const l of await this.opts.store.leases()) if (l.lease.until > this.now()) this.rooms[l.lease.room] = { key: l.userId, name: l.name, until: l.lease.until };
+  }
+
+  /** What should survive a restart: worn/depleted nodes, dead mobs' timers, ground items. */
+  snapshot(): WorldSnapshot {
+    const now = this.now();
+    return {
+      v: 1,
+      nodes: [...this.nodes].map(([id, n]) => [id, n.left, n.total, n.until] as [string, number, number, number]),
+      mobs: [...this.mobs.values()].filter((m) => m.dead && m.respawnAt > now).map((m) => [m.id, m.respawnAt] as [string, number]),
+      ground: [...this.ground.values()].filter((g) => g.expires > now).map((g) => ({ item: g.item, x: g.x, z: g.z, expires: g.expires })),
+    };
+  }
+
+  restore(s: WorldSnapshot): void {
+    const now = this.now();
+    for (const [id, left, total, until] of s.nodes) if (!until || until > now) this.nodes.set(id, { left, total, until });
+    for (const [id, at] of s.mobs) {
+      const m = this.mobs.get(id);
+      if (m && at > now) Object.assign(m, { dead: true, hp: 0, respawnAt: at, corpseUntil: 0, skinned: true, target: null });
+    }
+    for (const g of s.ground) if (g.expires > now) this.spawnGround(g.item, g.x, g.z, (g.expires - now) / 1000);
+  }
+
+  async loadWorld(): Promise<void> {
+    if (!this.opts.store) return;
+    const s = await this.opts.store.loadWorld();
+    if (s) { this.restore(s); this.log(`world restored: ${s.nodes.length} nodes, ${s.mobs.length} mob timers, ${s.ground.length} ground items`); }
+  }
+
+  async saveWorld(): Promise<void> {
+    if (!this.opts.store) return;
+    try { await this.opts.store.saveWorld(this.snapshot()); } catch (e) { this.log('world save failed', e); }
   }
 
   connect(client: Client): void { this.pending.set(client, true); }
@@ -112,11 +144,12 @@ export class World {
       case 'eat': return this.eat(p, msg.index);
       case 'talent': return this.learn(p, msg.tree, msg.node);
       case 'respec': return this.respec(p, msg.tree);
-      case 'rent': return this.rent(p, msg.weeks);
+      case 'rent': return this.rent(p, msg.weeks, msg.home);
+      case 'rest': return this.rest(p);
       case 'storage': return this.storageMove(p, msg.op, msg.index, msg.qty);
       case 'quest': return this.quest(p, msg.quest, msg.op);
       case 'imbue': return this.imbue(p, msg.index, msg.element);
-      case 'travel': return this.travel(p, msg.to);
+      case 'travel': return this.travel(p, msg.portal);
       case 'respawn': return this.respawn(p);
       case 'skin': return skin(this, p, msg.target);
       case 'repair': return this.repair(p, msg.slot);
@@ -219,7 +252,7 @@ export class World {
   /** Give if possible, otherwise drop at the player's feet (owned by them). */
   giveOrDrop(p: ServerPlayer, st: Stack): void {
     const left = this.give(p, { ...st });
-    if (left > 0) { this.spawnGround({ ...st, qty: left }, p.state.x, p.state.z, p.state.id, GROUND_SECONDS); this.notice(p, 'Bag full — dropped at your feet.', 'info'); }
+    if (left > 0) { this.spawnGround({ ...st, qty: left }, p.state.x, p.state.z, GROUND_SECONDS); this.notice(p, 'Bag full — dropped at your feet.', 'info'); }
   }
 
   /** Add XP (with multipliers); returns the XP actually given. Level-ups recompute stats. */
@@ -279,9 +312,10 @@ export class World {
     }
   }
 
-  spawnGround(item: Stack, x: number, z: number, owner: string | undefined, seconds: number): void {
+  /** Anything on the ground is free for all: whoever gets there first takes it. */
+  spawnGround(item: Stack, x: number, z: number, seconds: number): void {
     const now = this.now();
-    const g: Ground = { id: nextGround++, item, x: r2(x), y: r2(groundAt(x, z)), z: r2(z), owner, ownedFor: owner ? 60 : 0, expires: now + seconds * 1000, ownedUntil: owner ? now + 60_000 : 0 };
+    const g: Ground = { id: nextGround++, item, x: r2(x), y: r2(groundAt(x, z)), z: r2(z), expires: now + seconds * 1000 };
     this.ground.set(g.id, g);
     this.broadcast({ t: 'ground', add: [groundView(g)] });
   }
@@ -493,7 +527,7 @@ export class World {
     s.qty -= n;
     if (s.qty <= 0) p.bag[index] = null;
     const a = this.rand() * 6.28;
-    this.spawnGround(dropped, p.state.x + Math.cos(a) * 0.7, p.state.z + Math.sin(a) * 0.7, undefined, GROUND_SECONDS);
+    this.spawnGround(dropped, p.state.x + Math.cos(a) * 0.7, p.state.z + Math.sin(a) * 0.7, GROUND_SECONDS);
     p.dirty = true;
     this.sendInv(p);
   }
@@ -501,9 +535,7 @@ export class World {
   private pickup(p: ServerPlayer, id: number): void {
     const g = this.ground.get(id);
     if (!g) return;
-    const now = this.now();
     if (Math.hypot(g.x - p.state.x, g.z - p.state.z) > 3 || Math.abs(g.y - p.state.y) > 3) return this.notice(p, 'Too far away.', 'error');
-    if (g.owner && g.owner !== p.state.id && now < g.ownedUntil) return this.notice(p, `That’s someone else’s loot for another ${Math.ceil((g.ownedUntil - now) / 1000)} s.`, 'error');
     if (g.item.id === 'coins') {
       p.gold += g.item.qty;
       p.client.send({ t: 'gain', item: 'coins', qty: g.item.qty });
@@ -665,52 +697,97 @@ export class World {
   private roomKey(p: ServerPlayer): string { return p.userId ?? `guest:${p.state.id}`; }
   private roomNames(): (string | null)[] { const now = this.now(); return this.rooms.map((r) => (r && r.until > now ? r.name : null)); }
 
+  /** Your current home, if the lease is still running. */
+  private home(p: ServerPlayer) {
+    const now = this.now();
+    return p.lease && p.lease.until > now && this.rooms[p.lease.room]?.key === this.roomKey(p) ? HOMES[p.lease.room] : undefined;
+  }
+
+  /** At your home's door (or, for a lodge room, with Hilde inside). */
+  private atHome(p: ServerPlayer, h: Home): boolean {
+    if (Math.hypot(p.state.x - h.door.x, p.state.z - h.door.z) <= 3.5) return true;
+    const inn = NPC_BY_ID.get('hilde')!;
+    return h.kind === 'room' && (this.near(p, inn, 1) || this.near(p, { x: INN.x, z: INN.z + INN.d / 2 }, INN.w / 2));
+  }
+
   /**
-   * Rent (or extend) a room. One home at a time: a new lease replaces the old one and your stored
-   * items go with you (they belong to the character, not the room). Up to 4 weeks paid ahead.
-   * Coming back after a lease ran out with items still in storage costs 20% extra (reclaim fee).
+   * Rent or extend a home. Without `home`, Hilde gives you any free lodge room. One home at a time:
+   * renting somewhere else ends the old lease, and your chest moves with you (items belong to the
+   * character). Up to 4 weeks paid ahead. Coming back after a lease ran out with items still in
+   * storage costs 20% extra (reclaim fee).
    */
-  private rent(p: ServerPlayer, weeks: number): void {
-    const inn = [...NPC_BY_ID.values()].find((n) => n.roles.includes('inn'));
-    if (!inn || !this.near(p, inn, 1)) return this.notice(p, 'Talk to Hilde at Bjørkvik Lodge to rent a room.', 'error');
+  private rent(p: ServerPlayer, weeks: number, homeId?: number): void {
     const now = this.now(), WEEK = 7 * 86400_000;
     const key = this.roomKey(p);
-    let room = p.lease && p.lease.until > now && this.rooms[p.lease.room]?.key === key ? p.lease.room : -1;
-    const start = room >= 0 ? p.lease!.until : now;
+    const cur = this.home(p);
+    let target: Home | undefined;
+    if (homeId == null) {
+      if (!this.near(p, NPC_BY_ID.get('hilde')!, 1)) return this.notice(p, 'Talk to Hilde at Bjørkvik Lodge to rent a room.', 'error');
+      target = cur?.kind === 'room' ? cur : HOMES.find((h) => h.kind === 'room' && !(this.rooms[h.id] && this.rooms[h.id]!.until > now));
+      if (!target) return this.notice(p, 'All eight rooms are taken. Try again when a lease runs out.', 'error');
+    } else {
+      target = HOMES[homeId];
+      if (!target) return;
+      if (!this.atHome(p, target)) return this.notice(p, `Go to the ${homeLabel(target).toLowerCase()} to rent it.`, 'error');
+      const holder = this.rooms[target.id];
+      if (holder && holder.until > now && holder.key !== key) return this.notice(p, `${holder.name} lives there.`, 'error');
+    }
+    const extending = cur?.id === target.id;
+    const start = extending ? p.lease!.until : now;
     const until = Math.min(start + weeks * WEEK, now + INN.maxWeeks * WEEK);
     const paidWeeks = Math.round((until - start) / WEEK);
     if (paidWeeks <= 0) return this.notice(p, `You can pay at most ${INN.maxWeeks} weeks ahead.`, 'error');
-    const reclaim = room < 0 && p.storage.some(Boolean) && p.lease ? 1.2 : 1;
-    const cost = Math.ceil(paidWeeks * INN.pricePerWeek * reclaim);
+    const reclaim = !cur && p.storage.some(Boolean) && p.lease ? 1.2 : 1;
+    const cost = Math.ceil(paidWeeks * target.price * reclaim);
     if (p.gold < cost) return this.notice(p, `That’s ${cost} gold.`, 'error');
-    if (room < 0) {
-      room = this.rooms.findIndex((r) => !r || r.until <= now);
-      if (room < 0) return this.notice(p, 'All eight rooms are taken. Try again when a lease runs out.', 'error');
+    if (cur && !extending) {
+      if (p.storage.slice(target.storage).some(Boolean)) return this.notice(p, `Your chest won’t fit there (${target.storage} slots). Empty the last slots first.`, 'error');
+      this.rooms[cur.id] = null;
+      this.notice(p, `You moved out of the ${homeLabel(cur).toLowerCase()}. Your chest came with you.`);
     }
     p.gold -= cost;
-    p.lease = { room, until };
-    this.rooms[room] = { key, name: p.state.name, until };
+    p.lease = { room: target.id, until };
+    this.rooms[target.id] = { key, name: p.state.name, until };
     p.dirty = true;
     this.sendInv(p);
     this.sendLease(p);
     this.broadcast({ t: 'rooms', taken: this.roomNames() });
-    this.notice(p, `Room ${room + 1} is yours until ${new Date(until).toLocaleDateString('en-GB', { timeZone: 'Europe/Oslo', day: 'numeric', month: 'short' })}. Your chest is by its door.`);
+    const date = new Date(until).toLocaleDateString('en-GB', { timeZone: 'Europe/Oslo', day: 'numeric', month: 'short' });
+    this.notice(p, `The ${homeLabel(target).toLowerCase()} is yours until ${date}. Your chest is by the door — rest there for a Rested bonus.`);
+  }
+
+  /** Sleep at your own door: Rested (more XP, faster regen) for 30 minutes. */
+  private rest(p: ServerPlayer): void {
+    const h = this.home(p);
+    if (!h) return this.notice(p, 'You need a home to rest in. Rent a room from Hilde, or a cottage or hut at its door.', 'error');
+    if (!this.atHome(p, h)) return this.notice(p, `Your bed is at the ${homeLabel(h).toLowerCase()}.`, 'error');
+    if (p.lastHurtAt > this.now() - EAT_LOCK_MS) return this.notice(p, 'You can’t rest mid-fight.', 'error');
+    p.buffs = p.buffs.filter((b) => b.name !== 'Rested');
+    p.buffs.push({ name: 'Rested', stats: { xp: h.rest.xp, regen: h.rest.regen }, until: this.now() + 30 * 60_000 });
+    p.hp = p.stats.maxHp;
+    this.refreshGear(p);
+    this.sendHp(p);
+    p.client.send({ t: 'buffs', list: p.buffs });
+    this.notice(p, `You rest a while. Rested: +${Math.round(h.rest.xp * 100)}% XP for 30 minutes.`);
   }
 
   private storageMove(p: ServerPlayer, op: 'put' | 'take', index: number, qty: number): void {
-    const now = this.now();
-    if (!p.lease || p.lease.until <= now) return this.notice(p, 'Rent a room at the lodge to use a storage chest.', 'error');
-    const inn = [...NPC_BY_ID.values()].find((n) => n.roles.includes('inn'))!;
-    if (!this.near(p, { x: INN.x, z: INN.z + INN.d / 2 }, INN.w / 2) && !this.near(p, inn, 1)) return this.notice(p, 'Your chest is at Bjørkvik Lodge.', 'error');
-    const [from, to] = op === 'put' ? [p.bag, p.storage] : [p.storage, p.bag];
-    const s = from[index];
+    const h = this.home(p);
+    if (!h) return this.notice(p, 'Rent a home to use a storage chest.', 'error');
+    if (!this.atHome(p, h)) return this.notice(p, `Your chest is at the ${homeLabel(h).toLowerCase()}.`, 'error');
+    const s = (op === 'put' ? p.bag : p.storage)[index];
     if (!s) return;
     const k = Math.min(qty, s.qty);
-    const left = addStack(to, { ...s, qty: k });
-    const moved = k - left;
+    let moved: number;
+    if (op === 'put') {
+      // Only the first `h.storage` slots of the chest can be filled here.
+      const view = p.storage.slice(0, h.storage);
+      moved = k - addStack(view, { ...s, qty: k });
+      view.forEach((v, i) => (p.storage[i] = v));
+    } else moved = k - addStack(p.bag, { ...s, qty: k });
     if (moved <= 0) return this.notice(p, op === 'put' ? 'Your chest is full.' : 'Your bag is full.', 'error');
     s.qty -= moved;
-    if (s.qty <= 0) from[index] = null;
+    if (s.qty <= 0) (op === 'put' ? p.bag : p.storage)[index] = null;
     p.dirty = true;
     this.sendInv(p);
     this.sendLease(p);
@@ -718,15 +795,15 @@ export class World {
 
   // ---------------------------------------------------------------- the cave
 
-  private travel(p: ServerPlayer, to: 'cave' | 'out'): void {
-    if (to === 'cave') {
-      if (Math.hypot(p.state.x - CAVE_ENTRANCE.x, p.state.z - CAVE_ENTRANCE.z) > CAVE_ENTRANCE.r + 3) return this.notice(p, 'Walk into the mine entrance.', 'error');
-      this.teleport(p, CAVE_START.x, CAVE_START.z);
-      this.notice(p, 'The Old Mine. It’s cold, and something is breathing down here.');
-    } else {
-      if (Math.hypot(p.state.x - CAVE_EXIT.x, p.state.z - CAVE_EXIT.z) > CAVE_EXIT.r + 3) return;
-      this.teleport(p, CAVE_EXIT_OUT.x, CAVE_EXIT_OUT.z);
-    }
+  private travel(p: ServerPlayer, id: string): void {
+    const portal = PORTAL_BY_ID.get(id);
+    if (!portal) return;
+    if (Math.hypot(p.state.x - portal.at.x, p.state.z - portal.at.z) > portal.at.r + 3) return this.notice(p, `Walk into ${portal.name.toLowerCase()}.`, 'error');
+    const lvl = levelOf(p.xp, 'combat');
+    if (portal.level && lvl < portal.level) return this.notice(p, `The pass is deadly below level ${portal.level} (you’re ${lvl}). Train up first.`, 'error');
+    this.teleport(p, portal.to.x, portal.to.z);
+    if (id === 'cave') this.notice(p, 'The Old Mine. It’s cold, and something is breathing down here.');
+    if (id === 'gruben') this.notice(p, 'Gruben. The old mine valley. Lights move in the bog, and the dead still work the row.');
     p.job = null;
   }
 
@@ -791,14 +868,14 @@ export class World {
 
   async shutdown(): Promise<void> {
     this.broadcast({ t: 'system', text: 'Server restarting — you will reconnect in a moment.' });
-    await this.saveAll();
+    await Promise.all([this.saveAll(), this.saveWorld()]);
   }
 
   inspect(id: string): ServerPlayer | undefined { return this.players.get(id); }
 }
 
 function groundView(g: Ground) {
-  return { id: g.id, item: g.item, x: g.x, y: g.y, z: g.z, owner: g.owner, ownedFor: Math.max(0, Math.ceil((g.ownedUntil - Date.now()) / 1000)) };
+  return { id: g.id, item: g.item, x: g.x, y: g.y, z: g.z };
 }
 
 export const chunkOf = (v: number) => Math.floor(v / CHUNK_SIZE);

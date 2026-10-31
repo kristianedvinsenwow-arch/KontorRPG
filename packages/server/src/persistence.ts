@@ -6,12 +6,13 @@
  * Plain fetch, no SDK, so the server bundle stays small.
  */
 import {
-  INN, SKILLS, computeStats, sanitiseBag, sanitiseEquipment, sanitiseTalents,
-  type Bag, type CharacterBuild, type Equipment, type QuestState, type SkillXp, type TalentAlloc,
+  HOMES, STORAGE_MAX, SKILLS, computeStats, sanitiseBag, sanitiseEquipment, sanitiseTalents,
+  type Bag, type Stack, type CharacterBuild, type Equipment, type QuestState, type SkillXp, type TalentAlloc,
 } from '@kontor/shared';
 import type { Lease } from './types.js';
 
-export const STORAGE_SLOTS = 24;
+/** The chest always holds this many slots; how many you can fill depends on your home. */
+export const STORAGE_SLOTS = STORAGE_MAX;
 
 export interface StoredCharacter {
   userId: string;
@@ -42,6 +43,33 @@ export interface CharacterStore {
   save(userId: string, p: Progress): Promise<void>;
   /** Every current inn lease (so rooms rented by offline players stay taken). */
   leases(): Promise<{ userId: string; name: string; lease: Lease }[]>;
+  /** Shared world state (depleted nodes, respawn timers, ground items), kept across restarts. */
+  loadWorld(): Promise<WorldSnapshot | null>;
+  saveWorld(s: WorldSnapshot): Promise<void>;
+}
+
+/** What survives a restart. Times are wall-clock ms. */
+export interface WorldSnapshot {
+  v: 1;
+  /** [node id, hits left, total hits, depleted until (0 = still standing)] */
+  nodes: [string, number, number, number][];
+  /** [mob id, respawn at] for dead mobs. */
+  mobs: [string, number][];
+  ground: { item: Stack; x: number; z: number; expires: number }[];
+}
+
+export function cleanSnapshot(raw: any): WorldSnapshot | null {
+  if (!raw || raw.v !== 1) return null;
+  const num = (x: unknown) => typeof x === 'number' && Number.isFinite(x);
+  return {
+    v: 1,
+    nodes: Array.isArray(raw.nodes) ? raw.nodes.filter((n: any) => Array.isArray(n) && typeof n[0] === 'string' && num(n[1]) && num(n[2]) && num(n[3])) : [],
+    mobs: Array.isArray(raw.mobs) ? raw.mobs.filter((m: any) => Array.isArray(m) && typeof m[0] === 'string' && num(m[1])) : [],
+    ground: Array.isArray(raw.ground) ? raw.ground.flatMap((g: any) => {
+      const item = sanitiseBag([g?.item], 1)[0];
+      return item && num(g.x) && num(g.z) && num(g.expires) ? [{ item, x: g.x, z: g.z, expires: g.expires }] : [];
+    }) : [],
+  };
 }
 
 function sanitiseXp(raw: unknown): SkillXp {
@@ -65,7 +93,7 @@ function sanitiseQuests(raw: unknown): QuestState {
 }
 
 export function sanitiseLease(raw: any): Lease | null {
-  if (!raw || !Number.isInteger(raw.room) || raw.room < 0 || raw.room >= INN.rooms || !Number.isFinite(raw.until)) return null;
+  if (!raw || !Number.isInteger(raw.room) || raw.room < 0 || raw.room >= HOMES.length || !Number.isFinite(raw.until)) return null;
   return { room: raw.room, until: raw.until };
 }
 
@@ -147,6 +175,21 @@ export class SupabaseStore implements CharacterStore {
     const rows = (await r.json()) as { user_id: string; name: string; lease: unknown }[];
     return rows.map((x) => ({ userId: x.user_id, name: x.name, lease: sanitiseLease(x.lease) })).filter((x): x is { userId: string; name: string; lease: Lease } => !!x.lease);
   }
+
+  async loadWorld(): Promise<WorldSnapshot | null> {
+    const r = await fetch(`${this.url}/rest/v1/world_state?key=eq.main&select=data`, { headers: this.headers() });
+    if (!r.ok) throw new Error(`load world: ${r.status} ${await r.text()}`);
+    const row = ((await r.json()) as { data: unknown }[])[0];
+    return row ? cleanSnapshot(row.data) : null;
+  }
+
+  async saveWorld(s: WorldSnapshot): Promise<void> {
+    const r = await fetch(`${this.url}/rest/v1/world_state?on_conflict=key`, {
+      method: 'POST', headers: this.headers({ Prefer: 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify({ key: 'main', data: s, updated_at: new Date().toISOString() }),
+    });
+    if (!r.ok) throw new Error(`save world: ${r.status} ${await r.text()}`);
+  }
 }
 
 /** In-memory store. Tokens of the form "dev:<userId>" are accepted so tests can log in. */
@@ -157,6 +200,9 @@ export class MemoryStore implements CharacterStore {
   async load(userId: string) { const r = this.rows.get(userId); return r ? cleanCharacter(structuredClone(r)) : null; }
   async create(c: StoredCharacter) { this.rows.set(c.userId, structuredClone(c)); }
   async save(userId: string, p: Progress) { const r = this.rows.get(userId); if (r) Object.assign(r, structuredClone(p)); }
+  world: WorldSnapshot | null = null;
+  async loadWorld() { return this.world ? cleanSnapshot(structuredClone(this.world)) : null; }
+  async saveWorld(s: WorldSnapshot) { this.world = structuredClone(s); }
   async leases() {
     return [...this.rows.values()].filter((r) => r.lease).map((r) => ({ userId: r.userId, name: r.name, lease: r.lease! }));
   }

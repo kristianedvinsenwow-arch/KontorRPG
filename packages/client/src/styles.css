@@ -387,3 +387,23 @@ select:focus { border-color: var(--amber); outline: none; }
 #hpbox .special span { position: relative; display: block; text-align: center; font: 700 11px/18px var(--mono); text-shadow: 0 1px 2px #000; }
 #hpbox { bottom: 108px; }
 #jobbar { bottom: 176px; }
+
+/* Shop rows: a short facts line, then the description. */
+.ware .wfacts { font: 600 12px var(--display); letter-spacing: .06em; text-transform: uppercase; color: var(--amber); }
+.ware .wblurb { font-size: 11.5px; line-height: 1.45; color: var(--muted); }
+
+/* Skills on the left of the character sheet: skills | model | stats & perks | gear & bag */
+.charskills { background: var(--panel); border-right: 1px solid var(--line); padding: 20px 16px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto; }
+.skills.compact { gap: 6px; }
+.skills.compact .skill { padding: 6px 10px; gap: 4px; }
+.skills.compact .srow b { font-size: 15px; }
+.skills.compact .lvl { font: 700 16px var(--display); color: var(--amber); }
+.charwrap { grid-template-columns: minmax(190px, 230px) minmax(220px, 290px) minmax(270px, 340px) minmax(290px, 380px); }
+@media (max-width: 1240px) {
+  .charwrap { grid-template-columns: minmax(180px, 220px) minmax(200px, 260px) minmax(280px, 400px); overflow-y: auto; }
+  .charinv { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); overflow: visible; }
+}
+@media (max-width: 760px) {
+  .charwrap { grid-template-columns: 1fr; }
+  .charskills { order: 2; border-right: 0; border-top: 1px solid var(--line); }
+}

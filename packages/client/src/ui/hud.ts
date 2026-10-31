@@ -1,4 +1,5 @@
 /** HUD: location, connection, who's online, toasts, chat. Plain DOM; rendered from the stores. */
+import { regionAt } from '@kontor/shared';
 import { PLAYER_COLORS } from '@kontor/shared';
 import { netStore, uiStore } from '../state/store.js';
 
@@ -7,6 +8,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
 export function initHud(onSendChat: (text: string) => void) {
   const hud = $('hud');
   const coords = $('coords');
+  const whereName = document.querySelector('#where b') as HTMLElement;
   const netdot = $('netdot'), nettext = $('nettext');
   const roster = $('roster');
   const toasts = $('toasts');
@@ -77,6 +79,8 @@ export function initHud(onSendChat: (text: string) => void) {
     },
     frame(x: number, z: number) {
       coords.textContent = `${x.toFixed(0)}, ${z.toFixed(0)}`;
+      const r = regionAt(x, z), name = r === 'cave' ? 'The Old Mine' : r === 'gruben' ? 'Gruben' : 'Mofjellet';
+      if (whereName.textContent !== name) whereName.textContent = name;
       frames++;
       const now = performance.now();
       if (now - lastFps > 1000) { fps.textContent = `${frames} fps`; frames = 0; lastFps = now; }

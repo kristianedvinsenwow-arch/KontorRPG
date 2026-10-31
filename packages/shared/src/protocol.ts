@@ -37,7 +37,7 @@ export const ST_BURN = 1, ST_SLOW = 2, ST_FROZEN = 4, ST_DEAD = 8, ST_ANGRY = 16
 
 export interface MobState { id: string; k: MobKind; x: number; y: number; z: number; yaw: number; hp: number; mhp: number; st: number; bs?: number; act?: 'atk' | 'slam'; /** A body that can still be skinned. */ sk?: 1 }
 
-export interface GroundItem { id: number; item: Stack; x: number; y: number; z: number; owner?: string; ownedFor?: number }
+export interface GroundItem { id: number; item: Stack; x: number; y: number; z: number }
 
 export type HoldSlot = 'mainHand' | 'pickaxe' | 'hatchet' | 'rod';
 
@@ -65,11 +65,12 @@ export type ClientMsg =
   | { t: 'eat'; index: number }
   | { t: 'talent'; tree: TreeId; node: string }
   | { t: 'respec'; tree: TreeId }
-  | { t: 'rent'; weeks: number }
+  | { t: 'rent'; weeks: number; home?: number }
+  | { t: 'rest' }
   | { t: 'storage'; op: 'put' | 'take'; index: number; qty: number }
   | { t: 'quest'; quest: string; op: 'accept' | 'turnin' | 'abandon' }
   | { t: 'imbue'; index: number; element: 'fire' | 'frost' }
-  | { t: 'travel'; to: 'cave' | 'out' }
+  | { t: 'travel'; portal: string }
   | { t: 'respawn' }
   | { t: 'skin'; target: string }
   | { t: 'repair'; slot: Slot };
@@ -156,11 +157,12 @@ export function decodeClient(raw: string): ClientMsg | null {
     case 'eat': return num(m.index) ? { t: 'eat', index: int(m.index) } : null;
     case 'talent': return str(m.tree, 16) && str(m.node) ? { t: 'talent', tree: m.tree, node: m.node } : null;
     case 'respec': return str(m.tree, 16) ? { t: 'respec', tree: m.tree } : null;
-    case 'rent': return num(m.weeks) ? { t: 'rent', weeks: Math.max(1, Math.min(4, int(m.weeks))) } : null;
+    case 'rent': return num(m.weeks) ? { t: 'rent', weeks: Math.max(1, Math.min(4, int(m.weeks))), home: num(m.home) ? int(m.home) : undefined } : null;
+    case 'rest': return { t: 'rest' };
     case 'storage': return (m.op === 'put' || m.op === 'take') && num(m.index) && num(m.qty) ? { t: 'storage', op: m.op, index: int(m.index), qty: Math.max(1, int(m.qty)) } : null;
     case 'quest': return str(m.quest) && ['accept', 'turnin', 'abandon'].includes(m.op) ? { t: 'quest', quest: m.quest, op: m.op } : null;
     case 'imbue': return num(m.index) && (m.element === 'fire' || m.element === 'frost') ? { t: 'imbue', index: int(m.index), element: m.element } : null;
-    case 'travel': return m.to === 'cave' || m.to === 'out' ? { t: 'travel', to: m.to } : null;
+    case 'travel': return typeof m.portal === 'string' && m.portal.length < 24 ? { t: 'travel', portal: m.portal } : null;
     case 'respawn': return { t: 'respawn' };
     case 'skin': return str(m.target) ? { t: 'skin', target: m.target } : null;
     case 'repair': return str(m.slot, 12) ? { t: 'repair', slot: m.slot as Slot } : null;

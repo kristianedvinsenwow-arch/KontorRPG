@@ -30,6 +30,7 @@ const store: CharacterStore | undefined = SUPABASE_URL && SUPABASE_PUBLISHABLE_K
 const requireLogin = !!store && process.env.REQUIRE_LOGIN === 'true';
 const world = new World({ build: BUILD, log, store, requireLogin });
 void world.loadLeases().catch((e) => log('could not load inn leases', e));
+void world.loadWorld().catch((e) => log('could not load world state', e));
 const statics = serveStatic(CLIENT_DIST);
 
 const server = createServer((req, res) => {
@@ -93,6 +94,7 @@ const heartbeat = setInterval(() => {
 
 const tick = setInterval(() => world.step(), 1000 / TICK_HZ);
 const autosave = setInterval(() => void world.saveAll(), 30_000);
+const worldSave = setInterval(() => void world.saveWorld(), 60_000);
 
 server.listen(PORT, () => log(`KontorRPG server ${BUILD} on :${PORT} (client from ${CLIENT_DIST}); accounts: ${store ? 'Supabase' : 'off (guests only)'}`));
 
@@ -101,6 +103,7 @@ function shutdown(signal: string) {
   clearInterval(tick);
   clearInterval(heartbeat);
   clearInterval(autosave);
+  clearInterval(worldSave);
   void world.shutdown().finally(() => {
     for (const ws of wss.clients) ws.close(1012, 'restart');
     server.close(() => process.exit(0));

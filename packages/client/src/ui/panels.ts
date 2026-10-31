@@ -4,14 +4,14 @@
  * world map (M). They only ever send requests; what you own changes when the server answers.
  */
 import {
-  COMING_SKILLS, EQUIP_SLOTS, IMBUE, INN, ITEMS, NPC_BY_ID, QUESTS, RECIPES, SKILLS, STATION_BY_ID, TALENT_TREE, TREES,
+  COMING_SKILLS, EQUIP_SLOTS, HOMES, IMBUE, INN, ITEMS, homeLabel, type Home, NPC_BY_ID, QUESTS, RECIPES, SKILLS, STATION_BY_ID, TALENT_TREE, TREES,
   canLearn, countItem, knifeRepair, knifeUses, recipeGroup, formatStat, levelFromXp, levelProgress, pointsLeft, questAvailable, recipeAt, respecCost, xpForLevel,
   type ClientMsg, type Stack, type StatKey, type TreeId,
 } from '@kontor/shared';
 import { gameStore, uiStore, type GameState } from '../state/store.js';
 import { iconFor, rarityColor } from './icons.js';
 import { attachTip, hideTip, itemTip } from './tooltip.js';
-import { drawMap } from './map.js';
+import { drawMap, mapTitle } from './map.js';
 
 const $ = (id: string) => document.getElementById(id)!;
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
@@ -121,6 +121,25 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
   }
 
   // ---------------------------------------------------------------- skills
+
+  /** Compact skill list for the left side of the character sheet. */
+  function skillList(g: GameState): HTMLElement[] {
+    const list = el('div', 'skills compact');
+    for (const s of SKILLS) {
+      const xp = g.xp[s.id] ?? 0, lvl = levelFromXp(xp);
+      const row = el('div', 'skill');
+      const top = el('div', 'srow');
+      top.append(el('b', '', s.name), el('span', 'lvl', `${lvl}`));
+      const bar = el('div', 'bar');
+      const fill = el('i');
+      fill.style.width = `${Math.round(levelProgress(xp) * 100)}%`;
+      bar.append(fill);
+      row.append(top, bar);
+      attachTip(row, () => [el('div', 'tname', `${s.name} · level ${lvl}`), el('div', 'tdim', `${xp.toLocaleString('en')} XP · ${(xpForLevel(lvl + 1) - xp).toLocaleString('en')} to level ${lvl + 1}`), el('div', '', s.blurb)]);
+      list.append(row);
+    }
+    return [el('div', 'eyebrow', 'Skills'), list, el('p', 'note', `Every level gives a talent point (T). Coming later: ${COMING_SKILLS.join(', ')}.`)];
+  }
 
   function skills(g: GameState): HTMLElement[] {
     const list = el('div', 'skills');
@@ -275,6 +294,63 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
 
   // ---------------------------------------------------------------- NPC dialogs
 
+  /**
+   * Renting and your chest. `h` = a specific home (at its door), or null for Hilde's lodge rooms.
+   */
+  function homeBox(g: GameState, h: Home | null): HTMLElement {
+    const now = Date.now();
+    const box = el('div', 'inn');
+    const mineId = g.lease.room != null && (g.lease.until ?? 0) > now ? g.lease.room : null;
+    const mine = mineId != null ? HOMES[mineId] : null;
+    const until = g.lease.until ? new Date(g.lease.until).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '';
+    const target = h ?? (mine?.kind === 'room' ? mine : null);
+    const here = !!mine && (h ? mine.id === h.id : mine.kind === 'room');
+    const holder = h ? g.rooms[h.id] : null;
+    const price = (h ?? HOMES[0]).price;
+    box.append(el('div', 'lbl', h ? 'Rent' : 'Lodge rooms'));
+    const sizes = h ? `${h.storage}-slot chest · resting gives +${Math.round(h.rest.xp * 100)}% XP for 30 min` : `24-slot chest · resting gives +5% XP for 30 min`;
+    let text: string;
+    if (here) text = `${target ? homeLabel(target) : 'It'} is yours until ${until}. Pay up to ${INN.maxWeeks} weeks ahead.`;
+    else if (holder && h) text = `${holder} lives here.`;
+    else if (h) text = `Free · ${price} g a week · ${sizes}.${mine ? ` Renting here moves you out of the ${homeLabel(mine).toLowerCase()}; your chest comes with you.` : ''}`;
+    else text = `${HOMES.filter((x) => x.kind === 'room' && !g.rooms[x.id]).length} of ${INN.rooms} rooms free · ${price} g a week · ${sizes}. One home at a time${mine ? ` — you live in the ${homeLabel(mine).toLowerCase()} now` : ''}. Cottages (Bjørkvik) and miners’ huts (Gruben) are rented at their doors.`;
+    box.append(el('p', 'note', text));
+    if (!(holder && h && !here) && !(!h && mine && mine.kind !== 'room')) {
+      const rent = el('div', 'ract');
+      for (const w of [1, 2, 4]) rent.append(btn(`${here ? 'Extend' : 'Rent'} ${w} wk · ${w * price} g`, 'btn', () => send({ t: 'rent', weeks: w, home: h ? h.id : undefined })));
+      box.append(rent);
+    }
+    if (here) {
+      const cap = target?.storage ?? 24;
+      const act = el('div', 'ract');
+      act.append(btn('Rest (Rested buff)', 'btn ghost', () => send({ t: 'rest' })));
+      box.append(act);
+      const two = el('div', 'pbody two');
+      const left = el('div', 'pcol');
+      left.append(el('div', 'lbl', `Your chest (${g.lease.storage.filter(Boolean).length}/${cap})`));
+      const chest = el('div', 'bag');
+      g.lease.storage.forEach((s, i) => {
+        if (i >= cap && !s) return;
+        const c = el('button', i >= cap ? 'cell over' : 'cell'); c.type = 'button';
+        if (s) { c.append(icon(s)); attachTip(c, () => itemTip(s, sellMult())); c.onclick = () => send({ t: 'storage', op: 'take', index: i, qty: s.qty }); }
+        else c.disabled = true;
+        chest.append(c);
+      });
+      left.append(chest);
+      const right = el('div', 'pcol'); right.append(el('div', 'lbl', 'Bag — click to store'), bagGrid(g, { kind: 'storage' }));
+      two.append(left, right);
+      box.append(two);
+    }
+    return box;
+  }
+
+  function homePanel(g: GameState, id: number): HTMLElement[] {
+    const h = HOMES[id];
+    const body = el('div', 'pbody');
+    body.append(homeBox(g, h));
+    return [header(homeLabel(h), h.kind === 'room' ? 'Bjørkvik Lodge' : h.kind === 'cottage' ? 'A cottage on Bjørkvik’s green' : 'A miners’ hut at Gruben camp', 'Esc'), body];
+  }
+
   function npc(g: GameState, id: string): HTMLElement[] {
     const n = NPC_BY_ID.get(id)!;
     const body = el('div', 'pbody');
@@ -311,7 +387,8 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
         const d = ITEMS[itemId];
         const row = el('div', 'ware');
         const info = el('div', 'rinfo');
-        info.append(el('b', '', d.name), el('span', 'note', d.blurb));
+        const facts = [EQUIP_SLOTS.find((x) => x.slot === d.slot)?.label, d.armour ? `Armour ${d.armour}` : '', d.ward ? `Ward ${d.ward}` : ''].filter(Boolean).join(' · ');
+        info.append(el('b', '', d.name), ...(facts ? [el('span', 'wfacts', facts)] : []), el('span', 'wblurb', d.blurb));
         const buy = btn(`${d.buyPrice} g`, 'btn', () => send({ t: 'buy', npc: id, item: itemId }));
         buy.disabled = g.gold < (d.buyPrice ?? Infinity);
         const ic = icon({ id: itemId, qty: 1 });
@@ -325,36 +402,8 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
       two.append(left, right);
       body.append(two);
     }
-    // The inn.
-    if (n.roles.includes('inn')) {
-      const box = el('div', 'inn');
-      const mine = g.lease.room != null && (g.lease.until ?? 0) > now;
-      const free = g.rooms.filter((r) => !r).length;
-      box.append(el('div', 'lbl', 'Rooms'));
-      box.append(el('p', 'note', mine
-        ? `You rent room ${g.lease.room! + 1} until ${new Date(g.lease.until!).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}. Pay up to ${INN.maxWeeks} weeks ahead.`
-        : `${free} of ${INN.rooms} rooms free. ${INN.pricePerWeek} g a week. One home at a time: renting somewhere new moves your chest with you.`));
-      const rent = el('div', 'ract');
-      for (const w of [1, 2, 4]) rent.append(btn(`${mine ? 'Extend' : 'Rent'} ${w} wk · ${w * INN.pricePerWeek} g`, 'btn', () => send({ t: 'rent', weeks: w })));
-      box.append(rent);
-      if (mine) {
-        const two = el('div', 'pbody two');
-        const left = el('div', 'pcol');
-        left.append(el('div', 'lbl', `Your chest (${g.lease.storage.filter(Boolean).length}/${g.lease.storage.length})`));
-        const chest = el('div', 'bag');
-        g.lease.storage.forEach((s, i) => {
-          const c = el('button', 'cell'); c.type = 'button';
-          if (s) { c.append(icon(s)); attachTip(c, () => itemTip(s, sellMult())); c.onclick = () => send({ t: 'storage', op: 'take', index: i, qty: s.qty }); }
-          else c.disabled = true;
-          chest.append(c);
-        });
-        left.append(chest);
-        const right = el('div', 'pcol'); right.append(el('div', 'lbl', 'Bag — click to store'), bagGrid(g, { kind: 'storage' }));
-        two.append(left, right);
-        box.append(two);
-      }
-      body.append(box);
-    }
+    // The inn: Hilde rents lodge rooms (and shows your chest if you live here).
+    if (n.roles.includes('inn')) body.append(homeBox(g, null));
     // The imbuer.
     if (n.roles.includes('imbuer')) {
       const box = el('div', 'quests');
@@ -383,16 +432,17 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
 
   function render() {
     const u = uiStore.get(), g = gameStore.get();
-    if (u.panel === 'character') $('charInv').replaceChildren(...inventory(g));
-    const open = ['skills', 'craft', 'npc', 'talents', 'map'].includes(u.panel);
+    if (u.panel === 'character') { $('charInv').replaceChildren(...inventory(g)); $('charSkills').replaceChildren(...skillList(g)); }
+    const open = ['skills', 'craft', 'npc', 'home', 'talents', 'map'].includes(u.panel);
     root.hidden = !open;
     if (!open) return;
     card.className = `pcard ${u.panel}`;
     if (u.panel === 'skills') card.replaceChildren(...skills(g));
     else if (u.panel === 'craft') card.replaceChildren(...craft(g, u.station));
     else if (u.panel === 'npc') card.replaceChildren(...npc(g, u.npc));
+    else if (u.panel === 'home') card.replaceChildren(...homePanel(g, u.home));
     else if (u.panel === 'talents') card.replaceChildren(...talents(g));
-    else if (u.panel === 'map') { const c = drawMap(); card.replaceChildren(header('Map', 'Mofjellet and Bjørkvik', 'M'), c); }
+    else if (u.panel === 'map') { const c = drawMap(); card.replaceChildren(header('Map', mapTitle(), 'M'), c); }
     hideTip();
   }
 
@@ -401,7 +451,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     if (u.panel !== lastPanel) {
       const was = lastPanel;
       lastPanel = u.panel;
-      if (['skills', 'craft', 'npc', 'talents', 'map', 'character'].includes(was) && u.panel === 'none') onClose();
+      if (['skills', 'craft', 'npc', 'home', 'talents', 'map', 'character'].includes(was) && u.panel === 'none') onClose();
     }
     render();
   });

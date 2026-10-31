@@ -14,7 +14,13 @@ const LOOK: Record<string, [string, string]> = {
   cloth: ['#8a7cb0', '#4e4470'],
   bone: ['#ece4cc', '#a49a7c'],
   goblin: ['#7a8a4a', '#4a5a28'],
+  lynx: ['#b8955e', '#6a5030'],
+  steel: ['#c4cad2', '#6a7078'],
+  silversteel: ['#dce8f2', '#7a90a8'],
+  coal: ['#2a2a2e', '#121214'],
+  gold: ['#f2cc5a', '#a8802a'],
 };
+const GEM_COLOR: Record<string, string> = { quartz: '#ece6f2', sapphire: '#3d64d8', garnet: '#c02a38' };
 const cache = new Map<string, string>();
 type G = CanvasRenderingContext2D;
 
@@ -98,6 +104,7 @@ function bag(g: G, a: string, big: boolean) {
   poly(g, [[x - 1, 20], [x + w + 1, 20], [x + w - 2, 34], [x + 2, 34]], '#4a3420');
   g.strokeStyle = '#3a2818'; g.lineWidth = 3; g.beginPath(); g.arc(32, 20, 8, Math.PI, 0); g.stroke();
 }
+function gem2(g: G, x: number, y: number, c: string) { poly(g, [[x, y - 9], [x + 8, y], [x, y + 9], [x - 8, y]], c); }
 function arrows(g: G, head: string) {
   for (const dx of [-8, 0, 8]) { line(g, '#c8b48a', 3, [[18 + dx, 56], [42 + dx, 12]]); poly(g, [[42 + dx, 12], [46 + dx, 4], [47 + dx, 14]], head); }
 }
@@ -134,6 +141,13 @@ export function iconFor(id: string): string {
     goblin_leather: () => { poly(g, [[10, 20], [54, 20], [50, 46], [14, 46]], '#6a7a3a'); line(g, '#3a4a1a', 2, [[14, 30], [50, 30]]); },
     goblin_trinket: () => { dot(g, 32, 36, 14, '#c8a040'); dot(g, 32, 36, 6, '#4a8a3a'); line(g, '#6a5434', 2, [[32, 22], [32, 8]]); },
     bat_wing: () => poly(g, [[8, 20], [56, 14], [50, 30], [42, 26], [36, 40], [28, 30], [18, 42]], '#4a3a40'),
+    coal: () => lump(g, '#2e2e32', '#18181b', '#55555e'),
+    steel_arrowheads: () => { for (const [x, y] of [[20, 24], [40, 20], [30, 42]]) poly(g, [[x, y - 10], [x + 7, y + 6], [x - 7, y + 6]], '#c4cad2'); },
+    lynx_pelt: () => { poly(g, [[12, 20], [26, 12], [40, 14], [54, 22], [50, 50], [30, 56], [14, 46]], '#b8955e'); for (const [x, y] of [[24, 26], [36, 22], [30, 38], [42, 36], [20, 40]]) dot(g, x, y, 3, '#5a4026'); },
+    lynx_leather: () => { poly(g, [[10, 20], [54, 20], [50, 46], [14, 46]], '#b8955e'); line(g, '#6a5030', 2, [[14, 30], [50, 30]]); },
+    grave_dust: () => { poly(g, [[16, 50], [48, 50], [40, 30], [24, 30]], '#8a8f94'); dot(g, 32, 26, 8, '#a8aeb4'); },
+    wisp_essence: () => { dot(g, 32, 32, 16, 'rgba(143,220,255,.35)'); dot(g, 32, 32, 9, '#d8f4ff'); },
+    kings_crown: () => { poly(g, [[12, 46], [12, 22], [22, 34], [32, 16], [42, 34], [52, 22], [52, 46]], '#b08a3a'); dot(g, 32, 38, 4, '#c02a38'); },
     troll_tooth: () => poly(g, [[24, 10], [40, 10], [44, 30], [32, 56], [22, 30]], '#ece4cc'),
     trolltooth_necklace: () => { g.strokeStyle = '#6a5434'; g.lineWidth = 3; g.beginPath(); g.arc(32, 24, 18, 0, Math.PI); g.stroke(); poly(g, [[28, 40], [36, 40], [34, 58], [30, 58]], '#ece4cc'); },
   };
@@ -154,6 +168,8 @@ export function iconFor(id: string): string {
   else if (d?.weapon === 'staff') staff(g, a);
   else if (d?.weapon === 'fireStaff') staff(g, a, '#ff7a2a');
   else if (d?.weapon === 'frostStaff') staff(g, a, '#8fd8ff');
+  else if (d?.slot === 'ring') { g.strokeStyle = id === 'mine_kings_ring' ? '#b08a3a' : '#d8dde4'; g.lineWidth = 6; g.beginPath(); g.arc(32, 38, 14, 0, Math.PI * 2); g.stroke(); const gc = GEM_COLOR[id.split('_')[0]] ?? (id === 'mine_kings_ring' ? '#c02a38' : null); if (gc) gem2(g, 32, 20, gc); }
+  else if (d?.slot === 'neck') { g.strokeStyle = '#d8dde4'; g.lineWidth = 3; g.beginPath(); g.arc(32, 22, 18, 0, Math.PI); g.stroke(); const gc = GEM_COLOR[id.split('_')[0]]; if (gc) gem2(g, 32, 46, gc); else dot(g, 32, 44, 6, '#d8dde4'); }
   else if (d?.slot) armourPiece(g, d.slot, a, b);
   else { g.fillStyle = '#555'; g.fillRect(16, 16, 32, 32); }
   const url = c.toDataURL();

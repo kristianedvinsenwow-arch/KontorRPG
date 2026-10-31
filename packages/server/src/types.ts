@@ -84,6 +84,6 @@ export interface Mob {
   skinned: boolean;
 }
 
-export interface Ground extends GroundItem { expires: number; ownedUntil: number }
+export interface Ground extends GroundItem { expires: number }
 
 export interface NodeState { left: number; total: number; until: number }

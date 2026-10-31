@@ -6,7 +6,7 @@
 import './styles.css';
 import * as THREE from 'three';
 import {
-  CAST_RANGE, CAVE_ENTRANCE, CAVE_EXIT, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS,
+  CAST_RANGE, HOMES, PORTALS, regionAt, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS,
   STATIONS, TREE_BY_ID, TREE_TYPES, USE_RANGE, VEIN_BY_ID, VEIN_TYPES, WATER_LEVEL,
   MOBS, groundAt, attackInterval, attackRange, computeStats, faceOf, inCaveRegion, isFishable, levelFromXp, r2, r3, swingSeconds, weaponClass,
   type CharacterBuild, type HoldSlot, type MobState, type PlayerStats, type Tree, type Vein,
@@ -112,7 +112,7 @@ const hotbar = initHotbar(
   (index) => net.send({ t: 'eat', index }),
   () => { net.send({ t: 'respawn' }); input.lock(); },
 );
-const PANELS: UiState['panel'][] = ['character', 'skills', 'craft', 'npc', 'talents', 'map'];
+const PANELS: UiState['panel'][] = ['character', 'skills', 'craft', 'npc', 'home', 'talents', 'map'];
 function openPanel(panel: UiState['panel'], extra: Partial<UiState> = {}) {
   uiStore.set({ panel, ...extra });
   input.unlock();
@@ -135,7 +135,7 @@ document.addEventListener('pointerlockchange', () => {
 input.onKey((code) => {
   const u = uiStore.get();
   if (u.panel === 'menu' || u.bossKey || u.chatOpen) return;
-  const want: UiState['panel'] | null = code === 'KeyC' || code === 'KeyI' ? 'character' : code === 'KeyK' ? 'skills' : code === 'KeyT' ? 'talents' : code === 'KeyM' ? 'map' : null;
+  const want: UiState['panel'] | null = code === 'KeyC' || code === 'KeyI' || code === 'KeyK' ? 'character' : code === 'KeyT' ? 'talents' : code === 'KeyM' ? 'map' : null;
   if (PANELS.includes(u.panel)) {
     const close = code === 'Escape' || want === u.panel || (code === 'KeyE' && (u.panel === 'craft' || u.panel === 'npc'));
     if (close) { uiStore.set({ panel: 'none' }); input.lock(); return; }
@@ -296,7 +296,7 @@ function setPrompt(html: string | null) {
 }
 
 // ---------------------------------------------------------------- what you're pointing at / standing by
-type Near = { kind: 'npc'; id: string; name: string } | { kind: 'station'; id: string; name: string } | { kind: 'loot'; id: number; name: string } | { kind: 'corpse'; id: string; name: string } | null;
+type Near = { kind: 'npc'; id: string; name: string } | { kind: 'home'; id: number; name: string } | { kind: 'station'; id: string; name: string } | { kind: 'loot'; id: number; name: string } | { kind: 'corpse'; id: string; name: string } | null;
 type Aim = { kind: 'mob'; m: MobState } | { kind: 'vein'; v: Vein } | { kind: 'tree'; t: Tree } | { kind: 'water'; p: THREE.Vector3 } | null;
 let near: Near = null;
 let aimed: Aim = null;
@@ -308,6 +308,7 @@ function use() {
   if (near.kind === 'loot') net.send({ t: 'pickup', id: near.id });
   else if (near.kind === 'corpse') net.send({ t: 'skin', target: near.id });
   else if (near.kind === 'npc') openPanel('npc', { npc: near.id });
+  else if (near.kind === 'home') openPanel('home', { home: near.id });
   else openPanel('craft', { station: near.id });
 }
 
@@ -375,11 +376,16 @@ function interact(now: number, playing: boolean) {
       const t = look(s.x, s.z, s.r + 0.15, -0.2, 2.2);
       if (t < best) { best = t; near = { kind: 'station', id: s.id, name: s.name.toLowerCase() }; }
     }
+    // Home doors (lodge rooms, cottages, huts): look at the door.
+    for (const h of HOMES) {
+      const t = look(h.door.x, h.door.z, 0.6, 0, 2.2);
+      if (t < best) { best = t; near = { kind: 'home', id: h.id, name: h.kind === 'room' ? `room ${h.id + 1}` : h.name.toLowerCase() }; }
+    }
   }
-  // The mine: walk in / walk out.
+  // Portals (the mine, the Gruben pass): walk in.
   if (now > travelAt) {
-    if (!inCaveRegion(me.x, me.z) && Math.hypot(me.x - CAVE_ENTRANCE.x, me.z - CAVE_ENTRANCE.z) < CAVE_ENTRANCE.r) { net.send({ t: 'travel', to: 'cave' }); travelAt = now + 3000; }
-    else if (inCaveRegion(me.x, me.z) && Math.hypot(me.x - CAVE_EXIT.x, me.z - CAVE_EXIT.z) < CAVE_EXIT.r) { net.send({ t: 'travel', to: 'out' }); travelAt = now + 3000; }
+    const portal = PORTALS.find((p) => regionAt(p.at.x, p.at.z) === regionAt(me!.x, me!.z) && Math.hypot(me!.x - p.at.x, me!.z - p.at.z) < p.at.r);
+    if (portal) { net.send({ t: 'travel', portal: portal.id }); travelAt = now + 3000; }
   }
 
   // What's under the crosshair.
@@ -449,7 +455,7 @@ function interact(now: number, playing: boolean) {
     const name = aimed.kind === 'vein' ? VEIN_TYPES[aimed.v.type].name.toLowerCase() : TREE_TYPES[aimed.t.kind].name.toLowerCase();
     setPrompt(block ? `<span class="bad">${block}</span>` : `Hold <b>click</b> to ${aimed.kind === 'vein' ? 'mine' : 'chop'} ${name}`);
   } else if (aimed?.kind === 'water') setPrompt('<b>Click</b> to cast');
-  else if (near) setPrompt(`<b>E</b> ${near.kind === 'loot' ? `Pick up ${near.name}` : near.kind === 'corpse' ? `Skin the ${near.name}${g.equip.knife ? '' : ' <span class="bad">(needs a skinning knife)</span>'}` : near.kind === 'npc' ? `Talk to ${near.name}` : `Use the ${near.name}`}`);
+  else if (near) setPrompt(`<b>E</b> ${near.kind === 'loot' ? `Pick up ${near.name}` : near.kind === 'corpse' ? `Skin the ${near.name}${g.equip.knife ? '' : ' <span class="bad">(needs a skinning knife)</span>'}` : near.kind === 'npc' ? `Talk to ${near.name}` : near.kind === 'home' ? `Knock on ${near.name.startsWith('room') ? near.name : `the ${near.name}`}` : `Use the ${near.name}`}`);
   else setPrompt(null);
 
   // Purse and crafting bar.
@@ -503,6 +509,7 @@ function frame() {
     sendInput(now, act);
     const under = inCaveRegion(me.x, me.z);
     gfx.setUnderground(under);
+    gfx.setRegion(regionAt(me.x, me.z));
     caveView.setVisible(under);
     if (!under) terrain.update(me.x, me.z);
 

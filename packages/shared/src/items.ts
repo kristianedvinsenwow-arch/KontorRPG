@@ -17,14 +17,14 @@ export type WeaponClass = 'sword' | 'longsword' | 'battleaxe' | 'bow' | 'staff' 
 export type ArmourType = 'cloth' | 'leather' | 'metal';
 export type ToolKind = 'pickaxe' | 'hatchet' | 'rod' | 'knife';
 /** Visual material for models and icons. */
-export type Look = 'stone' | 'iron' | 'silver' | 'birch' | 'pine' | 'leather' | 'goblin' | 'cloth' | 'bone';
+export type Look = 'stone' | 'iron' | 'steel' | 'silversteel' | 'silver' | 'coal' | 'gold' | 'birch' | 'pine' | 'leather' | 'goblin' | 'lynx' | 'cloth' | 'bone';
 
 export interface ItemDef {
   id: string;
   name: string;
   kind: ItemKind;
   stack: number;
-  /** 1 = stone/birch, 2 = iron/pine, 3 = silver. */
+  /** 1 = stone/birch, 2 = iron/pine, 3 = steel, 4 = silversteel (steel with silver worked in). */
   tier?: number;
   look?: Look;
   slot?: Slot;
@@ -155,24 +155,30 @@ export function rollEffects(d: ItemDef, rarity: Rarity, rand: () => number): Eff
 // ------------------------------------------------------------------ item list
 
 const defs: ItemDef[] = [];
+const ITEM_GEM_NAME: Record<string, string> = { quartz: 'a Mofjell quartz', sapphire: 'a sapphire', garnet: 'a garnet' };
 const add = (d: ItemDef) => { defs.push(d); return d; };
 
 // raw materials
 add({ id: 'stone', name: 'Stone', kind: 'ore', stack: 10, tier: 1, look: 'stone', sellValue: 0, blurb: 'Mined from stone veins. Shape it at the anvil.' });
 add({ id: 'iron_ore', name: 'Iron ore', kind: 'ore', stack: 10, tier: 2, look: 'iron', sellValue: 0, blurb: 'Rusty ore from iron veins. Smelt two into a bar.' });
+add({ id: 'coal', name: 'Coal', kind: 'ore', stack: 20, tier: 3, look: 'coal', sellValue: 0, blurb: 'Black, crumbly and warm to the touch. Smelt it with iron ore into steel.' });
 add({ id: 'silver_ore', name: 'Silver ore', kind: 'ore', stack: 10, tier: 3, look: 'silver', sellValue: 1, blurb: 'Found deep in the cave. Smelt two into a bar.' });
 add({ id: 'quartz', name: 'Mofjell quartz', kind: 'gem', stack: 5, sellValue: 3, blurb: 'A rare find in stone veins. Imbues birch staffs.' });
 add({ id: 'sapphire', name: 'Sapphire', kind: 'gem', stack: 5, sellValue: 8, blurb: 'A rare find in iron veins. Imbues pine staffs.' });
 add({ id: 'garnet', name: 'Garnet', kind: 'gem', stack: 5, sellValue: 15, blurb: 'A deep red gem from silver veins.' });
 add({ id: 'shaped_stone', name: 'Shaped stone', kind: 'material', stack: 10, tier: 1, look: 'stone', sellValue: 0, blurb: 'Two stones knapped into a usable block.' });
 add({ id: 'iron_bar', name: 'Iron bar', kind: 'bar', stack: 10, tier: 2, look: 'iron', sellValue: 1, blurb: 'Smelted from two iron ore.' });
-add({ id: 'silver_bar', name: 'Silver bar', kind: 'bar', stack: 10, tier: 3, look: 'silver', sellValue: 4, blurb: 'Smelted from two silver ore. Silver gear comes later; the smith pays well for it.' });
+add({ id: 'silver_bar', name: 'Silver bar', kind: 'bar', stack: 10, tier: 3, look: 'silver', sellValue: 4, blurb: 'Smelted from two silver ore. For jewellery, and worked into steel for silversteel gear.' });
+add({ id: 'steel_bar', name: 'Steel bar', kind: 'bar', stack: 10, tier: 3, look: 'steel', sellValue: 2, blurb: 'Iron ore smelted with coal: harder and lighter than iron.' });
+add({ id: 'silversteel_bar', name: 'Silversteel bar', kind: 'bar', stack: 10, tier: 4, look: 'silversteel', sellValue: 6, blurb: 'Steel folded with silver. Takes an edge like nothing else, and turns spells.' });
 add({ id: 'birch_log', name: 'Birch log', kind: 'log', stack: 10, tier: 1, look: 'birch', sellValue: 0, blurb: 'Pale, light wood. Shafts, shortbows, staffs.' });
 add({ id: 'pine_log', name: 'Pine log', kind: 'log', stack: 10, tier: 2, look: 'pine', sellValue: 1, blurb: 'Tough, resinous wood for better bows and staffs.' });
 add({ id: 'arrow_shaft', name: 'Arrow shafts', kind: 'material', stack: 100, look: 'birch', sellValue: 0, blurb: 'Fit arrowheads to them at the workbench.' });
 add({ id: 'stone_arrowheads', name: 'Stone arrowheads', kind: 'material', stack: 100, tier: 1, look: 'stone', sellValue: 0, blurb: 'Knapped at the anvil, fitted at the workbench.' });
 add({ id: 'iron_arrowheads', name: 'Iron arrowheads', kind: 'material', stack: 100, tier: 2, look: 'iron', sellValue: 0, blurb: 'Forged at the anvil, fitted at the workbench.' });
 add({ id: 'stone_arrow', name: 'Stone arrows', kind: 'ammo', stack: 200, tier: 1, look: 'stone', slot: 'ammo', ammoDmg: 1, sellValue: 0, blurb: 'Wear them in the ammo slot. +1 damage per shot.' });
+add({ id: 'steel_arrowheads', name: 'Steel arrowheads', kind: 'material', stack: 100, tier: 3, look: 'steel', sellValue: 0, blurb: 'Forged at the anvil, fitted at the workbench.' });
+add({ id: 'steel_arrow', name: 'Steel arrows', kind: 'ammo', stack: 200, tier: 3, look: 'steel', slot: 'ammo', ammoDmg: 5, sellValue: 0, blurb: 'Wear them in the ammo slot. +5 damage per shot.' });
 add({ id: 'iron_arrow', name: 'Iron arrows', kind: 'ammo', stack: 200, tier: 2, look: 'iron', slot: 'ammo', ammoDmg: 3, sellValue: 0, blurb: 'Wear them in the ammo slot. +3 damage per shot.' });
 
 // fish and food
@@ -199,6 +205,11 @@ add({ id: 'wolf_pelt', name: 'Wolf pelt', kind: 'material', stack: 10, look: 'le
 add({ id: 'goblin_skin', name: 'Goblin skin', kind: 'material', stack: 10, look: 'goblin', sellValue: 3, blurb: 'Tough, greenish hide from goblins. Tan it at a tanning rack.' });
 add({ id: 'leather', name: 'Leather', kind: 'material', stack: 10, tier: 1, look: 'leather', sellValue: 3, blurb: 'Tanned wolf pelt. Leather armour is made from it.' });
 add({ id: 'goblin_leather', name: 'Goblin leather', kind: 'material', stack: 10, tier: 2, look: 'goblin', sellValue: 6, blurb: 'Tanned goblin skin. Tougher than wolf leather.' });
+add({ id: 'lynx_pelt', name: 'Lynx pelt', kind: 'material', stack: 10, look: 'lynx', sellValue: 6, blurb: 'Soft, spotted and warm. Skinned from Gruben’s lynxes. Tan it at a tanning rack.' });
+add({ id: 'lynx_leather', name: 'Lynx leather', kind: 'material', stack: 10, tier: 3, look: 'lynx', sellValue: 10, blurb: 'Tanned lynx pelt: supple and strong. Tier 3 leather.' });
+add({ id: 'grave_dust', name: 'Grave dust', kind: 'material', stack: 20, sellValue: 2, blurb: 'What’s left of a draug. Alchemy will want it.' });
+add({ id: 'wisp_essence', name: 'Wisp essence', kind: 'material', stack: 10, sellValue: 6, blurb: 'A cold, faintly glowing mote. Enchanting will want it.' });
+add({ id: 'kings_crown', name: 'Rusted crown', kind: 'trinket', stack: 5, sellValue: 60, blurb: 'Proof you put the Mine King back to rest.' });
 add({ id: 'goblin_trinket', name: 'Goblin trinket', kind: 'junk', stack: 10, sellValue: 4, blurb: 'Shiny junk goblins hoard.' });
 add({ id: 'bat_wing', name: 'Bat wing', kind: 'material', stack: 10, sellValue: 1, blurb: 'Leathery. Alchemy will want these.' });
 add({ id: 'troll_tooth', name: 'Troll tooth', kind: 'trinket', stack: 5, sellValue: 25, blurb: 'Proof you beat Old Knut.' });
@@ -206,24 +217,36 @@ add({ id: 'troll_tooth', name: 'Troll tooth', kind: 'trinket', stack: 5, sellVal
 // tools
 add({ id: 'stone_pickaxe', name: 'Stone pickaxe', kind: 'tool', stack: 1, tier: 1, look: 'stone', slot: 'pickaxe', tool: 'pickaxe', power: 1, swingSec: 2.6, sellValue: 2, buyPrice: 10, blurb: 'Mines stone and iron.' });
 add({ id: 'iron_pickaxe', name: 'Iron pickaxe', kind: 'tool', stack: 1, tier: 2, look: 'iron', slot: 'pickaxe', tool: 'pickaxe', power: 2, swingSec: 1.9, sellValue: 6, blurb: 'Faster, and strong enough for silver.' });
+add({ id: 'steel_pickaxe', name: 'Steel pickaxe', kind: 'tool', stack: 1, tier: 3, look: 'steel', slot: 'pickaxe', tool: 'pickaxe', power: 3, swingSec: 1.5, sellValue: 12, blurb: 'Light and hard. Swings fast.' });
+add({ id: 'silversteel_pickaxe', name: 'Silversteel pickaxe', kind: 'tool', stack: 1, tier: 4, look: 'silversteel', slot: 'pickaxe', tool: 'pickaxe', power: 4, swingSec: 1.25, mods: { gemChance: 0.25 }, sellValue: 25, blurb: 'Rings like a bell on stone. Gems seem to find it (+25% gem chance).' });
 add({ id: 'stone_hatchet', name: 'Stone hatchet', kind: 'tool', stack: 1, tier: 1, look: 'stone', slot: 'hatchet', tool: 'hatchet', power: 1, swingSec: 2.4, sellValue: 2, buyPrice: 10, blurb: 'Fells birch and pine.' });
 add({ id: 'iron_hatchet', name: 'Iron hatchet', kind: 'tool', stack: 1, tier: 2, look: 'iron', slot: 'hatchet', tool: 'hatchet', power: 2, swingSec: 1.8, sellValue: 6, blurb: 'Bites deeper; fells trees a third faster.' });
+add({ id: 'steel_hatchet', name: 'Steel hatchet', kind: 'tool', stack: 1, tier: 3, look: 'steel', slot: 'hatchet', tool: 'hatchet', power: 3, swingSec: 1.4, sellValue: 12, blurb: 'Holds an edge all day.' });
+add({ id: 'silversteel_hatchet', name: 'Silversteel hatchet', kind: 'tool', stack: 1, tier: 4, look: 'silversteel', slot: 'hatchet', tool: 'hatchet', power: 4, swingSec: 1.2, mods: { doubleYield: 0.08 }, sellValue: 25, blurb: 'Splits clean: sometimes two logs from one cut (+8%).' });
 add({ id: 'stone_skinning_knife', name: 'Stone skinning knife', kind: 'tool', stack: 1, tier: 1, look: 'stone', slot: 'knife', tool: 'knife', power: 1, knife: { fail: 0.35, uses: 12 }, sellValue: 1, blurb: 'Wear it to skin wolves and goblins (E on the body). Wears out; repair it at an anvil.' });
 add({ id: 'iron_skinning_knife', name: 'Iron skinning knife', kind: 'tool', stack: 1, tier: 2, look: 'iron', slot: 'knife', tool: 'knife', power: 2, knife: { fail: 0.18, uses: 25 }, sellValue: 4, blurb: 'Ruins far fewer hides and lasts twice as long. Repair it at an anvil.' });
+add({ id: 'steel_skinning_knife', name: 'Steel skinning knife', kind: 'tool', stack: 1, tier: 3, look: 'steel', slot: 'knife', tool: 'knife', power: 3, knife: { fail: 0.1, uses: 40 }, sellValue: 8, blurb: 'Rarely ruins a hide. Repair it at an anvil.' });
+add({ id: 'silversteel_skinning_knife', name: 'Silversteel skinning knife', kind: 'tool', stack: 1, tier: 4, look: 'silversteel', slot: 'knife', tool: 'knife', power: 4, knife: { fail: 0.05, uses: 60 }, sellValue: 16, blurb: 'Almost never ruins a hide, and lasts and lasts. Repair it at an anvil.' });
 add({ id: 'basic_rod', name: 'Basic fishing rod', kind: 'tool', stack: 1, tier: 1, look: 'birch', slot: 'rod', tool: 'rod', power: 1, sellValue: 2, buyPrice: 10, blurb: 'A stick, a line and hope.' });
 add({ id: 'birch_rod', name: 'Birch fishing rod', kind: 'tool', stack: 1, tier: 1, look: 'birch', slot: 'rod', tool: 'rod', power: 1, mods: { fishEase: 0.1 }, sellValue: 4, blurb: 'Springy birch: a bigger catch bar.' });
 add({ id: 'pine_rod', name: 'Pine fishing rod', kind: 'tool', stack: 1, tier: 2, look: 'pine', slot: 'rod', tool: 'rod', power: 2, mods: { fishEase: 0.2, fishSpeed: 0.1 }, sellValue: 10, blurb: 'Lands the big ones: pike and char bite sooner.' });
 
+/** Smithed metal tiers, in order. Silver itself is for jewellery and silversteel. */
+export const METALS = ['stone', 'iron', 'steel', 'silversteel'] as const;
+const metalName = (t: string) => (t === 'silversteel' ? 'Silversteel' : t[0].toUpperCase() + t.slice(1));
+const ARMOUR_MULT = [1, 1.8, 2.6, 3.4];
+
 // weapons: [class, dps per tier, interval, range, twoHanded]
-const W: Record<'sword' | 'longsword' | 'battleaxe', { name: string; dps: [number, number]; interval: number; range: number; two: boolean; blurb: string }> = {
-  sword: { name: 'sword', dps: [7, 11], interval: 1.6, range: 2.6, two: false, blurb: 'One-handed. Right click: Heavy Strike (2.5× damage, 8 s).' },
-  longsword: { name: 'longsword', dps: [9, 14], interval: 2.3, range: 3.0, two: true, blurb: 'Two-handed. Right click: Whirlwind — spin and hit everything around you (12 s).' },
-  battleaxe: { name: 'battleaxe', dps: [9.5, 15], interval: 2.5, range: 2.8, two: true, blurb: 'Two-handed. Right click: Executioner (4× damage, 18 s).' },
+const W: Record<'sword' | 'longsword' | 'battleaxe', { name: string; dps: number[]; interval: number; range: number; two: boolean; blurb: string }> = {
+  sword: { name: 'sword', dps: [7, 11, 15, 19], interval: 1.6, range: 2.6, two: false, blurb: 'One-handed. Right click: Heavy Strike (2.5× damage, 8 s).' },
+  longsword: { name: 'longsword', dps: [9, 14, 19, 24.5], interval: 2.3, range: 3.0, two: true, blurb: 'Two-handed. Right click: Whirlwind — spin and hit everything around you (12 s).' },
+  battleaxe: { name: 'battleaxe', dps: [9.5, 15, 20.5, 26.5], interval: 2.5, range: 2.8, two: true, blurb: 'Two-handed. Right click: Executioner (4× damage, 18 s).' },
 };
 for (const [cls, w] of Object.entries(W) as [keyof typeof W, typeof W.sword][]) {
-  ['stone', 'iron'].forEach((t, i) => add({
-    id: `${t}_${cls}`, name: `${t[0].toUpperCase()}${t.slice(1)} ${w.name}`, kind: 'weapon', stack: 1, tier: i + 1, look: t as Look,
-    slot: 'mainHand', weapon: cls, dps: w.dps[i], interval: w.interval, range: w.range, twoHanded: w.two, sellValue: (i + 1) * (w.two ? 3 : 2), blurb: w.blurb,
+  METALS.forEach((t, i) => add({
+    id: `${t}_${cls}`, name: `${metalName(t)} ${w.name}`, kind: 'weapon', stack: 1, tier: i + 1, look: t as Look,
+    slot: 'mainHand', weapon: cls, dps: w.dps[i], interval: w.interval, range: w.range, twoHanded: w.two, sellValue: [1, 2, 4, 8][i] * (w.two ? 3 : 2), blurb: w.blurb,
+    ...(t === 'silversteel' ? { mods: { allDmg: 0.04, crit: 0.02 } } : {}),
   }));
 }
 add({ id: 'birch_shortbow', name: 'Birch shortbow', kind: 'weapon', stack: 1, tier: 1, look: 'birch', slot: 'mainHand', weapon: 'bow', dps: 6, interval: 2.0, range: 28, twoHanded: true, sellValue: 3, blurb: 'Needs arrows in the ammo slot. Right click: Power Shot (3×, 10 s).' });
@@ -246,20 +269,36 @@ export const ARMOUR_PIECES: { piece: string; slot: Slot; name: Record<ArmourType
   { piece: 'kite_shield', slot: 'offHand', name: { metal: 'kite shield', leather: '', cloth: '' }, bars: 12, metal: 3, leather: [0, 0], cloth: [0, 0] },
 ];
 for (const p of ARMOUR_PIECES) {
-  ['stone', 'iron'].forEach((t, i) => add({
-    id: `${t}_${p.piece}`, name: `${t[0].toUpperCase()}${t.slice(1)} ${p.name.metal}`, kind: 'armour', stack: 1, tier: i + 1, look: t as Look,
-    slot: p.slot, armourType: 'metal', armour: i === 0 ? p.metal : Math.round(p.metal * 1.8), ward: 0, sellValue: Math.ceil(p.bars / 6) * (i + 1),
-    blurb: p.slot === 'offHand' ? 'Metal shield: lets you block (see block chance). One-handed weapons only.' : 'Metal armour: strong vs physical damage, a little slower, and magic hurts a bit more.',
+  METALS.forEach((t, i) => add({
+    id: `${t}_${p.piece}`, name: `${metalName(t)} ${p.name.metal}`, kind: 'armour', stack: 1, tier: i + 1, look: t as Look,
+    slot: p.slot, armourType: 'metal', armour: Math.round(p.metal * ARMOUR_MULT[i]), ward: t === 'silversteel' ? Math.max(1, Math.round(p.metal * 0.6)) : 0, sellValue: Math.ceil(p.bars / 6) * [1, 2, 4, 8][i],
+    blurb: (p.slot === 'offHand' ? 'A sturdy shield for blocking blows. Goes with one-handed weapons.' : 'Heavy plate that blades struggle through. Slows you a touch, and spells bite a little harder.')
+      + (t === 'silversteel' ? ' The silver worked into it turns some magic, too.' : ''),
   }));
   if (p.slot === 'offHand') continue;
-  add({ id: `leather_${p.piece}`, name: `Leather ${p.name.leather}`, kind: 'armour', stack: 1, tier: 1, look: 'leather', slot: p.slot, armourType: 'leather', armour: p.leather[0], ward: p.leather[1], sellValue: 2, blurb: 'Leather armour: medium protection vs both, and a little faster. Made at a tanning rack.' });
-  add({ id: `goblinhide_${p.piece}`, name: `Goblinhide ${p.name.leather}`, kind: 'armour', stack: 1, tier: 2, look: 'goblin', slot: p.slot, armourType: 'leather', armour: Math.max(1, Math.round(p.leather[0] * 1.8)), ward: Math.round(p.leather[1] * 1.8), sellValue: 5, blurb: 'Goblin-skin leather armour: tier 2 leather. Made at a tanning rack.' });
-  add({ id: `cloth_${p.piece}`, name: `Cloth ${p.name.cloth}`, kind: 'armour', stack: 1, tier: 1, look: 'cloth', slot: p.slot, armourType: 'cloth', armour: p.cloth[0], ward: p.cloth[1], sellValue: 2, buyPrice: 6 + p.bars, blurb: 'Cloth armour: strong vs magic, little vs blades.' });
+  add({ id: `leather_${p.piece}`, name: `Leather ${p.name.leather}`, kind: 'armour', stack: 1, tier: 1, look: 'leather', slot: p.slot, armourType: 'leather', armour: p.leather[0], ward: p.leather[1], sellValue: 2, blurb: 'Supple wolf leather. Fair against blades and spells alike, and light on the feet.' });
+  add({ id: `goblinhide_${p.piece}`, name: `Goblinhide ${p.name.leather}`, kind: 'armour', stack: 1, tier: 2, look: 'goblin', slot: p.slot, armourType: 'leather', armour: Math.max(1, Math.round(p.leather[0] * 1.8)), ward: Math.round(p.leather[1] * 1.8), sellValue: 5, blurb: 'Tough goblin hide, tanned and stitched. Sturdier than wolf leather.' });
+  add({ id: `lynxhide_${p.piece}`, name: `Lynxhide ${p.name.leather}`, kind: 'armour', stack: 1, tier: 3, look: 'lynx', slot: p.slot, armourType: 'leather', armour: Math.max(1, Math.round(p.leather[0] * 2.6)), ward: Math.round(p.leather[1] * 2.6), sellValue: 10, blurb: 'Soft, spotted lynx hide. The finest leather this side of the mountains.' });
+  add({ id: `cloth_${p.piece}`, name: `Cloth ${p.name.cloth}`, kind: 'armour', stack: 1, tier: 1, look: 'cloth', slot: p.slot, armourType: 'cloth', armour: p.cloth[0], ward: p.cloth[1], sellValue: 2, buyPrice: 6 + p.bars, blurb: 'Light woven cloth. Turns spells well, but won’t stop much of a blade.' });
+}
+
+// jewellery: silver with a gem set in it (crafted at the anvil, rolls rarity like other gear)
+export const JEWELS: { gem: string; name: string; ring: Partial<Stats>; neck: Partial<Stats> }[] = [
+  { gem: '', name: 'Silver', ring: { maxHp: 4 }, neck: { maxHp: 6 } },
+  { gem: 'quartz', name: 'Quartz', ring: { luck: 4, xp: 0.03 }, neck: { luck: 6, xp: 0.05 } },
+  { gem: 'sapphire', name: 'Sapphire', ring: { magicDmg: 0.05, ward: 1 }, neck: { magicDmg: 0.08, ward: 2 } },
+  { gem: 'garnet', name: 'Garnet', ring: { meleeDmg: 0.04, rangedDmg: 0.04 }, neck: { allDmg: 0.06, maxHp: 4 } },
+];
+for (const j of JEWELS) {
+  const base = j.gem ? `${j.gem}_` : 'silver_';
+  add({ id: `${base}ring`, name: `${j.name} ring`, kind: 'trinket', stack: 1, tier: 3, look: 'silver', slot: 'ring', mods: j.ring, sellValue: j.gem ? 20 : 8, blurb: j.gem ? `Silver set with ${ITEM_GEM_NAME[j.gem]}.` : 'A plain silver band.' });
+  add({ id: `${base}necklace`, name: `${j.name} necklace`, kind: 'trinket', stack: 1, tier: 3, look: 'silver', slot: 'neck', mods: j.neck, sellValue: j.gem ? 30 : 12, blurb: j.gem ? `A silver chain with ${ITEM_GEM_NAME[j.gem]}.` : 'A fine silver chain.' });
 }
 
 // bags and boss uniques
 add({ id: 'small_rucksack', name: 'Small rucksack', kind: 'bag', stack: 1, slot: 'back', bagSlots: 4, sellValue: 10, buyPrice: 40, blurb: '+4 bag slots.' });
 add({ id: 'leather_backpack', name: 'Leather backpack', kind: 'bag', stack: 1, slot: 'back', bagSlots: 8, sellValue: 30, buyPrice: 120, blurb: '+8 bag slots.' });
+add({ id: 'mine_kings_ring', name: 'Mine King’s signet', kind: 'trinket', stack: 1, slot: 'ring', fixedRarity: 4, mods: { maxHp: 8, allDmg: 0.06, miningSpeed: 0.1, gemChance: 0.3 }, sellValue: 90, blurb: 'Heavy, cold silver. The Mine King wore it for three hundred years.' });
 add({ id: 'trolltooth_necklace', name: 'Trolltooth necklace', kind: 'trinket', stack: 1, slot: 'neck', fixedRarity: 4, mods: { maxHp: 10, meleeDmg: 0.06, luck: 5 }, sellValue: 60, blurb: 'Old Knut’s own. Rarely, he drops it.' });
 
 export const ITEMS: Record<string, ItemDef> = Object.fromEntries(defs.map((d) => [d.id, d]));
@@ -427,4 +466,4 @@ export const knifeUses = (s: Pick<Stack, 'id' | 'r'>) => Math.round((ITEMS[s.id]
 /** Extra pelt chance from a knife's rarity: +10% per step. */
 export const knifeBonus = (s: Pick<Stack, 'r'>) => 0.1 * (s.r ?? 0);
 /** What a repair at the anvil costs. */
-export const knifeRepair = (id: string) => (ITEMS[id]?.tier === 2 ? { item: 'iron_bar', qty: 1 } : { item: 'shaped_stone', qty: 1 });
+export const knifeRepair = (id: string) => ({ item: ['shaped_stone', 'iron_bar', 'steel_bar', 'silversteel_bar'][(ITEMS[id]?.tier ?? 1) - 1] ?? 'shaped_stone', qty: 1 });

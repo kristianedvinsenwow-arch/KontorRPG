@@ -5,7 +5,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CHUNK_SIZE, VEINS, WORLD_HALF, WATER_LEVEL, heightAt, mulberry32, keepClear, pathDist, treesInChunk } from '@kontor/shared';
+import { CHUNK_SIZE, VEINS, inBounds, WATER_LEVEL, heightAt, mulberry32, keepClear, pathDist, treesInChunk } from '@kontor/shared';
 import { registerTrees } from './trees.js';
 import { canvasTex, TEX } from '../engine/procgen.js';
 
@@ -189,7 +189,7 @@ export function buildProps(cx: number, cz: number, colliders: Collider[], dense:
     const e = 0.6;
     return N.set(-(heightAt(x + e, z) - heightAt(x - e, z)), 2 * e, -(heightAt(x, z + e) - heightAt(x, z - e))).normalize();
   };
-  const inWorld = (x: number, z: number) => Math.abs(x) < WORLD_HALF - 2 && Math.abs(z) < WORLD_HALF - 2;
+  const inWorld = (x: number, z: number) => inBounds(x, z, 2);
 
   // Rocks (decoration only).
   for (let i = 0; i < 70; i++) {
