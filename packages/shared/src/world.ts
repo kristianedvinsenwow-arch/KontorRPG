@@ -302,7 +302,7 @@ export const STATIONS: Station[] = [
   { id: 'camp_bench', kind: 'workbench', name: 'Workbench', x: 9, z: 4, r: 1 },
   { id: 'camp_fire', kind: 'campfire', name: 'Campfire', x: -3, z: 6, r: 0.9 },
   { id: 'village_fire', kind: 'campfire', name: 'Campfire', x: V.x + 1, z: V.z + 7, r: 0.9 },
-  { id: 'inn_stove', kind: 'stove', name: 'Inn stove', x: V.x - 13.5, z: V.z - 2.5, r: 0.8 },
+  { id: 'inn_stove', kind: 'stove', name: 'Inn stove', x: V.x + 12.4, z: V.z - 9.5, r: 0.8 },
   { id: 'village_bench', kind: 'workbench', name: 'Workbench', x: V.x - 8, z: V.z - 1, r: 1 },
   { id: 'camp_tanning', kind: 'tanning', name: 'Tanning rack', x: -4, z: -12.5, r: 1 },
   { id: 'village_tanning', kind: 'tanning', name: 'Tanning rack', x: V.x + 13, z: V.z + 6, r: 1 },

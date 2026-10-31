@@ -220,7 +220,7 @@ export function createGfx(container: HTMLElement, quality: Quality): Gfx {
       fog.near = near; fog.far = far;
       // Starry night sky shows through when it's dark and clear.
       if (stars) { stars.visible = night > 0.3 && w.cloud < 0.7; (stars.material as THREE.PointsMaterial).opacity = Math.max(0, night - 0.3) * (1 - w.cloud) * 1.2; }
-      renderer.toneMappingExposure = 0.95 + night * 0.25;
+      renderer.toneMappingExposure = 0.95 + night * 0.08;
       grade.uniforms.saturation.value = (grim ? 0.82 : 1.08) * (1 - night * 0.35) * (1 - w.cloud * 0.2);
       grade.uniforms.warmth.value = grim ? -0.01 : 0.025 * day - 0.015 * night;
     },

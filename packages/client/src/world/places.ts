@@ -671,7 +671,7 @@ export class Places {
     this.t += dt;
     for (const f of this.fires) {
       const k = 0.85 + Math.sin(this.t * 13 + f.base) * 0.08 + Math.sin(this.t * 7.3) * 0.07;
-      f.light.intensity = f.base * k * (1 + this.night * 0.8);
+      f.light.intensity = f.base * k * (1 + this.night * 0.25);
       for (const m of f.mats) m.emissiveIntensity = 2.2 * k;
     }
     if (this.stableHorse) animateHorse(this.stableHorse, 0, dt);
