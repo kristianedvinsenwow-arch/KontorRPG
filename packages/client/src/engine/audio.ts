@@ -276,7 +276,7 @@ class Audio {
     const filter = ctx.createBiquadFilter(), gain = ctx.createGain();
     gain.gain.value = 0;
     if (k === 'wind') { filter.type = 'bandpass'; filter.frequency.value = 400; filter.Q.value = 0.5; }
-    if (k === 'rain') { filter.type = 'highpass'; filter.frequency.value = 1200; }
+    if (k === 'rain') { filter.type = 'lowpass'; filter.frequency.value = 2200; filter.Q.value = 0.3; } // soft patter, not a hiss
     if (k === 'water') { filter.type = 'lowpass'; filter.frequency.value = 500; }
     if (k === 'cave') { filter.type = 'lowpass'; filter.frequency.value = 120; }
     src.connect(filter).connect(gain).connect(this.amb);
@@ -293,7 +293,7 @@ class Audio {
     const gust = 0.5 + 0.5 * Math.sin(t * 0.21) * Math.sin(t * 0.13 + 1);
     set('wind', cave ? 0 : (0.025 + gust * 0.03 + Math.max(0, o.height - 8) * 0.004 + o.snow * 0.04 + (o.region === 'gruben' ? 0.02 : 0)) * shelter);
     if (this.loops.wind) this.loops.wind.filter.frequency.setTargetAtTime(300 + gust * 400, t, 0.8);
-    set('rain', cave ? 0 : o.rain * 0.12 * (o.indoors ? 0.5 : 1));
+    set('rain', cave ? 0 : o.rain * 0.022 * (o.indoors ? 0.4 : 1));
     set('water', cave ? 0 : o.nearWater * 0.05);
     set('cave', cave ? 0.18 : 0);
     const now = performance.now();
