@@ -6,7 +6,7 @@
  */
 import {
   ACHIEVEMENTS, titleOf, AOI_CHUNKS, PORTAL_BY_ID, HOMES, maxSpeed, regionAt, homeAt, homeDoorway, homeLabel, type Home, CHUNK_SIZE, IMBUE, INN, ITEMS, MAX_CHAT_LEN, MAX_NAME_LEN,
-  NPC_BY_ID, PLAYER_COLORS, PROTOCOL_VERSION, QUEST_BY_ID, RECIPE_BY_ID, START_GOLD, STATION_BY_ID, TICK_HZ, USE_RANGE,
+  NPC_BY_ID, PLAYER_COLORS, PROTOCOL_VERSION, QUEST_BY_ID, RECIPE_BY_ID, START_GOLD, START_TOOLS, STATION_BY_ID, TICK_HZ, USE_RANGE,
   EAT_LOCK_MS, POTION_CD_MS, addStack, burnChance, knifeRepair, knifeUses, STATIONS, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
   questAvailable, r2, r3, recipeAt, removeItem, resizeBag, respecCost, rollCraftRarity, canCraftEpic, sellEach, rollEffects, rollsRarity,
   validateBuild, xpMult, COMBAT_TREES, TALENT_TREE,
@@ -192,7 +192,7 @@ export class World {
     const store = this.opts.store;
     const fresh = (build: Extract<ClientMsg, { t: 'hello' }>['build'], userId: string | null): Joining => ({
       userId, name: sanitizeName(msg.name), color: Math.abs(Math.floor(msg.color)) % PLAYER_COLORS.length, build, pos: null, gold: START_GOLD,
-      bag: emptyBag(computeStats(build, {}, {}, {}).bagSlots), equip: {}, xp: {}, talents: {}, respecs: 0, quests: {}, lease: null, storage: emptyBag(STORAGE_SLOTS), achievements: { c: {}, done: [], title: null },
+      bag: emptyBag(computeStats(build, {}, {}, {}).bagSlots), equip: Object.fromEntries(START_TOOLS.map((id) => [ITEMS[id].slot, { id, qty: 1, ...(ITEMS[id].knife ? { d: knifeUses({ id }) } : {}) }])), xp: {}, talents: {}, respecs: 0, quests: {}, lease: null, storage: emptyBag(STORAGE_SLOTS), achievements: { c: {}, done: [], title: null },
     });
     if (!store || (!msg.token && !this.opts.requireLogin)) {
       const bad = validateBuild(msg.build);
@@ -497,6 +497,7 @@ export class World {
     if (!this.near(p, st)) return this.notice(p, `Stand next to the ${st.name.toLowerCase()}.`, 'error');
     const lvl = levelOf(p.xp, r.skill);
     if (lvl < r.level) return this.notice(p, `Needs ${r.skill[0].toUpperCase()}${r.skill.slice(1)} ${r.level} (you have ${lvl}).`, 'error');
+    if (r.plans && !p.achievements.c[`plans:${r.plans}`]) return this.notice(p, `You need ${r.plans} plans first — they’re found on monsters.`, 'error');
     if (!r.inputs.every((i) => countItem(p.bag, i.item) >= i.qty)) return this.notice(p, 'You don’t have the materials.', 'error');
     const speed = 1 + Math.max(0, (p.stats.scoped as any)[r.skill]?.craftSpeed ?? 0);
     const seconds = r.seconds / speed;
@@ -681,6 +682,17 @@ export class World {
 
   private eat(p: ServerPlayer, index: number): void {
     if (p.bag[index] && ITEMS[p.bag[index]!.id]?.potion) return this.drink(p, index);
+    const plans = p.bag[index] ? ITEMS[p.bag[index]!.id]?.teaches : undefined;
+    if (plans) {
+      if (p.achievements.c[`plans:${plans}`]) return this.notice(p, `You already know how to make ${plans}s. Sell the plans, or give them to someone.`, 'info');
+      const s = p.bag[index]!;
+      s.qty--; if (s.qty <= 0) p.bag[index] = null;
+      this.count(p, `plans:${plans}`);
+      this.sendAchievements(p);
+      this.sendInv(p);
+      this.notice(p, `You learned to smith ${plans}s! Find them at the anvil.`, 'rare');
+      return;
+    }
     const s = p.bag[index];
     const food = s ? ITEMS[s.id]?.food : undefined;
     if (!s || !food) return;

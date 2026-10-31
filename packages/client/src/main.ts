@@ -6,7 +6,7 @@
 import './styles.css';
 import * as THREE from 'three';
 import {
-  CAST_RANGE, EAT_LOCK_MS, pierDeck, heightAt as heightAtWorld, STATION_BY_ID, daylight, sunAt, weatherAt, HOMES, HOUSES, PORTALS, regionAt, homeAt, homeDoorway, innRoom, toWorld, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS,
+  CAST_RANGE, EAT_LOCK_MS, pierDeck, heightAt as heightAtWorld, STATION_BY_ID, daylight, sunAt, weatherAt, HOMES, HOUSES, PORTALS, regionAt, homeAt, homeDoorway, innRoom, toWorld, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS, specialFor,
   STATIONS, TREE_BY_ID, TREE_TYPES, USE_RANGE, VEIN_BY_ID, VEIN_TYPES, WATER_LEVEL,
   MOBS, groundAt, attackInterval, attackRange, computeStats, faceOf, inCaveRegion, isFishable, levelFromXp, r2, r3, swingSeconds, weaponClass,
   PICK_SEC, PLANT_BY_ID, PLANT_TYPES, type Plant, type CharacterBuild, type HoldSlot, type MobState, type PlayerStats, type Tree, type Vein,
@@ -323,7 +323,7 @@ net.on((msg) => {
     case 'fx': {
       const from = posOf(msg.from);
       if (!from) break;
-      sound.play(msg.kind === 'arrow' ? 'bow' : msg.kind === 'firebolt' ? 'fire' : msg.kind === 'frostbolt' ? 'frost' : msg.kind === 'magic' ? 'zap' : msg.kind, from);
+      sound.play(msg.kind === 'arrow' ? 'bow' : msg.kind === 'firebolt' ? 'fire' : msg.kind === 'frostbolt' ? 'frost' : msg.kind === 'magic' ? 'zap' : msg.kind === 'guard' ? 'block' : msg.kind, from);
       if (msg.kind === 'arrow' || msg.kind === 'firebolt' || msg.kind === 'frostbolt' || msg.kind === 'magic') {
         const start = msg.from === myId && me ? new THREE.Vector3(me.x, me.y + eyeHeight - 0.2, me.z).add(new THREE.Vector3(-Math.sin(me.yaw), 0, -Math.cos(me.yaw)).multiplyScalar(0.6)) : from;
         const to = msg.to;
@@ -332,6 +332,7 @@ net.on((msg) => {
       else if (msg.kind === 'nova') fx.ring(from.clone().setY(from.y - 1), 6, 0x9fdcff, 0.7);
       else if (msg.kind === 'ignite') fx.flash(from, 0xff7a2a);
       else if (msg.kind === 'slam') fx.ring(from.clone().setY(from.y - 1.5), 5, 0xb08a60, 0.6);
+      else if (msg.kind === 'guard') fx.ring(from.clone().setY(from.y - 1), 1.2, 0xc8d8ff, 0.5);
       break;
     }
     case 'fish':
@@ -425,13 +426,20 @@ function blocker(a: NonNullable<Aim>): string | null {
 function special() {
   if (!me || gameStore.get().dead) return;
   const g = gameStore.get();
-  const sp = SPECIALS[weaponClass(g.equip.mainHand)];
+  const sp = specialFor(g.equip.mainHand, g.equip.offHand);
   if (Date.now() < g.specialReady) return hud.toast(`${sp.name} is cooling down.`, 1200, 'error');
   let target = aimed?.kind === 'mob' ? aimed.m : null;
   if (!target && (sp.kind === 'spin' || sp.kind === 'nova' || sp.kind === 'ignite')) {
     // Area specials don't need aiming: use the nearest enemy in range.
     let bd = (sp.kind === 'ignite' ? 22 : sp.radius ?? 3) + 1;
     for (const m of mobs.all()) { if (m.st & 8) continue; const d = Math.hypot(m.x - me.x, m.z - me.z); if (d < bd) { bd = d; target = m; } }
+  }
+  if (sp.kind === 'guard') {
+    // Raise the shield: no target needed.
+    net.send({ t: 'attack', target: target?.id ?? 'none', special: true });
+    viewmodel.swing();
+    swingUntil = performance.now() + SWING_SEC * 1000;
+    return;
   }
   if (!target) return hud.toast(`${sp.name}: aim at an enemy.`, 1400, 'error');
   net.send({ t: 'attack', target: target.id, special: true });
@@ -568,7 +576,7 @@ function interact(now: number, playing: boolean) {
   // Prompt under the crosshair.
   if (!playing || fishing.active) setPrompt(null);
   else if (castAt) setPrompt('Waiting for a bite… (walk away to stop)');
-  else if (aimed?.kind === 'mob') setPrompt(`<b>Click</b> attack · <b>Right click</b> ${SPECIALS[weaponClass(main)].name}`);
+  else if (aimed?.kind === 'mob') setPrompt(`<b>Click</b> attack · <b>Right click</b> ${specialFor(main, gameStore.get().equip.offHand).name}`);
   else if (aimed?.kind === 'vein' || aimed?.kind === 'tree') {
     const name = aimed.kind === 'vein' ? VEIN_TYPES[aimed.v.type].name.toLowerCase() : TREE_TYPES[aimed.t.kind].name.toLowerCase();
     setPrompt(block ? `<span class="bad">${block}</span>` : `Hold <b>click</b> to ${aimed.kind === 'vein' ? 'mine' : 'chop'} ${name}`);

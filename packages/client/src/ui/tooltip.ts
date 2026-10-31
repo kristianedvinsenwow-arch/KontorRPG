@@ -3,7 +3,7 @@
  * blurb and what the trader pays. One floating element follows the mouse.
  */
 import {
-  ARMOUR_PIECES, ITEMS, KIND_LABEL, RARITY, SPECIALS, formatStat, itemStats, sellEach, weaponHit, type Stack, type StatKey,
+  ARMOUR_PIECES, ITEMS, KIND_LABEL, RARITY, SPECIALS, SHIELD_SPECIALS, formatStat, itemStats, sellEach, weaponHit, type Stack, type StatKey,
 } from '@kontor/shared';
 
 const tip = document.createElement('div');
@@ -37,8 +37,10 @@ export function itemTip(s: Stack, sellMult = 1): HTMLElement[] {
     const hit = weaponHit(s);
     out.push(row(`${Math.round(hit * 10) / 10} damage per hit · every ${d.interval}s (${Math.round((hit / (d.interval ?? 1.6)) * 10) / 10} DPS)`, 'tmain'));
     out.push(row(`Reach ${d.range} m${d.twoHanded ? ' · two-handed' : ''}`, 'tdim'));
-    const sp = SPECIALS[d.weapon];
+    const sp = SPECIALS[d.weapon], sh = SHIELD_SPECIALS[d.weapon];
     out.push(row(`Right click — ${sp.name}: ${sp.blurb} ${sp.cd}s cooldown.`, 'tspecial'));
+    if (sh) out.push(row(`With a shield — ${sh.name}: ${sh.blurb} ${sh.cd}s cooldown.`, 'tspecial'));
+    if (d.giantslayer) out.push(row('Giantslayer: ×0.75 on goblin-sized foes, up to ×1.6 on the biggest.', 'tspecial'));
   }
   if (d.tool) {
     if (d.swingSec) out.push(row(`Power ${d.power} · ${d.swingSec}s per swing at level 1`, 'tmain'));

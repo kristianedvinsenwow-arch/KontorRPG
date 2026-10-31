@@ -12,8 +12,8 @@ export type Slot =
   | 'head' | 'shoulders' | 'chest' | 'legs' | 'hands' | 'feet' | 'back'
   | 'mainHand' | 'offHand' | 'ring' | 'neck' | 'pickaxe' | 'hatchet' | 'rod' | 'knife' | 'ammo' | 'mount';
 
-export type ItemKind = 'ore' | 'gem' | 'material' | 'bar' | 'log' | 'ammo' | 'fish' | 'meat' | 'food' | 'herb' | 'potion' | 'mount' | 'junk' | 'tool' | 'weapon' | 'armour' | 'bag' | 'coins' | 'trinket';
-export type WeaponClass = 'sword' | 'longsword' | 'battleaxe' | 'bow' | 'staff' | 'fireStaff' | 'frostStaff';
+export type ItemKind = 'ore' | 'gem' | 'material' | 'bar' | 'log' | 'ammo' | 'fish' | 'meat' | 'food' | 'herb' | 'potion' | 'mount' | 'junk' | 'tool' | 'weapon' | 'armour' | 'bag' | 'coins' | 'trinket' | 'plans';
+export type WeaponClass = 'sword' | 'mace' | 'longsword' | 'battleaxe' | 'warhammer' | 'halberd' | 'spear' | 'bow' | 'staff' | 'fireStaff' | 'frostStaff';
 export type ArmourType = 'cloth' | 'leather' | 'metal';
 export type ToolKind = 'pickaxe' | 'hatchet' | 'rod' | 'knife';
 /** Visual material for models and icons. */
@@ -62,6 +62,10 @@ export interface ItemDef {
   fixedRarity?: Rarity;
   /** Extra move-speed penalty on heavy plate (monster-dropped uniques that hit harder in return). */
   heavy?: number;
+  /** Plans: reading them teaches this weapon's recipes for good. */
+  teaches?: string;
+  /** Does more damage the bigger the monster (great on giants and bosses, poor on goblins). */
+  giantslayer?: boolean;
   blurb: string;
 }
 
@@ -70,8 +74,10 @@ export interface ItemDef {
 export type Rarity = 0 | 1 | 2 | 3 | 4;
 export const RARITY: { name: string; color: string; mult: number; effects: number }[] = [
   { name: 'Normal', color: '#d8d4c8', mult: 1, effects: 0 },
-  { name: 'Uncommon', color: '#6fcf5f', mult: 1.2, effects: 1 },
-  { name: 'Rare', color: '#4ea1e8', mult: 1.35, effects: 2 },
+  // Each metal tier is 1.25× the one before, so an epic (1.5×) lands between the next tier's
+  // uncommon (1.15 × 1.25 ≈ 1.44) and rare (1.3 × 1.25 ≈ 1.63).
+  { name: 'Uncommon', color: '#6fcf5f', mult: 1.15, effects: 1 },
+  { name: 'Rare', color: '#4ea1e8', mult: 1.3, effects: 2 },
   { name: 'Epic', color: '#b77be8', mult: 1.5, effects: 3 },
   { name: 'Legendary', color: '#f2a23a', mult: 1.7, effects: 4 },
 ];
@@ -280,25 +286,36 @@ const metalName = (t: string) => (t === 'silversteel' ? 'Silversteel' : t[0].toU
 const ARMOUR_MULT = [1, 1.8, 2.6, 3.4];
 
 // weapons: [class, dps per tier, interval, range, twoHanded]
-const W: Record<'sword' | 'longsword' | 'battleaxe', { name: string; dps: number[]; interval: number; range: number; two: boolean; blurb: string }> = {
-  sword: { name: 'sword', dps: [4.5, 6, 7.5, 9], interval: 1.6, range: 2.6, two: false, blurb: 'One-handed. Right click: Heavy Strike (2.5× damage, 8 s).' },
-  longsword: { name: 'longsword', dps: [5.5, 7.5, 9.5, 11.5], interval: 2.3, range: 3.0, two: true, blurb: 'Two-handed. Right click: Whirlwind — spin and hit everything around you (12 s).' },
-  battleaxe: { name: 'battleaxe', dps: [5.5, 7.5, 9.5, 11.5], interval: 2.5, range: 2.8, two: true, blurb: 'Two-handed. Right click: Executioner (4× damage, 18 s).' },
+// Melee weapons. DPS per tier: tier 1 × 1.25 each step. One-handers do less, but with a shield
+// in the off hand their right click becomes a defensive move (see SHIELD_SPECIALS in combat.ts).
+// Warhammer, halberd and spear are smithed only after you find their plans.
+export const TIER_STEP = 1.25;
+export const PLANS_WEAPONS = ['warhammer', 'halberd', 'spear'] as const;
+const W: Record<'sword' | 'mace' | 'longsword' | 'battleaxe' | 'warhammer' | 'halberd' | 'spear', { name: string; dps: number; interval: number; range: number; two: boolean; blurb: string }> = {
+  sword: { name: 'sword', dps: 4.2, interval: 1.6, range: 2.6, two: false, blurb: 'One-handed. Right click: Heavy Strike (2.5×, 8 s). With a shield: Parry — the next melee hit on you within 4 s does 80% less, and you strike back (6 s).' },
+  mace: { name: 'mace', dps: 4.2, interval: 2.0, range: 2.5, two: false, blurb: 'One-handed. Right click: Crush (2×, stuns 1 s, 9 s). With a shield: Shield Bash — stun 1.2 s and make it fight you for 6 s; your next hit taken is halved (8 s).' },
+  longsword: { name: 'longsword', dps: 5.5, interval: 2.3, range: 3.5, two: true, blurb: 'Two-handed. Right click: Whirlwind — 1.6× to everything within 3.8 m (12 s).' },
+  battleaxe: { name: 'battleaxe', dps: 4.4, interval: 2.5, range: 3.3, two: true, blurb: 'Two-handed. Right click: Executioner (4×, 18 s).' },
+  warhammer: { name: 'warhammer', dps: 5.9, interval: 2.9, range: 3.2, two: true, blurb: 'Two-handed. Heavy blows. Right click: Quake — 1.2× to everything within 4.5 m and stuns them 1.2 s (15 s).' },
+  halberd: { name: 'halberd', dps: 5.3, interval: 2.4, range: 4.3, two: true, blurb: 'Two-handed, long reach. Right click: Sweep — 1.7× to everything in front of you within 4.5 m (10 s).' },
+  spear: { name: 'spear', dps: 5.4, interval: 1.8, range: 4.7, two: true, blurb: 'Two-handed, the longest reach. Quick jabs, a weak right click: Lunge (1.6×, 8 s).' },
 };
 for (const [cls, w] of Object.entries(W) as [keyof typeof W, typeof W.sword][]) {
   METALS.forEach((t, i) => add({
     id: `${t}_${cls}`, name: `${metalName(t)} ${w.name}`, kind: 'weapon', stack: 1, tier: i + 1, look: t as Look,
-    slot: 'mainHand', weapon: cls, dps: w.dps[i], interval: w.interval, range: w.range, twoHanded: w.two, sellValue: [1, 2, 4, 8][i] * (w.two ? 3 : 2), blurb: w.blurb,
+    slot: 'mainHand', weapon: cls, dps: Math.round(w.dps * TIER_STEP ** i * 100) / 100, interval: w.interval, range: w.range, twoHanded: w.two, sellValue: [1, 2, 4, 8][i] * (w.two ? 3 : 2), blurb: w.blurb,
     ...(t === 'silversteel' ? { mods: { allDmg: 0.04, crit: 0.02 } } : {}),
   }));
 }
+for (const wpn of PLANS_WEAPONS) add({ id: `${wpn}_plans`, name: `${wpn[0].toUpperCase()}${wpn.slice(1)} plans`, kind: 'plans', stack: 1, sellValue: 6, teaches: wpn, blurb: `A smith’s drawings for a ${wpn}. Use it (E in the bag, or right click → Use) to learn to smith ${wpn}s at the anvil, in every metal.` });
+add({ id: 'jotunbane', name: 'Jotunbane', kind: 'weapon', stack: 1, tier: 4, look: 'silversteel', slot: 'mainHand', weapon: 'battleaxe', dps: 8, interval: 2.6, range: 3.4, twoHanded: true, fixedRarity: 4, giantslayer: true, mods: { crit: 0.03 }, sellValue: 120, blurb: 'Giantslayer: the bigger the foe, the deeper it bites — up to +60% on the largest trolls, but goblins and bats barely notice it. Right click: Executioner (4×, 18 s).' });
 add({ id: 'birch_shortbow', name: 'Birch shortbow', kind: 'weapon', stack: 1, tier: 1, look: 'birch', slot: 'mainHand', weapon: 'bow', dps: 4.5, interval: 2.0, range: 28, twoHanded: true, sellValue: 3, blurb: 'Needs arrows in the ammo slot. Right click: Power Shot (3×, 10 s).' });
-add({ id: 'pine_longbow', name: 'Pine longbow', kind: 'weapon', stack: 1, tier: 2, look: 'pine', slot: 'mainHand', weapon: 'bow', dps: 6, interval: 2.2, range: 34, twoHanded: true, sellValue: 7, blurb: 'Needs arrows in the ammo slot. Right click: Power Shot (3×, 10 s).' });
+add({ id: 'pine_longbow', name: 'Pine longbow', kind: 'weapon', stack: 1, tier: 2, look: 'pine', slot: 'mainHand', weapon: 'bow', dps: 5.6, interval: 2.2, range: 34, twoHanded: true, sellValue: 7, blurb: 'Needs arrows in the ammo slot. Right click: Power Shot (3×, 10 s).' });
 for (const [wood, tier, dps] of [['birch', 1, 2.5], ['pine', 2, 3.5]] as const) {
   const W2 = wood[0].toUpperCase() + wood.slice(1);
   add({ id: `${wood}_staff`, name: `${W2} staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'staff', dps, interval: 1.8, range: 2.6, twoHanded: true, sellValue: tier * 2, blurb: 'A clumsy club until the Imbuer in Bjørkvik makes it magical.' });
-  add({ id: `${wood}_fire_staff`, name: `${W2} fire staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'fireStaff', dps: tier === 1 ? 3 : 4, interval: 1.8, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Light firebolts that set a burn (stacks to 3, most of the damage is in the burn). Right click: Ignite — every burning enemy nearby takes 45% of a firebolt per burn stack (12 s).' });
-  add({ id: `${wood}_frost_staff`, name: `${W2} frost staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'frostStaff', dps: tier === 1 ? 5 : 6.5, interval: 2.6, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Slow, heavy frostbolts. Right click: Frost Nova — freeze everything within 6 m for 2.5 s (15 s).' });
+  add({ id: `${wood}_fire_staff`, name: `${W2} fire staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'fireStaff', dps: tier === 1 ? 3 : 3.75, interval: 1.8, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Light firebolts that set a burn (stacks to 3, most of the damage is in the burn). Right click: Ignite — every burning enemy nearby takes 45% of a firebolt per burn stack (12 s).' });
+  add({ id: `${wood}_frost_staff`, name: `${W2} frost staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'frostStaff', dps: tier === 1 ? 5 : 6.25, interval: 2.6, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Slow, heavy frostbolts. Right click: Frost Nova — freeze everything within 6 m for 2.5 s (15 s).' });
 }
 
 // armour. Metal is smithed (stone uses shaped stone, iron uses bars); leather and cloth are sold for now.
@@ -369,7 +386,9 @@ add({ id: 'trolltooth_necklace', name: 'Trolltooth necklace', kind: 'trinket', s
 export const ITEMS: Record<string, ItemDef> = Object.fromEntries(defs.map((d) => [d.id, d]));
 
 export const BASE_BAG_SLOTS = 16;
-export const START_GOLD = 15;
+export const START_GOLD = 6;
+/** Everyone starts with these tools worn. */
+export const START_TOOLS = ['stone_pickaxe', 'stone_hatchet', 'basic_rod', 'stone_skinning_knife'];
 /** Traders pay half an item's value (more for rarer copies). Fractions add up when you sell a stack. */
 export const SELL_RATE = 0.5;
 export const sellEach = (s: Pick<Stack, 'id' | 'r'>, sellMult = 1) => { const d = ITEMS[s.id]; return d && d.sellValue > 0 ? d.sellValue * SELL_RATE * (1 + (s.r ?? 0) * 0.5) * sellMult : 0; };
@@ -397,7 +416,7 @@ export const EQUIP_SLOTS: { slot: Slot; label: string }[] = [
 
 export const KIND_LABEL: Record<ItemKind, string> = {
   ore: 'Ore', gem: 'Gem', material: 'Material', bar: 'Bar', log: 'Log', ammo: 'Ammunition', fish: 'Raw fish', meat: 'Raw meat', food: 'Food', herb: 'Herb', potion: 'Potion', mount: 'Mount', junk: 'Junk',
-  tool: 'Tool', weapon: 'Weapon', armour: 'Armour', bag: 'Bag', coins: 'Coins', trinket: 'Trinket',
+  tool: 'Tool', weapon: 'Weapon', armour: 'Armour', bag: 'Bag', coins: 'Coins', trinket: 'Trinket', plans: 'Plans',
 };
 
 // ------------------------------------------------------------------ stacks, bag and equipment
@@ -514,7 +533,7 @@ export function itemStats(s: Stack): Partial<Stats> {
   // Plate barely slows you (−0.5% a piece); heavy uniques slow you more but give a lot more back.
   if (d.armourType === 'metal' && d.slot !== 'offHand') { out.moveSpeed -= 0.005 + (d.heavy ?? 0); out.magicTaken += 0.03; }
   if (d.armourType === 'leather') out.moveSpeed += 0.01;
-  if (d.slot === 'offHand' && d.armourType === 'metal') out.block += 0.1;
+  if (d.slot === 'offHand' && d.armourType === 'metal') out.block += 0.2;
   addStats(out, d.mods);
   for (const [k, v] of s.fx ?? []) out[k] += v;
   const clean: Partial<Stats> = {};

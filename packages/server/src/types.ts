@@ -61,6 +61,8 @@ export interface ServerPlayer {
   job: CraftJob | null;
   nextAttackAt: number;
   nextSpecialAt: number;
+  /** Shield guard: the next melee hit within `until` is cut by `pct`; `riposte` × a basic hit back. */
+  guard?: { until: number; pct: number; riposte: number };
   fishing: Fishing | null;
 }
 
@@ -86,6 +88,10 @@ export interface Mob {
   /** Skinnable body: until when it stays, and whether someone has skinned it. */
   corpseUntil: number;
   skinned: boolean;
+  /** Forced to fight this player until then (Shield Bash). */
+  taunt?: { by: string; until: number };
+  /** When it last looked for the closest attacker. */
+  nextThreat?: number;
 }
 
 export interface Ground extends GroundItem { expires: number }

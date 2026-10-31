@@ -196,7 +196,12 @@ export function iconFor(id: string): string {
   else if (d?.tool === 'knife') { line(g, '#3a2818', 6, [[14, 54], [26, 40]]); poly(g, [[26, 40], [52, 10], [56, 14], [32, 44]], a); }
   else if (d?.weapon === 'sword') sword(g, a);
   else if (d?.weapon === 'longsword') sword(g, a, true);
-  else if (d?.weapon === 'battleaxe') axe(g, a);
+  else if (d?.weapon === 'battleaxe') { axe(g, a); if (d.giantslayer) dot(g, 46, 16, 4, '#f2a23a'); }
+  else if (d?.weapon === 'mace') { line(g, '#7a5a3a', 5, [[14, 56], [36, 26]]); dot(g, 40, 20, 11, a); for (const [x, y] of [[40, 6], [54, 20], [40, 34], [26, 20]]) dot(g, x, y, 4, b); }
+  else if (d?.weapon === 'warhammer') { line(g, '#7a5a3a', 5, [[12, 58], [42, 14]]); poly(g, [[30, 4], [56, 20], [48, 32], [22, 16]], a); }
+  else if (d?.weapon === 'halberd') { line(g, '#7a5a3a', 4, [[10, 60], [50, 6]]); poly(g, [[40, 8], [56, 14], [52, 28], [42, 22]], a); poly(g, [[50, 6], [58, 0], [54, 10]], a); }
+  else if (d?.weapon === 'spear') { line(g, '#7a5a3a', 4, [[8, 60], [48, 14]]); poly(g, [[46, 16], [58, 4], [52, 20]], a); }
+  else if (d?.kind === 'plans') { poly(g, [[12, 10], [52, 10], [52, 54], [12, 54]], '#e8dcb8'); for (const y of [20, 28, 36, 44]) line(g, '#8a7a5a', 2, [[18, y], [46, y]]); line(g, '#3a5a8a', 3, [[20, 46], [44, 16]]); }
   else if (d?.weapon === 'bow') bow(g, a);
   else if (d?.weapon === 'staff') staff(g, a);
   else if (d?.weapon === 'fireStaff') staff(g, a, '#ff7a2a');

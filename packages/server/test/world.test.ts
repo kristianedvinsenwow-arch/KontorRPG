@@ -204,17 +204,18 @@ function game(random: () => number = () => 0.5, store?: MemoryStore) {
   return { world, c, p, place, last, at, advance: (ms: number) => (t += ms), now: () => t };
 }
 
-test('new characters start with 16 empty slots, 15 gold and no tools', () => {
+test('new characters start with 16 empty slots, 6 gold and the basic tools worn', () => {
   const { last } = game();
   const inv = last('inv')!;
   assert.equal(inv.bag.length, 16);
-  assert.equal(inv.gold, 15);
-  assert.deepEqual(inv.equip, {});
+  assert.equal(inv.gold, 6);
+  assert.deepEqual(Object.fromEntries(Object.entries(inv.equip).map(([k, v]) => [k, (v as any).id])), { pickaxe: 'stone_pickaxe', hatchet: 'stone_hatchet', rod: 'basic_rod', knife: 'stone_skinning_knife' });
 });
 
 test('buy a pickaxe from Ingrid, equip it, mine; vein wear is shared and it depletes', () => {
   const { world, c, p, place, last, at, advance } = game();
   at('ingrid');
+  p.equip = {}; p.gold = 15;
   world.handle(c, { t: 'buy', npc: 'ingrid', item: 'stone_pickaxe' });
   assert.equal(p.gold, 5);
   world.handle(c, { t: 'equip', index: p.bag.findIndex((s) => s?.id === 'stone_pickaxe') });
@@ -358,7 +359,7 @@ test('quests: accept, deliver, reward, then locked until the reset', () => {
   world.handle(c, { t: 'quest', quest: q.id, op: 'accept' });
   p.bag[0] = { id: 'stone', qty: 10 };
   world.handle(c, { t: 'quest', quest: q.id, op: 'turnin' });
-  assert.equal(p.gold, 15 + q.reward.gold);
+  assert.equal(p.gold, 6 + q.reward.gold);
   assert.ok((p.xp.mining ?? 0) >= q.reward.xp[1]);
   world.handle(c, { t: 'quest', quest: q.id, op: 'accept' });
   assert.match(last('notice')!.text, /resets/);
@@ -455,6 +456,7 @@ test('skinning: needs a knife, can ruin the hide, the body goes away, the knife 
   const wolf = [...world.mobs.values()].find((m) => m.def.kind === 'wolf')!;
   world.kill; // (players can die; here the wolf does)
   wolf.hp = 1;
+  delete p.equip.knife;
   p.equip.mainHand = { id: 'stone_sword', qty: 1 };
   world.recompute(p);
   place(wolf.x + 1.2, wolf.z);
@@ -843,4 +845,48 @@ test('fibres: every fibre plant grows somewhere, and each cloth tier has thread,
   for (const k of ['flax', 'jute', 'ramie', 'bog_cotton', 'bamboo']) assert.ok(P.filter((x) => x.kind === k).length >= 6, `${k} patches`);
   for (const f of FIBRES) { assert.ok(RECIPE_BY_ID.get(f.thread) && RECIPE_BY_ID.get(f.cloth) && I[f.raw], f.raw); }
   for (const c of CLOTHS) for (const piece of ['helm', 'pauldrons', 'breastplate', 'greaves', 'gauntlets', 'boots']) assert.ok(I[`${c.prefix}_${piece}`] && RECIPE_BY_ID.get(`${c.prefix}_${piece}`), `${c.prefix}_${piece}`);
+});
+
+test('tanking: the mob turns to the closest (a shield counts as closer); Parry cuts the next hit and strikes back', () => {
+  const { world, c, p, place, advance } = game(() => 0.99);
+  const c2 = fakeClient(); world.connect(c2);
+  world.handle(c2, { t: 'hello', name: 'Dps', color: 1, proto: PROTOCOL_VERSION, build: defaultBuild() });
+  const p2 = [...world.players.values()].find((x) => x !== p)!;
+  const wolf = [...world.mobs.values()].find((m) => m.def.kind === 'wolf')!;
+  const put = (q: typeof p, x: number, z: number) => { const y = h(x, z); Object.assign(q.state, { x, y, z }); q.lastValid = { x, y, z, at: world.now() }; };
+  // p2 hits it first, from 2 m; the tank (p, sword + shield) stands at 3.5 m — counts as 0.5 m.
+  p.equip.mainHand = { id: 'stone_sword', qty: 1 }; p.equip.offHand = { id: 'iron_kite_shield', qty: 1 }; world.recompute(p);
+  put(p2, wolf.x + 2, wolf.z); put(p, wolf.x - 3.5, wolf.z);
+  wolf.target = p2.state.id; wolf.dmgBy.set(p2.state.id, 5);
+  advance(600); world.step();
+  assert.equal(wolf.target, p.state.id, 'the shield bearer pulls it');
+  // Parry: no target needed; the next hit is cut by 80% and the wolf takes a riposte.
+  world.handle(c, { t: 'attack', target: 'none', special: true });
+  assert.ok(p.guard && p.guard.pct === 0.8);
+  const hp0 = p.hp, wolfHp = wolf.hp;
+  put(p, wolf.x + 1, wolf.z);
+  wolf.nextAtk = 0;
+  for (let i = 0; i < 5 && p.guard; i++) { advance(100); world.step(); }
+  assert.ok(!p.guard, 'the guard was used');
+  assert.ok(hp0 - p.hp <= MOBS.wolf.dmg * 0.2 + 0.5, `small hit (${hp0 - p.hp})`);
+  assert.ok(wolf.hp < wolfHp, 'riposte');
+});
+
+test('plans teach a weapon for good; giantslayer hits big monsters harder', async () => {
+  const { world, c, p, place, advance } = game(() => 0.5);
+  const anvil = STATION_BY_ID.get('camp_anvil')!;
+  place(anvil.x + 1.5, anvil.z);
+  p.xp.smithing = xpForLevel(8);
+  p.bag[0] = { id: 'shaped_stone', qty: 8 }; p.bag[1] = { id: 'birch_log', qty: 2 };
+  world.handle(c, { t: 'craft', recipe: 'stone_spear', count: 1, station: anvil.id });
+  assert.equal(p.job, null, 'no plans, no spear');
+  p.bag[2] = { id: 'spear_plans', qty: 1 };
+  world.handle(c, { t: 'eat', index: 2 });
+  assert.equal(p.bag[2], null);
+  assert.equal(p.achievements.c['plans:spear'], 1);
+  world.handle(c, { t: 'craft', recipe: 'stone_spear', count: 1, station: anvil.id });
+  advance(6000); world.step();
+  assert.ok(p.bag.some((s) => s?.id === 'stone_spear'));
+  const { giantslayerMult } = await import('@kontor/shared');
+  assert.ok(giantslayerMult(MOBS.goblin.scale) < 0.8 && giantslayerMult(MOBS.troll.scale) > 1.5);
 });

@@ -441,6 +441,8 @@ export interface Recipe {
   seconds: number;
   /** Cooking: can burn into burnt_fish. */
   burns?: boolean;
+  /** Needs these plans learned first (warhammer, halberd, spear). */
+  plans?: string;
 }
 
 /** Fibres: raw plant → thread → cloth, and the Tailoring level to spin them. */
@@ -463,11 +465,13 @@ const R: Recipe[] = [
   { id: 'steel_arrowheads', skill: 'smithing', station: 'anvil', level: 18, inputs: [{ item: 'steel_bar', qty: 1 }], output: { item: 'steel_arrowheads', qty: 15 }, xp: 32, seconds: 2 },
   // smithing: weapons and tools
   { id: 'stone_sword', skill: 'smithing', station: 'anvil', level: 2, inputs: [{ item: 'shaped_stone', qty: 4 }], output: { item: 'stone_sword', qty: 1 }, xp: 30, seconds: 3 },
+  { id: 'stone_mace', skill: 'smithing', station: 'anvil', level: 3, inputs: [{ item: 'shaped_stone', qty: 4 }, { item: 'birch_log', qty: 1 }], output: { item: 'stone_mace', qty: 1 }, xp: 32, seconds: 3 },
   { id: 'stone_longsword', skill: 'smithing', station: 'anvil', level: 5, inputs: [{ item: 'shaped_stone', qty: 8 }], output: { item: 'stone_longsword', qty: 1 }, xp: 60, seconds: 4 },
   { id: 'stone_battleaxe', skill: 'smithing', station: 'anvil', level: 6, inputs: [{ item: 'shaped_stone', qty: 8 }, { item: 'birch_log', qty: 1 }], output: { item: 'stone_battleaxe', qty: 1 }, xp: 65, seconds: 4 },
   { id: 'iron_pickaxe', skill: 'smithing', station: 'anvil', level: 10, inputs: [{ item: 'iron_bar', qty: 4 }, { item: 'shaped_stone', qty: 1 }], output: { item: 'iron_pickaxe', qty: 1 }, xp: 100, seconds: 4 },
   { id: 'iron_hatchet', skill: 'smithing', station: 'anvil', level: 11, inputs: [{ item: 'iron_bar', qty: 4 }, { item: 'birch_log', qty: 1 }], output: { item: 'iron_hatchet', qty: 1 }, xp: 100, seconds: 4 },
   { id: 'iron_sword', skill: 'smithing', station: 'anvil', level: 10, inputs: [{ item: 'iron_bar', qty: 4 }, { item: 'shaped_stone', qty: 1 }], output: { item: 'iron_sword', qty: 1 }, xp: 100, seconds: 4 },
+  { id: 'iron_mace', skill: 'smithing', station: 'anvil', level: 11, inputs: [{ item: 'iron_bar', qty: 4 }, { item: 'birch_log', qty: 1 }], output: { item: 'iron_mace', qty: 1 }, xp: 105, seconds: 4 },
   { id: 'iron_longsword', skill: 'smithing', station: 'anvil', level: 14, inputs: [{ item: 'iron_bar', qty: 8 }, { item: 'shaped_stone', qty: 2 }], output: { item: 'iron_longsword', qty: 1 }, xp: 190, seconds: 5 },
   { id: 'iron_battleaxe', skill: 'smithing', station: 'anvil', level: 15, inputs: [{ item: 'iron_bar', qty: 8 }, { item: 'pine_log', qty: 1 }], output: { item: 'iron_battleaxe', qty: 1 }, xp: 200, seconds: 5 },
   { id: 'stone_skinning_knife', skill: 'smithing', station: 'anvil', level: 2, inputs: [{ item: 'shaped_stone', qty: 2 }], output: { item: 'stone_skinning_knife', qty: 1 }, xp: 16, seconds: 2.5 },
@@ -481,10 +485,17 @@ const R: Recipe[] = [
       mk(`${t}_hatchet`, lv + 1, [{ item: bar, qty: 4 }, { item: 'pine_log', qty: 1 }], 180),
       mk(`${t}_skinning_knife`, lv - 1, [{ item: bar, qty: 2 }, { item: 'leather', qty: 1 }], 90, 3),
       mk(`${t}_sword`, lv, [{ item: bar, qty: 4 }, { item: 'leather', qty: 1 }], 180),
+      mk(`${t}_mace`, lv + 1, [{ item: bar, qty: 4 }, { item: 'pine_log', qty: 1 }], 185),
       mk(`${t}_longsword`, lv + 4, [{ item: bar, qty: 8 }, { item: 'leather', qty: 1 }], 340, 5.5),
       mk(`${t}_battleaxe`, lv + 5, [{ item: bar, qty: 8 }, { item: 'pine_log', qty: 2 }], 360, 5.5),
     ];
   }),
+  // Weapons from found plans: every metal, a little later than the longsword of that metal.
+  ...(['warhammer', 'halberd', 'spear'] as const).flatMap((wpn): Recipe[] => (['stone', 'iron', 'steel', 'silversteel'] as const).map((t, i) => {
+    const mat = i === 0 ? 'shaped_stone' : `${t}_bar`, wood = i === 0 ? 'birch_log' : 'pine_log';
+    return { id: `${t}_${wpn}`, skill: 'smithing', station: 'anvil', level: [6, 15, 23, 33][i], plans: wpn,
+      inputs: [{ item: mat, qty: 8 }, { item: wood, qty: wpn === 'warhammer' ? 1 : 2 }], output: { item: `${t}_${wpn}`, qty: 1 }, xp: [65, 200, 360, 790][i], seconds: 5 };
+  })),
   // jewellery: silver, plain or with a gem set in it
   ...JEWELS.flatMap((j, i): Recipe[] => {
     const base = j.gem ? `${j.gem}_` : 'silver_', gem = j.gem ? [{ item: j.gem, qty: 1 }] : [];

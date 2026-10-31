@@ -54,6 +54,48 @@ function makeBattleaxe(look: string | undefined): THREE.Group {
   return g;
 }
 
+function makeMace(look: string | undefined): THREE.Group {
+  const g = new THREE.Group();
+  haft(g, 0.55, 0.024);
+  const m = lookMat(look);
+  mesh(new THREE.IcosahedronGeometry(0.09, 0), m, g).position.y = 0.6;
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    const f = mesh(new THREE.BoxGeometry(0.03, 0.12, 0.05), m, g);
+    f.position.set(Math.cos(a) * 0.08, 0.6, Math.sin(a) * 0.08); f.rotation.y = -a;
+  }
+  return g;
+}
+
+function makeWarhammer(look: string | undefined): THREE.Group {
+  const g = new THREE.Group();
+  haft(g, 1.1, 0.028);
+  const m = lookMat(look);
+  bx(g, 0.34, 0.15, 0.15, m, 0, 1.02, 0);
+  bx(g, 0.05, 0.19, 0.19, m, 0.18, 1.02, 0);
+  bx(g, 0.05, 0.19, 0.19, m, -0.18, 1.02, 0);
+  return g;
+}
+
+function makeHalberd(look: string | undefined): THREE.Group {
+  const g = new THREE.Group();
+  haft(g, 1.7, 0.022);
+  const m = lookMat(look);
+  const blade = mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.018, 3, 1, false, 0, Math.PI), m, g);
+  blade.rotation.set(Math.PI / 2, 0, 0); blade.position.set(0.02, 1.55, 0); blade.scale.set(1, 1, 1.5);
+  const tip = mesh(new THREE.ConeGeometry(0.04, 0.26, 4), m, g); tip.position.y = 1.83; tip.scale.z = 0.35;
+  bx(g, 0.1, 0.03, 0.02, m, -0.07, 1.52, 0);
+  return g;
+}
+
+function makeSpear(look: string | undefined): THREE.Group {
+  const g = new THREE.Group();
+  haft(g, 1.75, 0.02);
+  const m = lookMat(look);
+  const tip = mesh(new THREE.ConeGeometry(0.045, 0.3, 4), m, g); tip.position.y = 1.9; tip.scale.z = 0.4;
+  return g;
+}
+
 function makeHatchet(look: string | undefined): THREE.Group {
   const g = new THREE.Group();
   haft(g, 0.62);
@@ -158,6 +200,10 @@ export function makeHeld(id: string | undefined): THREE.Group | null {
     case 'sword': return makeSword(def.look);
     case 'longsword': return makeSword(def.look, true);
     case 'battleaxe': return makeBattleaxe(def.look);
+    case 'mace': return makeMace(def.look);
+    case 'warhammer': return makeWarhammer(def.look);
+    case 'halberd': return makeHalberd(def.look);
+    case 'spear': return makeSpear(def.look);
     case 'bow': return makeBow(def.look);
     case 'staff': return makeStaff(def.look);
     case 'fireStaff': return makeStaff(def.look, 'fire');

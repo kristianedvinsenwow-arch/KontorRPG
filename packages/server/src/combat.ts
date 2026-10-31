@@ -5,9 +5,9 @@
  * flight time so the hit numbers match what players see.
  */
 import {
-  BURN, CORPSE_SEC, FREEZE_SEC, ITEMS, knifeBonus, knifeUses, levelOf, MOBS, PROJECTILE_SPEED, SLOW, SPAWNS, SPECIALS, ST_ANGRY, ST_BURN, ST_DEAD, ST_FROZEN, ST_SLOW,
+  BURN, CORPSE_SEC, FREEZE_SEC, ITEMS, knifeBonus, knifeUses, levelOf, MOBS, PROJECTILE_SPEED, SLOW, SPAWNS, ST_ANGRY, ST_BURN, ST_DEAD, ST_FROZEN, ST_SLOW,
   attackInterval, attackRange, groundAt, incoming, inCaveRegion, regionAt, mitigate, outgoing, r2, r3, rollCraftRarity, rollEffects,
-  specialCooldown, styleOf, weaponClass, type Drop, type MobState, type Rarity, type Stack,
+  specialCooldown, specialFor, hasShield, giantslayerMult, GUARD_SEC, SHIELD_THREAT_M, styleOf, weaponClass, type Drop, type MobState, type Rarity, type Stack,
 } from '@kontor/shared';
 import type { Mob, ServerPlayer } from './types.js';
 import type { World } from './world.js';
@@ -17,6 +17,7 @@ const GEAR_BY_TIER: Record<number, string[]> = {};
 for (const d of Object.values(ITEMS)) {
   if (!d.slot || d.fixedRarity || d.kind === 'ammo' || d.kind === 'bag' || !d.tier) continue;
   if (d.weapon === 'fireStaff' || d.weapon === 'frostStaff') continue;
+  if (d.weapon === 'warhammer' || d.weapon === 'halberd' || d.weapon === 'spear') continue; // only from plans
   (GEAR_BY_TIER[d.tier] ??= []).push(d.id);
 }
 
@@ -73,6 +74,24 @@ export function stepMobs(w: World, dt: number, now: number): void {
     if (target && (target.dead || !sameRegion(m, target.state))) { target = undefined; m.target = null; }
     const home = Math.hypot(m.x - m.spawn.x, m.z - m.spawn.z);
     if (target && home > m.spawn.leash) { m.target = null; target = undefined; m.returning = true; }
+    // Fight whoever is closest among those near it (a shield bearer counts as closer; a taunt wins).
+    if (target && !m.returning && now >= (m.nextThreat ?? 0)) {
+      m.nextThreat = now + 500;
+      const t = m.taunt && m.taunt.until > now ? w.players.get(m.taunt.by) : undefined;
+      if (t && !t.dead && sameRegion(m, t.state)) { target = t; m.target = t.state.id; }
+      else {
+        const eff = (p: ServerPlayer) => Math.hypot(p.state.x - m.x, p.state.z - m.z) - (hasShield(p.equip.offHand) ? SHIELD_THREAT_M : 0);
+        let best = target, bd = eff(target) - 1; // a little stickiness so it doesn't flip-flop
+        for (const p of w.players.values()) {
+          if (p === target || p.dead || !sameRegion(m, p.state)) continue;
+          const engaged = m.dmgBy.has(p.state.id) || Math.hypot(p.state.x - m.x, p.state.z - m.z) < m.def.aggro;
+          if (!engaged) continue;
+          const e = eff(p);
+          if (e < bd) { bd = e; best = p; }
+        }
+        if (best !== target) { target = best; m.target = best.state.id; }
+      }
+    }
     if (!target && !m.returning) {
       // Look for someone to chase.
       let best: ServerPlayer | undefined, bd = m.def.aggro;
@@ -139,7 +158,19 @@ function hurtPlayer(w: World, p: ServerPlayer, m: Mob, raw: number, magic: boole
   if (!magic && w.rand() < Math.min(0.4, s.dodge)) return void p.client.send({ t: 'hit', to: p.state.id, dmg: 0, kind: 'dodge', from: m.id });
   let dmg = incoming(raw, magic, s);
   let kind: 'phys' | 'magic' | 'block' = magic ? 'magic' : 'phys';
-  if (!magic && p.equip.offHand && w.rand() < Math.min(0.5, s.block)) { dmg *= 0.5; kind = 'block'; }
+  if (!magic && hasShield(p.equip.offHand) && w.rand() < Math.min(0.5, s.block)) { dmg *= 0.35; kind = 'block'; }
+  // A raised guard (Parry, Shield Bash) takes the edge off the next melee hit — slams included.
+  if (!magic && p.guard && p.guard.until > now) {
+    dmg *= 1 - p.guard.pct;
+    kind = 'block';
+    const back = p.guard.riposte;
+    p.guard = undefined;
+    if (back > 0 && !m.dead) {
+      const hit = Math.max(0.5, Math.round(mitigate(outgoing(p.equip.mainHand, undefined, s, back), false, m.def.armour, m.def.ward) * 10) / 10);
+      w.broadcastNear(m, { t: 'hit', to: m.id, dmg: hit, crit: false, kind: 'phys', from: p.state.id });
+      damageMob(w, m, hit, p.state.id, now);
+    }
+  }
   dmg = Math.max(0.5, Math.round(dmg * 10) / 10);
   p.hp -= dmg;
   p.lastHurtAt = now;
@@ -155,17 +186,28 @@ function hurtPlayer(w: World, p: ServerPlayer, m: Mob, raw: number, magic: boole
 export function attack(w: World, p: ServerPlayer, targetId: string, special: boolean): void {
   if (p.dead) return;
   const now = w.now();
-  const m = w.mobs.get(targetId);
-  if (!m || m.dead || !sameRegion(m, p.state)) return;
   const main = p.equip.mainHand, ammo = p.equip.ammo;
   const cls = weaponClass(main);
+  const spDef = specialFor(main, p.equip.offHand);
+  // Parry needs no target: raise the shield.
+  if (special && spDef.kind === 'guard') {
+    if (now < p.nextSpecialAt) return;
+    p.nextSpecialAt = now + specialCooldown(spDef, p.stats.all) * 1000;
+    p.client.send({ t: 'cooldown', until: Date.now() + (p.nextSpecialAt - now) });
+    p.guard = { until: now + GUARD_SEC * 1000, pct: spDef.guard ?? 0.5, riposte: spDef.riposte ?? 0 };
+    p.act = 'swing'; p.actUntil = now + 600;
+    w.broadcastNear(p.state, { t: 'fx', kind: 'guard', from: p.state.id });
+    return;
+  }
+  const m = w.mobs.get(targetId);
+  if (!m || m.dead || !sameRegion(m, p.state)) return;
   const style = styleOf(cls);
   const s = p.stats.all;
   const d = Math.hypot(m.x - p.state.x, m.z - p.state.z);
   if (d > attackRange(main) + mobRadius(m) + 1) return w.notice(p, 'Out of range.', 'error');
   if (special) {
     if (now < p.nextSpecialAt) return;
-    p.nextSpecialAt = now + specialCooldown(cls, s) * 1000;
+    p.nextSpecialAt = now + specialCooldown(spDef, s) * 1000;
     p.client.send({ t: 'cooldown', until: Date.now() + (p.nextSpecialAt - now) });
   } else {
     if (now < p.nextAttackAt - 150) return;
@@ -176,16 +218,20 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
     if (!ammo || ammo.qty <= 0) return w.notice(p, 'No arrows — wear some in the ammo slot.', 'error');
     if (w.rand() >= s.arrowSave) { ammo.qty--; if (ammo.qty <= 0) delete p.equip.ammo; w.sendInv(p); p.dirty = true; }
   }
-  p.act = style === 'melee' ? (special && SPECIALS[cls].kind === 'spin' ? 'spin' : 'swing') : style === 'ranged' ? 'shoot' : 'cast';
+  p.act = style === 'melee' ? (special && spDef.kind === 'spin' ? 'spin' : 'swing') : style === 'ranged' ? 'shoot' : 'cast';
   p.actUntil = now + 600;
-  const sp = special ? SPECIALS[cls] : null;
+  const sp = special ? spDef : null;
   const magic = style === 'magic';
   const roll = (mult: number) => {
     const crit = w.rand() < s.crit;
     return { dmg: outgoing(main, ammo, s, mult) * (crit ? 1.5 : 1), crit };
   };
+  const giant = !!(main && ITEMS[main.id]?.giantslayer);
   const strike = (t: Mob, mult: number, then?: (t: Mob) => void) => {
-    const { dmg, crit } = roll(mult);
+    const { dmg: d0, crit } = roll(mult);
+    const dmg = giant ? d0 * giantslayerMult(t.def.scale) : d0;
+    if (sp?.stun) t.frozenUntil = Math.max(t.frozenUntil, w.now() + sp.stun * 1000);
+    if (sp?.taunt) { t.taunt = { by: p.state.id, until: w.now() + sp.taunt * 1000 }; t.target = p.state.id; }
     const final = Math.max(0.5, Math.round(mitigate(dmg, magic, t.def.armour, t.def.ward) * 10) / 10);
     w.broadcastNear(t, { t: 'hit', to: t.id, dmg: final, crit, kind: magic ? 'magic' : 'phys', from: p.state.id });
     then?.(t);
@@ -193,6 +239,7 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
   };
   const flight = (t: Mob) => (Math.hypot(t.x - p.state.x, t.z - p.state.z) / PROJECTILE_SPEED) * 1000;
 
+  if (sp?.guard) p.guard = { until: now + GUARD_SEC * 1000, pct: sp.guard, riposte: sp.riposte ?? 0 };
   if (!sp || sp.kind === 'single' || sp.kind === 'shot') {
     // Frost power: longer freezes, and frostbolts hit harder (half the bonus).
     const mult = (sp ? sp.mult : 1) * (cls === 'frostStaff' ? 1 + s.frostPower / 2 : 1);
@@ -215,6 +262,14 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
   if (sp.kind === 'spin') {
     w.broadcastNear(p.state, { t: 'fx', kind: 'spin', from: p.state.id });
     for (const t of near(sp.radius ?? 3.5)) strike(t, sp.mult);
+  } else if (sp.kind === 'cone') {
+    // Everything within reach in front of you (±60° around the aimed target).
+    w.broadcastNear(p.state, { t: 'fx', kind: 'spin', from: p.state.id });
+    const ax = m.x - p.state.x, az = m.z - p.state.z, al = Math.hypot(ax, az) || 1;
+    for (const t of near(sp.radius ?? 4.5)) {
+      const bx = t.x - p.state.x, bz = t.z - p.state.z, bl = Math.hypot(bx, bz) || 1;
+      if (t === m || (ax * bx + az * bz) / (al * bl) > 0.5) strike(t, sp.mult);
+    }
   } else if (sp.kind === 'nova') {
     w.broadcastNear(p.state, { t: 'fx', kind: 'nova', from: p.state.id });
     for (const t of near(sp.radius ?? 6)) strike(t, sp.mult, (x) => { x.frozenUntil = w.now() + FREEZE_SEC * 1000 * (1 + s.frostPower); });
@@ -270,8 +325,8 @@ function dropLoot(w: World, m: Mob, owner: ServerPlayer | undefined): void {
       const pool = GEAR_BY_TIER[d.gear] ?? [];
       if (!pool.length) continue;
       const id = pool[Math.floor(w.rand() * pool.length)];
-      // Found gear can be epic only from tier 2 and up (not from the first goblins).
-      const r: Rarity = d.legendary && w.rand() < d.legendary ? 4 : rollCraftRarity(luck, () => w.rand(), d.gear >= 2);
+      // Found gear can be epic (0.6%, a little more with luck), even from the first goblins.
+      const r: Rarity = d.legendary && w.rand() < d.legendary ? 4 : rollCraftRarity(luck, () => w.rand(), true);
       const st: Stack = { id, qty: 1 };
       if (r) { st.r = r; st.fx = rollEffects(ITEMS[id], r, () => w.rand()); }
       items.push(st);

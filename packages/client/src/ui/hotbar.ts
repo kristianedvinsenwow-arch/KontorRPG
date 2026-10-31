@@ -3,7 +3,7 @@
  * the right-click cooldown sweeps over the weapon), food (5), healing potion (6), health, buffs, tracked quests, and
  * the "knocked out" screen.
  */
-import { EAT_LOCK_MS, POTION_CD_MS, ITEMS, QUEST_BY_ID, SPECIALS, countItem, formatStat, weaponClass, type HoldSlot, type StatKey } from '@kontor/shared';
+import { EAT_LOCK_MS, POTION_CD_MS, ITEMS, QUEST_BY_ID, SPECIALS, specialFor, countItem, formatStat, weaponClass, type HoldSlot, type StatKey } from '@kontor/shared';
 import { gameStore, type GameState } from '../state/store.js';
 import { icon, el } from './panels.js';
 import { attachTip, itemTip } from './tooltip.js';
@@ -47,7 +47,7 @@ export function initHotbar(onHold: (s: HoldSlot) => void, onEat: (index: number)
       const st = g.equip[s.slot];
       const cell = el('button', `hcell${g.held === s.slot ? ' on' : ''}${st ? '' : ' empty'}`);
       cell.type = 'button';
-      if (st) { cell.append(icon(st)); attachTip(cell, () => [...itemTip(st), ...(s.slot === 'mainHand' ? [el('div', 'tspecial', `Right click: ${SPECIALS[weaponClass(st)].name}`)] : [])]); }
+      if (st) { cell.append(icon(st)); attachTip(cell, () => [...itemTip(st), ...(s.slot === 'mainHand' ? [el('div', 'tspecial', `Right click: ${specialFor(st, gameStore.get().equip.offHand).name}`)] : [])]); }
       else if (s.slot === 'mainHand') cell.append(el('span', 'fist', '✊'));
       cell.append(el('kbd', '', s.key), el('small', '', s.label));
       const cd = el('div', 'cd');
@@ -106,7 +106,7 @@ export function initHotbar(onHold: (s: HoldSlot) => void, onEat: (index: number)
       const g = gameStore.get();
       const now = Date.now();
       const left = g.specialReady - now;
-      const special = SPECIALS[weaponClass(g.equip.mainHand)];
+      const special = specialFor(g.equip.mainHand, g.equip.offHand);
       const total = special.cd * 1000;
       const frac = left > 0 ? 1 - Math.min(1, left / total) : 1;
       spFill.style.width = `${frac * 100}%`;

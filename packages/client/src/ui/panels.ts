@@ -68,6 +68,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
       const actions: [string, () => void][] = [];
       if (d?.food) actions.push(['Eat', () => send({ t: 'eat', index: i })]);
       if (d?.potion) actions.push(['Drink', () => send({ t: 'eat', index: i })]);
+      if (d?.teaches) actions.push(['Read', () => send({ t: 'eat', index: i })]);
       if (d?.slot) actions.push(['Equip', () => send({ t: 'equip', index: i })]);
       if (mode.kind === 'shop' && d?.sellValue) { actions.push(['Sell one', () => send({ t: 'sell', npc: mode.npc, index: i, qty: 1 })]); if (s.qty > 1) actions.push([`Sell all ${s.qty}`, () => send({ t: 'sell', npc: mode.npc, index: i, qty: s.qty })]); }
       if (mode.kind === 'storage') actions.push([s.qty > 1 ? `Put all ${s.qty} in chest` : 'Put in chest', () => send({ t: 'storage', op: 'put', index: i, qty: s.qty })]);
@@ -77,7 +78,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
       cell.onclick = (e) => {
         if (mode.kind === 'shop' && d?.sellValue) return send({ t: 'sell', npc: mode.npc, index: i, qty: e.shiftKey ? s.qty : 1 });
         if (mode.kind === 'storage') return send({ t: 'storage', op: 'put', index: i, qty: s.qty });
-        if (d?.food || d?.potion) return send({ t: 'eat', index: i });
+        if (d?.food || d?.potion || d?.teaches) return send({ t: 'eat', index: i });
         if (d?.slot) return send({ t: 'equip', index: i });
         contextMenu(e, actions);
       };
@@ -289,12 +290,13 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     for (const r of here.filter((x) => recipeGroup(x) === tab)) {
       const lvl = levelFromXp(g.xp[r.skill] ?? 0);
       const can = Math.min(...r.inputs.map((i) => Math.floor(countItem(g.bag, i.item) / i.qty)));
-      const locked = lvl < r.level;
+      const noPlans = !!r.plans && !g.ach.c[`plans:${r.plans}`];
+      const locked = lvl < r.level || noPlans;
       const row = el('div', locked ? 'recipe locked' : 'recipe');
       const out = ITEMS[r.output.item];
       const info = el('div', 'rinfo');
       const skillName = r.skill[0].toUpperCase() + r.skill.slice(1);
-      info.append(el('b', '', r.output.qty > 1 ? `${out.name} ×${r.output.qty}` : out.name), el('span', 'note', `${skillName} ${r.level} · ${Math.max(1, Math.round(r.xp * xpMult(ps, r.skill)))} XP${locked ? '' : moreFor(r)} · ${r.seconds}s${out.slot && out.kind !== 'ammo' ? ' · can roll a rarity' : ''}${r.burns ? ' · can burn' : ''}`));
+      info.append(el('b', '', r.output.qty > 1 ? `${out.name} ×${r.output.qty}` : out.name), el('span', 'note', `${skillName} ${r.level} · ${Math.max(1, Math.round(r.xp * xpMult(ps, r.skill)))} XP${locked ? '' : moreFor(r)} · ${r.seconds}s${out.slot && out.kind !== 'ammo' ? ' · can roll a rarity' : ''}${r.burns ? ' · can burn' : ''}${noPlans ? ` · needs ${r.plans} plans (found on monsters)` : ''}`));
       const ins = el('div', 'inputs');
       for (const i of r.inputs) {
         const have = countItem(g.bag, i.item);
@@ -309,7 +311,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
       n.value = String(Math.max(1, Math.min(want.get(r.id) ?? Math.max(1, can), 100)));
       n.oninput = () => want.set(r.id, Number(n.value) || 1);
       n.onkeydown = (e) => e.stopPropagation();
-      const go = btn(locked ? `Level ${r.level}` : 'Make', 'btn', () => send({ t: 'craft', recipe: r.id, station: st.id, count: Math.max(1, Math.min(100, Number(n.value) || 1)) }));
+      const go = btn(noPlans ? 'Need plans' : locked ? `Level ${r.level}` : 'Make', 'btn', () => send({ t: 'craft', recipe: r.id, station: st.id, count: Math.max(1, Math.min(100, Number(n.value) || 1)) }));
       go.disabled = locked || can < 1 || !!g.job;
       const all = btn('All', 'btn ghost', () => send({ t: 'craft', recipe: r.id, station: st.id, count: Math.min(100, can) }));
       all.disabled = go.disabled;
