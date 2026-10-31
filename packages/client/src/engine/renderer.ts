@@ -18,6 +18,7 @@ import { Sky } from 'three/addons/objects/Sky.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { GTAOPass } from 'three/addons/postprocessing/GTAOPass.js';
+import { NO_AO } from '../world/props.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
@@ -145,6 +146,13 @@ export function createGfx(container: HTMLElement, quality: Quality): Gfx {
   const renderPass = new RenderPass(scene, cam);
   const gtao = new GTAOPass(scene, cam, 1, 1);
   gtao.blendIntensity = 0.85;
+  // Hide alpha-cut grass cards while the AO pass draws its depth/normals (it ignores alphaTest).
+  const gtaoRender = gtao.render.bind(gtao);
+  gtao.render = (...args: Parameters<typeof gtaoRender>) => {
+    const hidden: THREE.Object3D[] = [];
+    for (const o of NO_AO) { if (!o.parent) { NO_AO.delete(o); continue; } if (o.visible) { o.visible = false; hidden.push(o); } }
+    try { gtaoRender(...args); } finally { for (const o of hidden) o.visible = true; }
+  };
   gtao.updateGtaoMaterial({ radius: 0.9, distanceExponent: 1.6, thickness: 1.5, scale: 1 });
   gtao.updatePdMaterial({ lumaPhi: 10, depthPhi: 2, normalPhi: 3, radius: 6, rings: 2, samples: 16 });
   const bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.22, 0.55, 0.92);

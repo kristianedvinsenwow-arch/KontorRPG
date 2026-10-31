@@ -97,7 +97,12 @@ function underRoof(x: number, z: number): boolean {
 /** A tuft: three crossed quads textured with grass blades; uv.y drives the wind (tips move, roots don't). */
 function tuftGeo(w: number, h: number): THREE.BufferGeometry {
   const quads = [0, Math.PI / 3, (2 * Math.PI) / 3].map((a) => new THREE.PlaneGeometry(w, h).translate(0, h / 2, 0).rotateY(a));
-  return mergeGeometries(quads)!;
+  const g = mergeGeometries(quads)!;
+  // Normals point up, so tufts light like the ground they stand on (side-facing card normals made
+  // the tops look shaded).
+  const n = g.attributes.normal;
+  for (let i = 0; i < n.count; i++) n.setXYZ(i, 0, 1, 0);
+  return g;
 }
 
 const bladesTex = canvasTex((g, s) => {
@@ -173,6 +178,8 @@ export const PROP = {
   cotton: { geo: tuftGeo(0.5, 0.45), mat: windMaterial(flowerTex('#f4f2ea'), 0xffffff, 0.08) },
 };
 // Shadows from thousands of grass cards cost a lot and look noisy; only the big things cast.
+/** Meshes the ambient-occlusion pass should leave out (see renderer). */
+export const NO_AO = new Set<THREE.Object3D>();
 const CASTS: Partial<Record<PropKey, boolean>> = { pineTrunk: true, pineCrown: true, birchTrunk: true, birchCrown: true, rockA: true, rockB: true, bush: true, berryBush: true };
 type PropKey = keyof typeof PROP;
 
@@ -263,6 +270,9 @@ export function buildProps(cx: number, cz: number, colliders: Collider[], dense:
     list.forEach((it, i) => { im.setMatrixAt(i, it.m); im.setColorAt(i, it.c); });
     im.castShadow = !!CASTS[k];
     im.receiveShadow = true;
+    // Thin alpha-cut cards (grass, flowers, reeds): the ambient-occlusion pass draws them as solid
+    // quads, which left a dark smudge floating over the grass tops, so it skips them.
+    if (p.mat.alphaTest > 0) NO_AO.add(im);
     im.computeBoundingSphere();
     out.push(im);
   }

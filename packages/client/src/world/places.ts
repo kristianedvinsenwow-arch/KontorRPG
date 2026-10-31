@@ -431,10 +431,15 @@ export class Places {
     // Window on the right-hand wall; it glows at night.
     const win = new THREE.MeshStandardMaterial({ color: 0xe8d8a8, roughness: 0.3, emissive: 0xffb060, emissiveIntensity: 0 });
     this.windows.push(win);
-    bx(g, 0.06, 0.6, 0.8, win, w / 2 + 0.05, 1.45, -0.3);
-    bx(g, 0.06, 0.6, 0.8, win, w / 2 - 0.05, 1.45, -0.3);
+    // The panes sit a few cm proud of each face of the wall (not inside it, which flickered), with a
+    // wooden frame around the outside one.
+    for (const sx of [1, -1]) bx(g, 0.02, 0.6, 0.8, win, w / 2 + sx * (T / 2 + 0.02), 1.45, -0.3);
+    const fx = w / 2 + T / 2 + 0.035;
+    for (const dy of [-0.33, 0.33]) bx(g, 0.07, 0.07, 0.94, M.darkWood, fx, 1.45 + dy, -0.3);
+    for (const dz of [-0.435, 0.435]) bx(g, 0.07, 0.6, 0.07, M.darkWood, fx, 1.45, -0.3 + dz);
+    bx(g, 0.05, 0.6, 0.04, M.darkWood, fx + 0.01, 1.45, -0.3);
     // Ceiling and roof.
-    bx(g, w, 0.06, d, M.darkWood, 0, H + 0.03, 0);
+    bx(g, w - T, 0.06, d - T, M.darkWood, 0, H - 0.03, 0); // inside the walls, so no faces share a plane
     // Two roof slabs meeting at the ridge, their low edges resting on the wall tops.
     const slope = 0.5, half = (w / 2 + 0.35) / Math.cos(slope);
     for (const sx of [-1, 1]) bx(g, half, 0.16, d + 0.6, hut ? M.roof : M.turf, sx * (w / 2 + 0.35) / 2, H + 0.1 + Math.tan(slope) * (w / 2 + 0.35) / 2, 0, 0, 0, -sx * slope);
