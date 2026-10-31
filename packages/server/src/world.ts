@@ -8,7 +8,7 @@ import {
   ACHIEVEMENTS, titleOf, AOI_CHUNKS, PORTAL_BY_ID, HOMES, maxSpeed, regionAt, homeAt, homeDoorway, homeLabel, type Home, CHUNK_SIZE, IMBUE, INN, ITEMS, MAX_CHAT_LEN, MAX_NAME_LEN,
   NPC_BY_ID, PLAYER_COLORS, PROTOCOL_VERSION, QUEST_BY_ID, RECIPE_BY_ID, START_GOLD, STATION_BY_ID, TICK_HZ, USE_RANGE,
   EAT_LOCK_MS, POTION_CD_MS, addStack, burnChance, knifeRepair, knifeUses, STATIONS, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
-  questAvailable, r2, r3, recipeAt, removeItem, resizeBag, respecCost, rollCraftRarity, rollEffects, rollsRarity,
+  questAvailable, r2, r3, recipeAt, removeItem, resizeBag, respecCost, rollCraftRarity, canCraftEpic, sellEach, rollEffects, rollsRarity,
   validateBuild, xpMult, COMBAT_TREES, TALENT_TREE,
   type Buff, type ClientMsg, type HoldSlot, type MobKind, type PlayerState, type ServerMsg, type SkillId, type Slot,
   type Stack, type TreeId,
@@ -519,7 +519,7 @@ export class World {
     let out: Stack = { id: r.output.item, qty: r.output.qty };
     if (r.burns && this.rand() < burnChance(levelOf(p.xp, 'cooking'), r.level, st.kind === 'stove', sc.burnChance)) out = { id: 'burnt_fish', qty: 1 };
     else if (rollsRarity(r)) {
-      const rar = rollCraftRarity(sc.luck, () => this.rand());
+      const rar = rollCraftRarity(sc.luck, () => this.rand(), canCraftEpic(p.talents, r.skill));
       if (rar) { out.r = rar; out.fx = rollEffects(ITEMS[out.id], rar, () => this.rand()); }
     }
     if (ITEMS[out.id]?.knife) out.d = knifeUses(out);
@@ -729,10 +729,11 @@ export class World {
     const def = ITEMS[s.id];
     if (!def || def.sellValue <= 0) return this.notice(p, 'The trader isn’t interested in that.', 'error');
     const k = Math.min(qty, s.qty);
-    const each = Math.max(1, Math.round(def.sellValue * (1 + (s.r ?? 0) * 0.5) * (1 + p.stats.all.sell)));
+    const total = Math.floor(k * sellEach(s, 1 + p.stats.all.sell) + 1e-9);
+    if (total < 1) return this.notice(p, 'That’s worth less than a coin. Sell a few together.', 'error');
     s.qty -= k;
     if (s.qty <= 0) p.bag[index] = null;
-    p.gold += k * each;
+    p.gold += total;
     p.dirty = true;
     this.sendInv(p);
   }

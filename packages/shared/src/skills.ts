@@ -7,7 +7,7 @@
 export type SkillId = 'mining' | 'smithing' | 'woodcutting' | 'carpentry' | 'leatherworking' | 'tailoring' | 'herbalism' | 'alchemy' | 'fishing' | 'cooking' | 'combat';
 
 export const SKILLS: { id: SkillId; name: string; live: boolean; blurb: string }[] = [
-  { id: 'combat', name: 'Player level', live: true, blurb: 'From fighting. Each level gives a talent point for melee, ranged, magic or defence, and +3 max HP.' },
+  { id: 'combat', name: 'Player level', live: true, blurb: 'From fighting. Each level gives a talent point for melee, ranged, magic or defence, and +2 max HP.' },
   { id: 'mining', name: 'Mining', live: true, blurb: 'Stone, iron and (in the cave) silver. Higher levels swing faster.' },
   { id: 'smithing', name: 'Smithing', live: true, blurb: 'Furnace and anvil: bars, weapons, metal armour, arrowheads.' },
   { id: 'woodcutting', name: 'Woodcutting', live: true, blurb: 'Fell birch and pine with a hatchet.' },

@@ -61,7 +61,7 @@ test('moving points keeps the build valid; adding points does not', () => {
 
 test('perks change derived stats', () => {
   const base = derive(defaultBuild());
-  assert.equal(base.maxHp, 25);
+  assert.equal(base.maxHp, 20);
   assert.equal(base.bagBonus, 0);
   const mule = derive({ ...defaultBuild(), major: 'pack_mule' });
   assert.equal(mule.bagBonus, 4);
@@ -69,7 +69,7 @@ test('perks change derived stats', () => {
   const gifted = derive({ ...defaultBuild(), major: 'gifted' });
   assert.equal(gifted.attrs.str, 6);
   const tough = derive({ ...defaultBuild(), minor: 'thick_skin' });
-  assert.equal(tough.maxHp, 30);
+  assert.equal(tough.maxHp, 25);
 });
 
 import { clockXpMult, RACES } from '../src/index.js';

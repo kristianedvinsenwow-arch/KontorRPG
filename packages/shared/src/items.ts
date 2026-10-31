@@ -70,22 +70,25 @@ export interface ItemDef {
 export type Rarity = 0 | 1 | 2 | 3 | 4;
 export const RARITY: { name: string; color: string; mult: number; effects: number }[] = [
   { name: 'Normal', color: '#d8d4c8', mult: 1, effects: 0 },
-  { name: 'Uncommon', color: '#6fcf5f', mult: 1.1, effects: 1 },
-  { name: 'Rare', color: '#4ea1e8', mult: 1.2, effects: 2 },
-  { name: 'Epic', color: '#b77be8', mult: 1.35, effects: 3 },
-  { name: 'Legendary', color: '#f2a23a', mult: 1.5, effects: 4 },
+  { name: 'Uncommon', color: '#6fcf5f', mult: 1.2, effects: 1 },
+  { name: 'Rare', color: '#4ea1e8', mult: 1.35, effects: 2 },
+  { name: 'Epic', color: '#b77be8', mult: 1.5, effects: 3 },
+  { name: 'Legendary', color: '#f2a23a', mult: 1.7, effects: 4 },
 ];
 
 /**
- * Rarity when crafting. Luck (points) scales the chances: 10 luck = +20%.
- * Base: uncommon 10%, rare 2.5%, epic 0.5%. Legendary never comes from crafting.
+ * Rarity when crafting (and for gear dropped by monsters). Luck (points) scales the chances:
+ * 10 luck = +20%. Base: uncommon 12%, rare 3%, epic 0.6% — but epics only when `epic` is true
+ * (the crafting skill's Masterpiece talent, or gear found on tougher monsters); otherwise that
+ * roll comes out rare. Legendary never comes from crafting.
  */
-export function rollCraftRarity(luck: number, rand: () => number): Rarity {
+export const CRAFT_ODDS = { uncommon: 0.12, rare: 0.03, epic: 0.006 };
+export function rollCraftRarity(luck: number, rand: () => number, epic = false): Rarity {
   const k = 1 + Math.max(0, luck) * 0.02;
   const r = rand();
-  if (r < 0.005 * k) return 3;
-  if (r < 0.03 * k) return 2;
-  if (r < 0.13 * k) return 1;
+  if (r < CRAFT_ODDS.epic * k) return epic ? 3 : 2;
+  if (r < (CRAFT_ODDS.epic + CRAFT_ODDS.rare) * k) return 2;
+  if (r < (CRAFT_ODDS.epic + CRAFT_ODDS.rare + CRAFT_ODDS.uncommon) * k) return 1;
   return 0;
 }
 
@@ -100,7 +103,7 @@ export const EFFECTS: { key: StatKey; groups: EffectGroup[]; min: number; max: n
   { key: 'physRed', groups: ['general'], min: 0.01, max: 0.04 },
   { key: 'magicRed', groups: ['general'], min: 0.01, max: 0.04 },
   { key: 'cdr', groups: ['general'], min: 0.03, max: 0.08 },
-  { key: 'maxHp', groups: ['general'], min: 2, max: 8, flat: true },
+  { key: 'maxHp', groups: ['general'], min: 1, max: 5, flat: true },
   { key: 'regen', groups: ['general'], min: 1, max: 3, flat: true },
   { key: 'crit', groups: ['general'], min: 0.01, max: 0.03 },
   // cloth
@@ -184,8 +187,8 @@ add({ id: 'stone_arrowheads', name: 'Stone arrowheads', kind: 'material', stack:
 add({ id: 'iron_arrowheads', name: 'Iron arrowheads', kind: 'material', stack: 100, tier: 2, look: 'iron', sellValue: 0, blurb: 'Forged at the anvil, fitted at the workbench.' });
 add({ id: 'stone_arrow', name: 'Stone arrows', kind: 'ammo', stack: 200, tier: 1, look: 'stone', slot: 'ammo', ammoDmg: 1, sellValue: 0, blurb: 'Wear them in the ammo slot. +1 damage per shot.' });
 add({ id: 'steel_arrowheads', name: 'Steel arrowheads', kind: 'material', stack: 100, tier: 3, look: 'steel', sellValue: 0, blurb: 'Forged at the anvil, fitted at the workbench.' });
-add({ id: 'steel_arrow', name: 'Steel arrows', kind: 'ammo', stack: 200, tier: 3, look: 'steel', slot: 'ammo', ammoDmg: 5, sellValue: 0, blurb: 'Wear them in the ammo slot. +5 damage per shot.' });
-add({ id: 'iron_arrow', name: 'Iron arrows', kind: 'ammo', stack: 200, tier: 2, look: 'iron', slot: 'ammo', ammoDmg: 3, sellValue: 0, blurb: 'Wear them in the ammo slot. +3 damage per shot.' });
+add({ id: 'steel_arrow', name: 'Steel arrows', kind: 'ammo', stack: 200, tier: 3, look: 'steel', slot: 'ammo', ammoDmg: 3, sellValue: 0, blurb: 'Wear them in the ammo slot. +3 damage per shot.' });
+add({ id: 'iron_arrow', name: 'Iron arrows', kind: 'ammo', stack: 200, tier: 2, look: 'iron', slot: 'ammo', ammoDmg: 2, sellValue: 0, blurb: 'Wear them in the ammo slot. +2 damage per shot.' });
 
 // fish and food
 const FISH: [string, string, number, number, number, ItemDef['food']][] = [
@@ -193,7 +196,7 @@ const FISH: [string, string, number, number, number, ItemDef['food']][] = [
   ['perch', 'Perch', 0, 1, 1, { heal: 6 }],
   ['trout', 'Trout', 1, 2, 1, { heal: 10, buff: { name: 'Well fed (trout)', stats: { miningSpeed: 0.05, woodSpeed: 0.05 }, sec: 600 } }],
   ['char', 'Arctic char', 1, 3, 2, { heal: 14, buff: { name: 'Well fed (char)', stats: { allDmg: 0.05 }, sec: 600 } }],
-  ['pike', 'Pike', 2, 4, 2, { heal: 18, buff: { name: 'Well fed (pike)', stats: { maxHp: 10, regen: 1 }, sec: 600 } }],
+  ['pike', 'Pike', 2, 4, 2, { heal: 18, buff: { name: 'Well fed (pike)', stats: { maxHp: 6, regen: 1 }, sec: 600 } }],
 ];
 for (const [id, name, raw, cooked, tier, food] of FISH) {
   add({ id: `raw_${id}`, name: `Raw ${name.toLowerCase()}`, kind: 'fish', stack: 10, tier, sellValue: raw, blurb: 'Cook it at a campfire or the inn’s stove.' });
@@ -242,9 +245,9 @@ add({ id: 'grave_moss', name: 'Grave moss', kind: 'herb', stack: 20, tier: 3, se
 add({ id: 'vial', name: 'Empty vial', kind: 'material', stack: 20, sellValue: 0, buyPrice: 2, blurb: 'Ragna sells them. Every potion needs one.' });
 export const POTION_CD_MS = 20_000;
 const POTIONS: [string, string, NonNullable<ItemDef['potion']>, number, string][] = [
-  ['healing_draught', 'Healing draught', { heal: 30, sec: 10 }, 3, 'Heals 30 HP over 10 s. Works mid-fight.'],
-  ['cloudberry_tonic', 'Cloudberry tonic', { heal: 55, sec: 10 }, 6, 'Heals 55 HP over 10 s. Works mid-fight.'],
-  ['grave_draught', 'Grave draught', { heal: 100, sec: 12 }, 12, 'Heals 100 HP over 12 s. Works mid-fight. Tastes like a cellar.'],
+  ['healing_draught', 'Healing draught', { heal: 20, sec: 10 }, 3, 'Heals 20 HP over 10 s. Works mid-fight.'],
+  ['cloudberry_tonic', 'Cloudberry tonic', { heal: 38, sec: 10 }, 6, 'Heals 38 HP over 10 s. Works mid-fight.'],
+  ['grave_draught', 'Grave draught', { heal: 70, sec: 12 }, 12, 'Heals 70 HP over 12 s. Works mid-fight. Tastes like a cellar.'],
   ['strength_elixir', 'Roseroot elixir', { buff: { name: 'Elixir: roseroot', stats: { meleeDmg: 0.08, rangedDmg: 0.08 }, sec: 900 } }, 8, '+8% melee and ranged damage for 15 min.'],
   ['mind_elixir', 'Lantern elixir', { buff: { name: 'Elixir: lantern', stats: { magicDmg: 0.1, ward: 2 }, sec: 900 } }, 10, '+10% magic damage and +2 ward for 15 min.'],
   ['warding_elixir', 'Warding elixir', { buff: { name: 'Elixir: warding', stats: { magicRed: 0.08, armour: 3 }, sec: 900 } }, 10, '+8% magic damage reduction and +3 armour for 15 min.'],
@@ -278,9 +281,9 @@ const ARMOUR_MULT = [1, 1.8, 2.6, 3.4];
 
 // weapons: [class, dps per tier, interval, range, twoHanded]
 const W: Record<'sword' | 'longsword' | 'battleaxe', { name: string; dps: number[]; interval: number; range: number; two: boolean; blurb: string }> = {
-  sword: { name: 'sword', dps: [6.5, 10, 13.5, 17.5], interval: 1.6, range: 2.6, two: false, blurb: 'One-handed. Right click: Heavy Strike (2.5× damage, 8 s).' },
-  longsword: { name: 'longsword', dps: [8, 12.5, 17, 22], interval: 2.3, range: 3.0, two: true, blurb: 'Two-handed. Right click: Whirlwind — spin and hit everything around you (12 s).' },
-  battleaxe: { name: 'battleaxe', dps: [8, 12.5, 17, 22], interval: 2.5, range: 2.8, two: true, blurb: 'Two-handed. Right click: Executioner (4× damage, 18 s).' },
+  sword: { name: 'sword', dps: [4.5, 6, 7.5, 9], interval: 1.6, range: 2.6, two: false, blurb: 'One-handed. Right click: Heavy Strike (2.5× damage, 8 s).' },
+  longsword: { name: 'longsword', dps: [5.5, 7.5, 9.5, 11.5], interval: 2.3, range: 3.0, two: true, blurb: 'Two-handed. Right click: Whirlwind — spin and hit everything around you (12 s).' },
+  battleaxe: { name: 'battleaxe', dps: [5.5, 7.5, 9.5, 11.5], interval: 2.5, range: 2.8, two: true, blurb: 'Two-handed. Right click: Executioner (4× damage, 18 s).' },
 };
 for (const [cls, w] of Object.entries(W) as [keyof typeof W, typeof W.sword][]) {
   METALS.forEach((t, i) => add({
@@ -289,13 +292,13 @@ for (const [cls, w] of Object.entries(W) as [keyof typeof W, typeof W.sword][]) 
     ...(t === 'silversteel' ? { mods: { allDmg: 0.04, crit: 0.02 } } : {}),
   }));
 }
-add({ id: 'birch_shortbow', name: 'Birch shortbow', kind: 'weapon', stack: 1, tier: 1, look: 'birch', slot: 'mainHand', weapon: 'bow', dps: 6, interval: 2.0, range: 28, twoHanded: true, sellValue: 3, blurb: 'Needs arrows in the ammo slot. Right click: Power Shot (3×, 10 s).' });
-add({ id: 'pine_longbow', name: 'Pine longbow', kind: 'weapon', stack: 1, tier: 2, look: 'pine', slot: 'mainHand', weapon: 'bow', dps: 9, interval: 2.2, range: 34, twoHanded: true, sellValue: 7, blurb: 'Needs arrows in the ammo slot. Right click: Power Shot (3×, 10 s).' });
-for (const [wood, tier, dps] of [['birch', 1, 3], ['pine', 2, 5]] as const) {
+add({ id: 'birch_shortbow', name: 'Birch shortbow', kind: 'weapon', stack: 1, tier: 1, look: 'birch', slot: 'mainHand', weapon: 'bow', dps: 4.5, interval: 2.0, range: 28, twoHanded: true, sellValue: 3, blurb: 'Needs arrows in the ammo slot. Right click: Power Shot (3×, 10 s).' });
+add({ id: 'pine_longbow', name: 'Pine longbow', kind: 'weapon', stack: 1, tier: 2, look: 'pine', slot: 'mainHand', weapon: 'bow', dps: 6, interval: 2.2, range: 34, twoHanded: true, sellValue: 7, blurb: 'Needs arrows in the ammo slot. Right click: Power Shot (3×, 10 s).' });
+for (const [wood, tier, dps] of [['birch', 1, 2.5], ['pine', 2, 3.5]] as const) {
   const W2 = wood[0].toUpperCase() + wood.slice(1);
   add({ id: `${wood}_staff`, name: `${W2} staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'staff', dps, interval: 1.8, range: 2.6, twoHanded: true, sellValue: tier * 2, blurb: 'A clumsy club until the Imbuer in Bjørkvik makes it magical.' });
-  add({ id: `${wood}_fire_staff`, name: `${W2} fire staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'fireStaff', dps: tier === 1 ? 4.5 : 7, interval: 1.8, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Light firebolts that set a burn (stacks to 3, most of the damage is in the burn). Right click: Ignite — every burning enemy nearby takes 45% of a firebolt per burn stack (12 s).' });
-  add({ id: `${wood}_frost_staff`, name: `${W2} frost staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'frostStaff', dps: tier === 1 ? 7.5 : 12, interval: 2.6, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Slow, heavy frostbolts. Right click: Frost Nova — freeze everything within 6 m for 2.5 s (15 s).' });
+  add({ id: `${wood}_fire_staff`, name: `${W2} fire staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'fireStaff', dps: tier === 1 ? 3 : 4, interval: 1.8, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Light firebolts that set a burn (stacks to 3, most of the damage is in the burn). Right click: Ignite — every burning enemy nearby takes 45% of a firebolt per burn stack (12 s).' });
+  add({ id: `${wood}_frost_staff`, name: `${W2} frost staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'frostStaff', dps: tier === 1 ? 5 : 6.5, interval: 2.6, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Slow, heavy frostbolts. Right click: Frost Nova — freeze everything within 6 m for 2.5 s (15 s).' });
 }
 
 // armour. Metal is smithed (stone uses shaped stone, iron uses bars); leather and cloth are sold for now.
@@ -366,7 +369,10 @@ add({ id: 'trolltooth_necklace', name: 'Trolltooth necklace', kind: 'trinket', s
 export const ITEMS: Record<string, ItemDef> = Object.fromEntries(defs.map((d) => [d.id, d]));
 
 export const BASE_BAG_SLOTS = 16;
-export const START_GOLD = 30;
+export const START_GOLD = 15;
+/** Traders pay half an item's value (more for rarer copies). Fractions add up when you sell a stack. */
+export const SELL_RATE = 0.5;
+export const sellEach = (s: Pick<Stack, 'id' | 'r'>, sellMult = 1) => { const d = ITEMS[s.id]; return d && d.sellValue > 0 ? d.sellValue * SELL_RATE * (1 + (s.r ?? 0) * 0.5) * sellMult : 0; };
 
 /** Order and labels for the character sheet. */
 export const EQUIP_SLOTS: { slot: Slot; label: string }[] = [
@@ -519,7 +525,7 @@ export function itemStats(s: Stack): Partial<Stats> {
 /** Weapon damage per basic hit for this copy (dps × interval × rarity). */
 export function weaponHit(s: Stack | undefined): number {
   const d = s ? ITEMS[s.id] : undefined;
-  if (!d?.dps) return 2; // fists
+  if (!d?.dps) return 1.5; // fists
   return d.dps * (d.interval ?? 1.6) * RARITY[s!.r ?? 0].mult;
 }
 

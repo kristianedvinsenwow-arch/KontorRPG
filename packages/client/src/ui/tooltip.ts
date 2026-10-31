@@ -3,7 +3,7 @@
  * blurb and what the trader pays. One floating element follows the mouse.
  */
 import {
-  ARMOUR_PIECES, ITEMS, KIND_LABEL, RARITY, SPECIALS, formatStat, itemStats, weaponHit, type Stack, type StatKey,
+  ARMOUR_PIECES, ITEMS, KIND_LABEL, RARITY, SPECIALS, formatStat, itemStats, sellEach, weaponHit, type Stack, type StatKey,
 } from '@kontor/shared';
 
 const tip = document.createElement('div');
@@ -68,8 +68,9 @@ export function itemTip(s: Stack, sellMult = 1): HTMLElement[] {
   }
   if (d.bagSlots) out.push(row(`+${d.bagSlots} bag slots`, 'tmain'));
   out.push(row(d.blurb, 'tblurb'));
-  const value = d.sellValue > 0 ? Math.max(1, Math.round(d.sellValue * (1 + r * 0.5) * sellMult)) : 0;
-  out.push(row(value ? `Trader pays ${value} g${s.qty > 1 ? ` each (${value * s.qty} g)` : ''}` : 'The trader won’t buy this', 'tvalue'));
+  const value = sellEach(s, sellMult);
+  const fmt = (v: number) => (v >= 10 || Number.isInteger(v) ? String(Math.round(v * 10) / 10) : v.toFixed(1).replace(/\.0$/, ''));
+  out.push(row(value ? `Trader pays ${fmt(value)} g${s.qty > 1 ? ` each (${Math.floor(value * s.qty + 1e-9)} g for all)` : ''}` : 'The trader won’t buy this', 'tvalue'));
   if (d.buyPrice) out.push(row(`Ingrid sells it for ${d.buyPrice} g`, 'tdim'));
   return out;
 }

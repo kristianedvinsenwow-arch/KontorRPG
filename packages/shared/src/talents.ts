@@ -80,24 +80,28 @@ export const TREES: TalentTree[] = [
     n('masterwork', 'Masterwork', 3, 1, 1, ['apprentice'], { luck: 2 }),
     n('forgemaster', 'Forgemaster', 1, -1, 2, ['steady_hammer'], { craftSpeed: 0.12 }),
     n('artisan', 'Artisan', 1, 1, 2, ['masterwork'], { luck: 6 }),
+    n('masterpiece_smithing', 'Masterpiece', 1, 0, 3, ['forgemaster', 'artisan'], { luck: 2 }),
   ] },
   { id: 'carpentry', name: 'Carpentry', skill: 'carpentry', nodes: [
     n('whittler', 'Whittler', 3, 0, 0, [], { craftSpeed: 0.04 }),
     n('fine_grain', 'Fine Grain', 3, 1, 1, ['whittler'], { luck: 2 }),
     n('quick_hands', 'Quick Hands', 3, -1, 1, ['whittler'], { craftSpeed: 0.04 }),
     n('bowyer', 'Bowyer', 1, 1, 2, ['fine_grain'], { luck: 6 }),
+    n('masterpiece_carpentry', 'Masterpiece', 1, 0, 3, ['bowyer'], { luck: 2 }),
   ] },
   { id: 'leatherworking', name: 'Leatherworking', skill: 'leatherworking', nodes: [
     n('tanner', 'Tanner', 3, 0, 0, [], { craftSpeed: 0.04 }),
     n('supple', 'Supple Hides', 3, 1, 1, ['tanner'], { luck: 2 }),
     n('quick_stitch', 'Quick Stitch', 3, -1, 1, ['tanner'], { craftSpeed: 0.04 }),
     n('master_tanner', 'Master Tanner', 1, 1, 2, ['supple'], { luck: 6 }),
+    n('masterpiece_leatherworking', 'Masterpiece', 1, 0, 3, ['master_tanner'], { luck: 2 }),
   ] },
   { id: 'tailoring', name: 'Tailoring', skill: 'tailoring', nodes: [
     n('nimble_fingers', 'Nimble Fingers', 3, 0, 0, [], { craftSpeed: 0.04 }),
     n('green_thumb', 'Green Thumb', 3, -1, 1, ['nimble_fingers'], { doubleYield: 0.05 }),
     n('fine_weave', 'Fine Weave', 3, 1, 1, ['nimble_fingers'], { luck: 2 }),
     n('master_weaver', 'Master Weaver', 1, 0, 2, ['green_thumb', 'fine_weave'], { luck: 6, craftSpeed: 0.1 }),
+    n('masterpiece_tailoring', 'Masterpiece', 1, 0, 3, ['master_weaver'], { luck: 2 }),
   ] },
   { id: 'herbalism', name: 'Herbalism', skill: 'herbalism', nodes: [
     n('forager', 'Forager', 3, 0, 0, [], { doubleYield: 0.04 }),
@@ -211,3 +215,9 @@ export function sanitiseTalents(raw: unknown, xp: SkillXp): TalentAlloc {
 
 /** Gold to reset a tree: 10, then doubling each time (design doc: respec cost doubles). */
 export const respecCost = (respecs: number) => 10 * 2 ** Math.min(respecs, 10);
+
+/** The talent that lets a crafting skill make epic items (without it, an epic roll comes out rare). */
+export const MASTERPIECE: Partial<Record<TreeId, string>> = {
+  smithing: 'masterpiece_smithing', carpentry: 'masterpiece_carpentry', leatherworking: 'masterpiece_leatherworking', tailoring: 'masterpiece_tailoring',
+};
+export const canCraftEpic = (a: TalentAlloc, skill: string) => { const id = MASTERPIECE[skill as TreeId]; return !!id && (a[skill as TreeId]?.[id] ?? 0) > 0; };

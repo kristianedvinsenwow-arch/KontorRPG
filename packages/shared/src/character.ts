@@ -204,7 +204,7 @@ export function derive(b: CharacterBuild): Derived {
   const pct = (x: number) => Math.round(x * 100);
   return {
     attrs: a,
-    maxHp: Math.round((10 + 3 * a.sta) * (1 + (m.hpPct ?? 0))) + (m.hpFlat ?? 0),
+    maxHp: Math.round((10 + 2 * a.sta) * (1 + (m.hpPct ?? 0))) + (m.hpFlat ?? 0),
     bagBonus: (a.str >= 8 ? 1 : 0) + (a.str >= 10 ? 1 : 0) + (m.bagSlots ?? 0),
     miningSpeed: (m.miningSpeedPct ?? 0) + 0.01 * (a.dex - 5) + (RACES[b.race]?.bonus.miningSpeed ?? 0),
     speedBonus: (m.speedPct ?? 0) + (RACES[b.race]?.bonus.moveSpeed ?? 0),

@@ -231,6 +231,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
         el('div', 'tname', n.name),
         el('div', 'ttype', n.ranks === 1 ? 'Notable — one point' : 'Three ranks'),
         ...Object.entries(n.fx).map(([k, v]) => el('div', 'tfx', `${formatStat(k as StatKey, v as number)}${n.ranks > 1 ? ' per rank' : ''}`)),
+        ...(n.id.startsWith('masterpiece_') ? [el('div', 'tfx', 'Your crafts can come out epic (without this, the best you can make is rare)')] : []),
         el('div', 'tdim', why ?? 'Click to learn.'),
       ]);
       b.onclick = () => send({ t: 'talent', tree, node: n.id });

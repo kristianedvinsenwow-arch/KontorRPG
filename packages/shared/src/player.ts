@@ -57,7 +57,7 @@ export function computeStats(build: CharacterBuild, equip: Equipment, talents: T
   for (const s of Object.keys(scopedExtra) as GatherSkill[]) addStats(scopedExtra[s], talentStats(talents, s as TreeId));
   const scoped = Object.fromEntries(Object.entries(scopedExtra).map(([k, v]) => [k, addStats(addStats(emptyStats(), all), v)])) as Record<GatherSkill, Stats>;
   const combatLevel = levelFromXp(xp.combat ?? 0);
-  const maxHp = Math.max(5, Math.round((10 + 3 * a.sta + 3 * (combatLevel - 1) + all.maxHp) * (1 + all.hpPct)));
+  const maxHp = Math.max(5, Math.round((10 + 2 * a.sta + 2 * (combatLevel - 1) + all.maxHp) * (1 + all.hpPct)));
   return {
     all, scoped, maxHp, combatLevel,
     speedCap: maxSpeed(1, all.moveSpeed),

@@ -270,7 +270,8 @@ function dropLoot(w: World, m: Mob, owner: ServerPlayer | undefined): void {
       const pool = GEAR_BY_TIER[d.gear] ?? [];
       if (!pool.length) continue;
       const id = pool[Math.floor(w.rand() * pool.length)];
-      const r: Rarity = d.legendary && w.rand() < d.legendary ? 4 : rollCraftRarity(luck, () => w.rand());
+      // Found gear can be epic only from tier 2 and up (not from the first goblins).
+      const r: Rarity = d.legendary && w.rand() < d.legendary ? 4 : rollCraftRarity(luck, () => w.rand(), d.gear >= 2);
       const st: Stack = { id, qty: 1 };
       if (r) { st.r = r; st.fx = rollEffects(ITEMS[id], r, () => w.rand()); }
       items.push(st);
