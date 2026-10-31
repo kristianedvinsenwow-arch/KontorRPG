@@ -20,7 +20,10 @@ const LOOK: Record<string, [string, string]> = {
   coal: ['#2a2a2e', '#121214'],
   gold: ['#f2cc5a', '#a8802a'],
   linen: ['#d8ccb0', '#8a7c60'],
+  jute: ['#b89a62', '#6e5a34'],
+  ramie: ['#dfe2d2', '#8a907a'],
   cotton: ['#f2efe6', '#a8a498'],
+  bamboo: ['#c8d890', '#6a8040'],
   silk: ['#bfe4f2', '#5a8aa8'],
 };
 const GEM_COLOR: Record<string, string> = { quartz: '#ece6f2', sapphire: '#3d64d8', garnet: '#c02a38' };
@@ -151,10 +154,13 @@ export function iconFor(id: string): string {
     vial: () => { poly(g, [[28, 10], [36, 10], [36, 24], [46, 40], [42, 56], [22, 56], [18, 40], [28, 24]], 'rgba(220,235,240,.55)'); },
     flax: () => { for (const dx of [-10, 0, 10]) { line(g, '#6f8c42', 3, [[32 + dx, 58], [32 + dx * 0.6, 14]]); dot(g, 32 + dx * 0.6, 12, 5, '#7a9ae8'); } },
     bog_cotton: () => { for (const dx of [-10, 0, 10]) { line(g, '#6f8c42', 3, [[32 + dx, 58], [32 + dx * 0.7, 22]]); dot(g, 32 + dx * 0.7, 18, 8, '#f6f4ec'); } },
-    linen_thread: () => { dot(g, 32, 34, 18, '#d8ccb0'); for (const y of [24, 30, 36, 42]) line(g, '#a89c80', 2, [[18, y], [46, y + 2]]); },
-    cotton_thread: () => { dot(g, 32, 34, 18, '#f2efe6'); for (const y of [24, 30, 36, 42]) line(g, '#c8c4b8', 2, [[18, y], [46, y + 2]]); },
-    linen: () => { poly(g, [[10, 22], [54, 18], [52, 46], [12, 48]], '#d8ccb0'); line(g, '#a89c80', 2, [[12, 32], [52, 30]]); },
-    cotton_cloth: () => { poly(g, [[10, 22], [54, 18], [52, 46], [12, 48]], '#f2efe6'); line(g, '#c8c4b8', 2, [[12, 32], [52, 30]]); },
+    jute: () => { for (const dx of [-9, 0, 9]) { line(g, '#6f8c42', 4, [[32 + dx, 60], [32 + dx * 0.8, 8]]); dot(g, 32 + dx * 0.8, 8, 4, '#e8c838'); } },
+    ramie: () => { line(g, '#6f8a52', 3, [[32, 60], [32, 10]]); for (const [y, s2] of [[44, 1], [32, -1], [20, 1]] as const) poly(g, [[32, y], [32 + s2 * 18, y - 6], [32 + s2 * 20, y + 4]], '#7e9a62'); },
+    bamboo: () => { for (const dx of [-10, 6]) { poly(g, [[28 + dx, 60], [36 + dx, 60], [36 + dx, 6], [28 + dx, 6]], '#a8c070'); for (const y of [18, 32, 46]) line(g, '#6a8040', 2, [[28 + dx, y], [36 + dx, y]]); } poly(g, [[40, 16], [58, 8], [46, 22]], '#7ea050'); },
+    ...Object.fromEntries(([['linen', '#d8ccb0', '#a89c80'], ['jute', '#b89a62', '#8a7040'], ['ramie', '#e4e6d8', '#b0b4a0'], ['cotton', '#f2efe6', '#c8c4b8'], ['bamboo', '#d4e0a8', '#9aac70']] as const).flatMap(([k, c, d]) => [
+      [k === 'jute' ? 'jute_thread' : `${k}_thread`, () => { dot(g, 32, 34, 18, c); for (const y of [24, 30, 36, 42]) line(g, d, 2, [[18, y], [46, y + 2]]); }],
+      [{ linen: 'linen', jute: 'hessian', ramie: 'ramie_cloth', cotton: 'cotton_cloth', bamboo: 'bamboo_cloth' }[k], () => { poly(g, [[10, 22], [54, 18], [52, 46], [12, 48]], c); line(g, d, 2, [[12, 32], [52, 30]]); if (k === 'jute') line(g, d, 2, [[22, 20], [24, 47]]); }],
+    ])),
     spirit_silk: () => { poly(g, [[10, 22], [54, 18], [52, 46], [12, 48]], '#bfe4f2'); line(g, '#8fdcff', 2, [[12, 32], [52, 30]]); dot(g, 40, 26, 3, '#ffffff'); },
     coal: () => lump(g, '#2e2e32', '#18181b', '#55555e'),
     steel_arrowheads: () => { for (const [x, y] of [[20, 24], [40, 20], [30, 42]]) poly(g, [[x, y - 10], [x + 7, y + 6], [x - 7, y + 6]], '#c4cad2'); },

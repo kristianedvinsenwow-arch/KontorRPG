@@ -672,7 +672,7 @@ test('tailoring: pick flax by hand, spin and weave at a loom, make a linen hood;
   for (let i = 0; i < 12; i++) { world.handle(c, { t: 'pick', node: flax.id }); advance(1600); world.step(); }
   assert.ok(countItem(p.bag, 'flax') >= 2, 'picked some flax');
   assert.ok(world.nodes.get(flax.id)!.until > 0, 'the patch was picked clean');
-  // Bog cotton needs Tailoring 10.
+  // Cotton needs Tailoring 18.
   const cot = PLANTS.find((x) => x.kind === 'bog_cotton')!;
   place(cot.x + 1, cot.z);
   world.handle(c, { t: 'pick', node: cot.id });
@@ -830,4 +830,11 @@ test('reset: PIN confirmed only for the token’s own account; character removed
   await store.remove(a.accountId);
   assert.equal(w.rooms[2], null);
   assert.equal(await store.load(a.accountId), null);
+});
+
+test('fibres: every fibre plant grows somewhere, and each cloth tier has thread, cloth and a full armour set', async () => {
+  const { PLANTS: P, RECIPE_BY_ID, ITEMS: I, FIBRES, CLOTHS } = await import('@kontor/shared');
+  for (const k of ['flax', 'jute', 'ramie', 'bog_cotton', 'bamboo']) assert.ok(P.filter((x) => x.kind === k).length >= 6, `${k} patches`);
+  for (const f of FIBRES) { assert.ok(RECIPE_BY_ID.get(f.thread) && RECIPE_BY_ID.get(f.cloth) && I[f.raw], f.raw); }
+  for (const c of CLOTHS) for (const piece of ['helm', 'pauldrons', 'breastplate', 'greaves', 'gauntlets', 'boots']) assert.ok(I[`${c.prefix}_${piece}`] && RECIPE_BY_ID.get(`${c.prefix}_${piece}`), `${c.prefix}_${piece}`);
 });

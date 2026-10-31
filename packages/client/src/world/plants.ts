@@ -1,5 +1,5 @@
 /**
- * Plants you pick by hand: flax and bog cotton (tailoring), and herbs — angelica, cloudberries,
+ * Plants you pick by hand: flax, jute, ramie, cotton and bamboo (tailoring), and herbs — angelica, cloudberries,
  * roseroot, grave moss (herbalism). Picked by hand; a picked-out patch drops to bare stubble until it regrows.
  */
 import * as THREE from 'three';
@@ -60,6 +60,7 @@ export class Plants {
     const stemGeo = new THREE.CylinderGeometry(0.012, 0.016, 1, 4).translate(0, 0.5, 0);
     const flowerGeo = new THREE.SphereGeometry(0.035, 5, 4);
     const tuftGeo = new THREE.SphereGeometry(0.07, 6, 5);
+    const leafGeo = new THREE.SphereGeometry(0.12, 5, 3).scale(1.3, 0.18, 0.55).translate(0.12, 0, 0);
     let seed = 1;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
     for (const p of PLANTS) {
@@ -90,17 +91,36 @@ export class Plants {
         this.views.set(p.id, { p, g, full, stubble, depleted: false, shake: 0 });
         continue;
       }
-      const n = p.kind === 'flax' ? 22 : 16;
+      // Fibre plants: [count, height min, height span, stem thickness, top, top colour, stem colour].
+      const F: Record<string, [number, number, number, number, 'flower' | 'tuft' | 'leaf' | 'cane', THREE.Material, THREE.Material]> = {
+        flax: [22, 0.6, 0.35, 1, 'flower', flaxFlower, stem],
+        jute: [14, 1.2, 0.5, 1.8, 'flower', sharedMat(0xe8c838, 0x302808), sharedMat(0x5f8a3a)],
+        ramie: [10, 0.7, 0.35, 1.4, 'leaf', sharedMat(0x7e9a62), sharedMat(0x6f8a52)],
+        bog_cotton: [14, 0.45, 0.3, 1.2, 'tuft', cotton, sharedMat(0x6a5a3a)],
+        bamboo: [8, 2.2, 1.2, 4, 'cane', sharedMat(0x6e9a40), sharedMat(0xa8c070)],
+      };
+      const [n, h0, hs, thick, shape, topMat, stemMat] = F[p.kind] ?? F.flax;
       for (let i = 0; i < n; i++) {
-        const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 0.6, h = p.kind === 'flax' ? 0.6 + rnd() * 0.35 : 0.35 + rnd() * 0.25;
-        const s = new THREE.Mesh(stemGeo, stem);
+        const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 0.6, h = h0 + rnd() * hs;
+        const s = new THREE.Mesh(stemGeo, stemMat);
         s.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
-        s.scale.y = h;
+        s.scale.set(thick, h, thick);
         s.rotation.set((rnd() - 0.5) * 0.25, 0, (rnd() - 0.5) * 0.25);
         full.add(s);
-        const top = new THREE.Mesh(p.kind === 'flax' ? flowerGeo : tuftGeo, p.kind === 'flax' ? flaxFlower : cotton);
+        if (shape === 'leaf' || shape === 'cane') {
+          // Broad leaves up the stem (ramie), or a leafy tuft at the top of each cane (bamboo).
+          for (const f of shape === 'leaf' ? [0.35, 0.6, 0.85] : [0.8, 0.95]) {
+            const leaf = new THREE.Mesh(leafGeo, topMat);
+            leaf.position.set(s.position.x, h * f, s.position.z);
+            leaf.rotation.y = rnd() * Math.PI * 2;
+            leaf.scale.setScalar(shape === 'cane' ? 1.4 : 1);
+            full.add(leaf);
+          }
+          continue;
+        }
+        const top = new THREE.Mesh(shape === 'flower' ? flowerGeo : tuftGeo, topMat);
         top.position.set(s.position.x, h, s.position.z);
-        if (p.kind === 'bog_cotton') top.scale.set(1, 1.3, 1);
+        if (shape === 'tuft') top.scale.set(1, 1.3, 1);
         full.add(top);
       }
       merge(full);

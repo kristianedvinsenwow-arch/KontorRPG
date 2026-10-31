@@ -6,7 +6,7 @@
 import { CHUNK_SIZE, SPIKE_CHUNKS, WATER_LEVEL } from './constants.js';
 import { heightAt, mulberry32, VILLAGE, LAKE, PIER, GRUBEN, GRUBEN_SPOTS, inGruben } from './terrain.js';
 import { CAVE, CAVE_ENTRANCE, CHUNK_RANGES, GRUBEN_PASS, caveClearance, caveFloor, caveRoomCentre, inBounds } from './cave.js';
-import { ARMOUR_PIECES, ITEMS, JEWELS } from './items.js';
+import { ARMOUR_PIECES, CLOTHS, ITEMS, JEWELS } from './items.js';
 import { HOUSES, houseAt, toWorld, type HouseFrame } from './houses.js';
 import type { SkillId } from './skills.js';
 
@@ -211,12 +211,15 @@ export function swingSeconds(toolSwingSec: number, level: number, speedBonus: nu
   return (toolSwingSec * (1 - 0.01 * (level - 1))) / (1 + Math.max(0, speedBonus));
 }
 
-// ------------------------------------------------------------------ plants (tailoring)
+// ------------------------------------------------------------------ plants (tailoring fibres, herbalism herbs)
 
-export type PlantKind = 'flax' | 'bog_cotton' | 'angelica' | 'cloudberry' | 'roseroot' | 'grave_moss';
+export type PlantKind = 'flax' | 'jute' | 'ramie' | 'bog_cotton' | 'bamboo' | 'angelica' | 'cloudberry' | 'roseroot' | 'grave_moss';
 export const PLANT_TYPES: Record<PlantKind, NodeTypeDef> = {
   flax: { name: 'Flax', item: 'flax', skill: 'tailoring', level: 1, power: 0, xp: 6, respawnSec: [8 * 60, 15 * 60], hits: [2, 4] },
-  bog_cotton: { name: 'Bog cotton', item: 'bog_cotton', skill: 'tailoring', level: 10, power: 0, xp: 16, respawnSec: [10 * 60, 20 * 60], hits: [2, 4] },
+  jute: { name: 'Jute', item: 'jute', skill: 'tailoring', level: 6, power: 0, xp: 10, respawnSec: [8 * 60, 16 * 60], hits: [2, 4] },
+  ramie: { name: 'Ramie', item: 'ramie', skill: 'tailoring', level: 12, power: 0, xp: 15, respawnSec: [10 * 60, 18 * 60], hits: [2, 4] },
+  bog_cotton: { name: 'Cotton', item: 'bog_cotton', skill: 'tailoring', level: 18, power: 0, xp: 21, respawnSec: [10 * 60, 20 * 60], hits: [2, 4] },
+  bamboo: { name: 'Bamboo', item: 'bamboo', skill: 'tailoring', level: 24, power: 0, xp: 28, respawnSec: [12 * 60, 22 * 60], hits: [2, 3] },
   angelica: { name: 'Angelica', item: 'angelica', skill: 'herbalism', level: 1, power: 0, xp: 8, respawnSec: [8 * 60, 15 * 60], hits: [1, 3] },
   cloudberry: { name: 'Cloudberries', item: 'cloudberry', skill: 'herbalism', level: 6, power: 0, xp: 14, respawnSec: [10 * 60, 20 * 60], hits: [2, 3] },
   roseroot: { name: 'Roseroot', item: 'roseroot', skill: 'herbalism', level: 12, power: 0, xp: 24, respawnSec: [12 * 60, 25 * 60], hits: [1, 3] },
@@ -226,7 +229,7 @@ export const PLANT_TYPES: Record<PlantKind, NodeTypeDef> = {
 export const PICK_SEC = 1.5;
 export interface Plant { id: string; kind: PlantKind; x: number; y: number; z: number }
 
-/** Flax fields in the home valley's meadows; bog cotton along the lake shore and in Gruben's bog. */
+/** Flax fields in the valley meadows; jute on the lake shore; ramie on the valley's slopes; cotton on Gruben's terraces; bamboo in Gruben's bog. */
 export const FLAX_FIELDS = [{ name: 'Flax field', x: 10, z: 42 }, { name: 'Flax field', x: -46, z: 4 }, { name: 'Flax field', x: 44, z: 62 }];
 function generatePlants(): Plant[] {
   const out: Plant[] = [];
@@ -243,13 +246,13 @@ function generatePlants(): Plant[] {
   const rl = mulberry32(5200);
   for (let i = 0, made = 0; i < 600 && made < 10; i++) {
     const a = rl() * Math.PI * 2, d = LAKE.r * (0.6 + rl() * 0.6), x = LAKE.x + Math.cos(a) * d, z = LAKE.z + Math.sin(a) * d, h = heightAt(x, z);
-    if (h > 0.35 && h < 1.4 && ok(x, z)) { out.push({ id: `c-l${made}`, kind: 'bog_cotton', x, y: h, z }); made++; }
+    if (h > 0.35 && h < 1.4 && ok(x, z)) { out.push({ id: `c-l${made}`, kind: 'jute', x, y: h, z }); made++; }
   }
-  // Gruben's Lantern bog.
+  // Gruben's Lantern bog: a bamboo grove.
   const rg = mulberry32(5300);
   for (let i = 0, made = 0; i < 300 && made < 8; i++) {
     const a = rg() * Math.PI * 2, d = 2 + rg() * 12, x = G.x - 42 + Math.cos(a) * d, z = G.z - 46 + Math.sin(a) * d;
-    if (ok(x, z)) { out.push({ id: `c-g${made}`, kind: 'bog_cotton', x, y: heightAt(x, z), z }); made++; }
+    if (ok(x, z)) { out.push({ id: `c-g${made}`, kind: 'bamboo', x, y: heightAt(x, z), z }); made++; }
   }
   // Herbs. Angelica: meadows and stream banks across the valley.
   const scatter = (kind: PlantKind, seed: number, n: number, tries: number, at: () => [number, number], when: (x: number, z: number, h: number) => boolean) => {
@@ -261,6 +264,9 @@ function generatePlants(): Plant[] {
   const rv = mulberry32(5400), rg2 = mulberry32(5500);
   const inValley = (): [number, number] => [(rv() - 0.5) * 220, (rv() - 0.5) * 220];
   const inGrubenV = (): [number, number] => [G.x + (rg2() - 0.5) * 150, G.z + (rg2() - 0.5) * 150];
+  // Ramie on the valley's lower slopes; cotton on Gruben's sheltered terraces.
+  scatter('ramie', 5408, 10, 3000, inValley, (_x, _z, h) => h > 2.5 && h < 8);
+  scatter('bog_cotton', 5409, 9, 3000, inGrubenV, (_x, _z, h) => h > 5 && h < 10);
   scatter('angelica', 5401, 16, 2000, inValley, (_x, _z, h) => h > 1.2 && h < 7);
   scatter('cloudberry', 5402, 8, 3000, () => { const a = rv() * Math.PI * 2, d = LAKE.r * (0.7 + rv() * 0.5); return [LAKE.x + Math.cos(a) * d, LAKE.z + Math.sin(a) * d]; }, (_x, _z, h) => h > 0.4 && h < 1.8);
   scatter('cloudberry', 5403, 6, 600, () => [G.x - 42 + (rg2() - 0.5) * 26, G.z - 46 + (rg2() - 0.5) * 26], () => true);
@@ -437,6 +443,14 @@ export interface Recipe {
   burns?: boolean;
 }
 
+/** Fibres: raw plant → thread → cloth, and the Tailoring level to spin them. */
+export const FIBRES = [
+  { raw: 'flax', thread: 'linen_thread', cloth: 'linen', level: 1, xp: 5 },
+  { raw: 'jute', thread: 'jute_thread', cloth: 'hessian', level: 6, xp: 8 },
+  { raw: 'ramie', thread: 'ramie_thread', cloth: 'ramie_cloth', level: 12, xp: 12 },
+  { raw: 'bog_cotton', thread: 'cotton_thread', cloth: 'cotton_cloth', level: 18, xp: 17 },
+  { raw: 'bamboo', thread: 'bamboo_thread', cloth: 'bamboo_cloth', level: 24, xp: 23 },
+];
 const R: Recipe[] = [
   // smithing: materials
   { id: 'shaped_stone', skill: 'smithing', station: 'anvil', level: 1, inputs: [{ item: 'stone', qty: 2 }], output: { item: 'shaped_stone', qty: 1 }, xp: 6, seconds: 1.6 },
@@ -480,11 +494,11 @@ const R: Recipe[] = [
     ];
   }),
   // tailoring: spin and weave
-  { id: 'linen_thread', skill: 'tailoring', station: 'loom', level: 1, inputs: [{ item: 'flax', qty: 2 }], output: { item: 'linen_thread', qty: 1 }, xp: 5, seconds: 1.6 },
-  { id: 'linen', skill: 'tailoring', station: 'loom', level: 2, inputs: [{ item: 'linen_thread', qty: 2 }], output: { item: 'linen', qty: 1 }, xp: 10, seconds: 2.2 },
-  { id: 'cotton_thread', skill: 'tailoring', station: 'loom', level: 10, inputs: [{ item: 'bog_cotton', qty: 2 }], output: { item: 'cotton_thread', qty: 1 }, xp: 14, seconds: 1.8 },
-  { id: 'cotton_cloth', skill: 'tailoring', station: 'loom', level: 11, inputs: [{ item: 'cotton_thread', qty: 2 }], output: { item: 'cotton_cloth', qty: 1 }, xp: 26, seconds: 2.4 },
-  { id: 'spirit_silk', skill: 'tailoring', station: 'loom', level: 18, inputs: [{ item: 'cotton_cloth', qty: 2 }, { item: 'wisp_essence', qty: 1 }], output: { item: 'spirit_silk', qty: 1 }, xp: 60, seconds: 3 },
+  ...FIBRES.flatMap((f) => [
+    { id: f.thread, skill: 'tailoring' as const, station: 'loom' as const, level: f.level, inputs: [{ item: f.raw, qty: 2 }], output: { item: f.thread, qty: 1 }, xp: f.xp, seconds: 1.6 },
+    { id: f.cloth, skill: 'tailoring' as const, station: 'loom' as const, level: f.level + 1, inputs: [{ item: f.thread, qty: 2 }], output: { item: f.cloth, qty: 1 }, xp: f.xp * 2, seconds: 2.2 },
+  ]),
+  { id: 'spirit_silk', skill: 'tailoring', station: 'loom', level: 30, inputs: [{ item: 'bamboo_cloth', qty: 2 }, { item: 'wisp_essence', qty: 1 }], output: { item: 'spirit_silk', qty: 1 }, xp: 80, seconds: 3 },
   // alchemy: one vial each
   { id: 'healing_draught', skill: 'alchemy', station: 'alchemy', level: 1, inputs: [{ item: 'angelica', qty: 2 }, { item: 'vial', qty: 1 }], output: { item: 'healing_draught', qty: 1 }, xp: 12, seconds: 2.5 },
   { id: 'cloudberry_tonic', skill: 'alchemy', station: 'alchemy', level: 6, inputs: [{ item: 'cloudberry', qty: 2 }, { item: 'angelica', qty: 1 }, { item: 'vial', qty: 1 }], output: { item: 'cloudberry_tonic', qty: 1 }, xp: 24, seconds: 2.8 },
@@ -523,14 +537,16 @@ for (const p of ARMOUR_PIECES) {
   R.push({ id: `steel_${p.piece}`, skill: 'smithing', station: 'anvil', level: lvl + 17, inputs: [{ item: 'steel_bar', qty: p.bars }, { item: 'leather', qty: Math.ceil(p.bars / 6) }], output: { item: `steel_${p.piece}`, qty: 1 }, xp: p.bars * 45, seconds: 3.5 + p.bars * 0.2 });
   R.push({ id: `silversteel_${p.piece}`, skill: 'smithing', station: 'anvil', level: lvl + 26, inputs: [{ item: 'silversteel_bar', qty: Math.ceil(p.bars / 2) }, { item: 'steel_bar', qty: Math.ceil(p.bars / 2) }, { item: 'goblin_leather', qty: Math.ceil(p.bars / 6) }], output: { item: `silversteel_${p.piece}`, qty: 1 }, xp: p.bars * 80, seconds: 4 + p.bars * 0.2 });
 }
-// Cloth armour (tailoring): linen, bog cotton (needs a little linen), spirit silk (a little bog cotton).
+// Cloth armour (tailoring): each tier also takes one bolt of the tier below.
 for (const p of ARMOUR_PIECES) {
   if (p.slot === 'offHand') continue;
   const n = { helm: 3, pauldrons: 3, breastplate: 6, greaves: 5, gauntlets: 2, boots: 2 }[p.piece] ?? 3;
   const lvl = { gauntlets: 1, boots: 1, helm: 2, pauldrons: 3, greaves: 4, breastplate: 5 }[p.piece] ?? 2;
-  R.push({ id: `cloth_${p.piece}`, skill: 'tailoring', station: 'loom', level: lvl, inputs: [{ item: 'linen', qty: n }], output: { item: `cloth_${p.piece}`, qty: 1 }, xp: n * 14, seconds: 2 + n * 0.3 });
-  R.push({ id: `cotton_${p.piece}`, skill: 'tailoring', station: 'loom', level: lvl + 9, inputs: [{ item: 'cotton_cloth', qty: n }, { item: 'linen', qty: 1 }], output: { item: `cotton_${p.piece}`, qty: 1 }, xp: n * 35, seconds: 2.5 + n * 0.3 });
-  R.push({ id: `silk_${p.piece}`, skill: 'tailoring', station: 'loom', level: lvl + 18, inputs: [{ item: 'spirit_silk', qty: n }, { item: 'cotton_cloth', qty: 1 }], output: { item: `silk_${p.piece}`, qty: 1 }, xp: n * 70, seconds: 3 + n * 0.3 });
+  CLOTHS.forEach((c, i) => R.push({
+    id: `${c.prefix}_${p.piece}`, skill: 'tailoring', station: 'loom', level: lvl + c.step,
+    inputs: i === 0 ? [{ item: c.cloth, qty: n }] : [{ item: c.cloth, qty: n }, { item: CLOTHS[i - 1].cloth, qty: 1 }],
+    output: { item: `${c.prefix}_${p.piece}`, qty: 1 }, xp: n * [14, 22, 32, 45, 60, 80][i], seconds: 2 + i * 0.25 + n * 0.3,
+  }));
 }
 // Leather armour: wolf leather (tier 1) and goblinhide (tier 2, needs a little wolf leather too).
 for (const p of ARMOUR_PIECES) {
@@ -552,7 +568,7 @@ export function recipeGroup(r: Recipe): string {
   if (r.skill === 'leatherworking') return out.look === 'goblin' ? 'Goblinhide' : out.look === 'lynx' ? 'Lynx' : 'Wolf leather';
   if (out.slot === 'ring' || out.slot === 'neck') return 'Jewellery';
   if (r.skill === 'alchemy') return ITEMS[r.output.item].potion?.heal ? 'Healing' : 'Elixirs';
-  if (r.skill === 'tailoring') return out.look === 'silk' ? 'Spirit silk' : out.look === 'cotton' ? 'Bog cotton' : 'Linen';
+  if (r.skill === 'tailoring') return ({ linen: 'Linen', jute: 'Jute', ramie: 'Ramie', cotton: 'Cotton', bamboo: 'Bamboo', silk: 'Spirit silk' } as Record<string, string>)[out.look ?? 'linen'] ?? 'Linen';
   const look = out.look ?? ins[0]?.look ?? 'stone';
   return look[0].toUpperCase() + look.slice(1);
 }
