@@ -769,3 +769,15 @@ test('achievements: pickaxe hits, axe chops and catches count; titles unlock, ca
   assert.equal(q.achievements.c.fish, 1000);
   assert.equal(q.state.title, 'Master of the Lake');
 });
+
+test('every player who hits a monster gets the kill XP, however little they did', () => {
+  const { world, p } = game();
+  const c2 = fakeClient(); world.connect(c2);
+  world.handle(c2, { t: 'hello', name: 'Helper', color: 1, proto: PROTOCOL_VERSION, build: defaultBuild() });
+  const q = world.inspect((c2.inbox.find((m) => m.t === 'welcome') as any).id)!;
+  const wolf = [...world.mobs.values()].find((m) => m.def.kind === 'wolf')!;
+  damageMob(world, wolf, 0.5, q.state.id, world.now()); // a single scratch
+  damageMob(world, wolf, 9999, p.state.id, world.now());
+  assert.equal(q.xp.combat, p.xp.combat);
+  assert.ok((q.xp.combat ?? 0) > 0);
+});

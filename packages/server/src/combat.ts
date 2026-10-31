@@ -237,14 +237,12 @@ export function damageMob(w: World, m: Mob, dmg: number, by: string, now: number
   const [lo, hi] = m.def.respawnSec;
   m.respawnAt = now + (lo + w.rand() * (hi - lo)) * 1000;
   if (m.def.skin) { m.corpseUntil = now + CORPSE_SEC * 1000; m.skinned = false; m.respawnAt = Math.max(m.respawnAt, m.corpseUntil + 2000); }
-  // Everyone who did at least 10% of the damage gets full XP and quest credit.
-  const total = [...m.dmgBy.values()].reduce((a, b) => a + b, 0);
+  // No parties: everyone who hurt it at all gets the full XP, quest and achievement credit.
   let top: ServerPlayer | undefined, topDmg = 0;
   for (const [pid, d] of m.dmgBy) {
     const p = w.players.get(pid);
-    if (!p) continue;
+    if (!p || d <= 0) continue;
     if (d > topDmg) { topDmg = d; top = p; }
-    if (d < total * 0.1) continue;
     const xp = w.addXp(p, 'combat', m.def.xp);
     p.client.send({ t: 'gain', skill: 'combat', xp });
     w.questKill(p, m.def.kind);

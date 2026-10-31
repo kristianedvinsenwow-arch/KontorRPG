@@ -36,9 +36,19 @@ function tag(text: string, sub: string | null, cls: string, at: THREE.Vector3, m
 }
 
 export class Places {
+  /** How many real point lights the fires share. */
+  static readonly POOL = 4;
   readonly group = new THREE.Group();
   readonly colliders: Collider[] = [];
-  private fires: { light: THREE.PointLight; mats: THREE.MeshStandardMaterial[]; base: number }[] = [];
+  /**
+   * Every fire and lamp in the world. They are not lights themselves: three.js shades every surface
+   * once per point light in the scene (even far away or at zero), so a small fixed pool of real
+   * lights follows the fires nearest to you instead (see animate).
+   */
+  private fires: { light: THREE.Object3D; mats: THREE.MeshStandardMaterial[]; base: number; color: number; range: number; pos?: THREE.Vector3 }[] = [];
+  private pool: THREE.PointLight[] = [];
+  private poolFor: number[] = [];
+  private nextPick = 0;
   private npcs: { c: Character; n: Npc; g: THREE.Group }[] = [];
   private t = 0;
   private doorTags: HTMLElement[] = [];
@@ -91,10 +101,10 @@ export class Places {
 
   private fire(parent: THREE.Object3D, y: number, intensity: number, range: number): THREE.MeshStandardMaterial {
     const m = new THREE.MeshStandardMaterial({ color: 0x1a0a04, emissive: 0xff6a1a, emissiveIntensity: 2.2, roughness: 1 });
-    const light = new THREE.PointLight(0xff7a2a, intensity, range, 1.8);
+    const light = new THREE.Object3D();
     light.position.y = y;
     parent.add(light);
-    this.fires.push({ light, mats: [m], base: intensity });
+    this.fires.push({ light, mats: [m], base: intensity, color: 0xff7a2a, range });
     return m;
   }
 
@@ -344,7 +354,7 @@ export class Places {
   openDoors(): number[] { return this.roomDoors.flatMap((d, n) => (d?.open ? [n] : [])); }
 
   /** Positions of every fire (campfires, furnaces, stoves, hearths, lanterns), for sound. */
-  firePositions(): THREE.Vector3[] { return this.fires.map((f) => f.light.getWorldPosition(new THREE.Vector3())); }
+  firePositions(): THREE.Vector3[] { return this.fires.map((f) => (f.pos ??= f.light.getWorldPosition(new THREE.Vector3()))); }
 
   doorOpen(n: number): boolean { return !!this.roomDoors[n]?.open; }
 
@@ -456,8 +466,8 @@ export class Places {
     const he = new THREE.Group(); he.position.set(f.hearth.x, 0.08, f.hearth.z); g.add(he);
     bx(he, 0.9, 0.9, 0.7, M.stone, 0, 0.45, 0.1);
     const fm = new THREE.MeshStandardMaterial({ color: 0x1a0a04, emissive: 0xff6a1a, emissiveIntensity: 2.2, roughness: 1 });
-    const hl = new THREE.PointLight(0xff7a2a, 0, 0.01); hl.position.set(0, 0.4, -0.3); he.add(hl);
-    this.fires.push({ light: hl, mats: [fm], base: 0 });
+    const hl = new THREE.Object3D(); hl.position.set(0, 0.5, -0.4); he.add(hl);
+    this.fires.push({ light: hl, mats: [fm], base: 2, color: 0xff7a2a, range: 5 });
     const fl = mesh(new THREE.PlaneGeometry(0.45, 0.3), fm, he, false); fl.position.set(0, 0.3, -0.26); fl.rotation.y = Math.PI;
     bx(he, 0.4, H + 1.2, 0.4, M.dark, 0.1, (H + 1.2) / 2 + 0.6, 0.2);
     if (f.table) {
@@ -509,8 +519,8 @@ export class Places {
     }
     for (const sx of [-1, 1]) bx(g, 0.06, 0.06, P.length * 0.65, M.wood, sx * (P.width / 2 - 0.1), P.deck + 0.85, P.length * 0.675);
     const lampPost = bx(g, 0.1, 2, 0.1, M.darkWood, P.width / 2 - 0.1, P.deck + 1, P.length - 0.2); void lampPost;
-    const lamp = new THREE.PointLight(0xffb060, 3, 9, 2); lamp.position.set(P.width / 2 - 0.3, P.deck + 2, P.length - 0.2); g.add(lamp);
-    this.fires.push({ light: lamp, mats: [], base: 3 });
+    const lamp = new THREE.Object3D(); lamp.position.set(P.width / 2 - 0.3, P.deck + 2, P.length - 0.2); g.add(lamp);
+    this.fires.push({ light: lamp, mats: [], base: 3, color: 0xffb060, range: 9 });
     const end = new THREE.Vector3(P.x + P.ux * (P.length - 1), P.deck + 2.4, P.z + P.uz * (P.length - 1));
     tag('Fishing pier', 'Cast off the end', 'place', end, 30);
   }
@@ -571,8 +581,8 @@ export class Places {
     }
     bx(g, 2.8, 0.3, 0.34, M.darkWood, 0, 3.2, -0.3);
     for (let i = 0; i < 5; i++) { const c = mesh(rockGeo(80 + i, 0.5), rock, g); c.scale.setScalar(0.35); c.position.set(-0.6 + i * 0.3, 3.45 + (i % 2) * 0.12, -0.3); }
-    const lamp = new THREE.PointLight(0xffb060, 3, 8, 2); lamp.position.set(1.4, 2.6, -0.8); g.add(lamp);
-    this.fires.push({ light: lamp, mats: [], base: 3 });
+    const lamp = new THREE.Object3D(); lamp.position.set(1.4, 2.6, -0.8); g.add(lamp);
+    this.fires.push({ light: lamp, mats: [], base: 3, color: 0xffb060, range: 8 });
     const glow = mesh(new THREE.SphereGeometry(0.09, 8, 6), new THREE.MeshStandardMaterial({ color: 0xffd080, emissive: 0xffa040, emissiveIntensity: 2 }), g, false);
     glow.position.copy(lamp.position);
     tag(name, sub, 'place', new THREE.Vector3(x, heightAt(x, z) + 4.2, z), 40);
@@ -667,19 +677,33 @@ export class Places {
     bx(g, 2.7, 0.3, 0.3, M.darkWood, 0, 2.85, -0.4);
     const hole = mesh(new THREE.PlaneGeometry(2, 2.7), new THREE.MeshBasicMaterial({ color: 0x050403 }), g, false);
     hole.position.set(0, 1.35, -0.3); hole.rotation.y = Math.PI;
-    const lamp = new THREE.PointLight(0xffb060, 3, 7, 2); lamp.position.set(1.4, 2.2, -0.9); g.add(lamp);
-    this.fires.push({ light: lamp, mats: [], base: 3 });
+    const lamp = new THREE.Object3D(); lamp.position.set(1.4, 2.2, -0.9); g.add(lamp);
+    this.fires.push({ light: lamp, mats: [], base: 3, color: 0xffb060, range: 7 });
     tag('The Old Mine', 'Walk in · levels 5–12 · Old Knut', 'place', new THREE.Vector3(x, heightAt(x, z) + 3.6, z), 40);
     for (const [dx, dz] of [[-2.2, 0], [2.2, 0], [-2.6, 1.6], [2.6, 1.6], [0, 2.8]]) this.colliders.push({ x: x + dx, z: z + dz, r: 1.1 });
   }
 
-  animate(dt: number): void {
+  animate(dt: number, at: THREE.Vector3): void {
     this.t += dt;
-    for (const f of this.fires) {
-      const k = 0.85 + Math.sin(this.t * 13 + f.base) * 0.08 + Math.sin(this.t * 7.3) * 0.07;
-      f.light.intensity = f.base * k * (1 + this.night * 0.25);
-      for (const m of f.mats) m.emissiveIntensity = 2.2 * k;
+    // The light pool: a fixed number of real lights (a changing count would recompile shaders),
+    // given to the fires nearest the camera a few times a second.
+    if (!this.pool.length) for (let i = 0; i < Places.POOL; i++) { const l = new THREE.PointLight(0xff7a2a, 0, 8, 1.8); l.position.set(0, -500, 0); this.group.add(l); this.pool.push(l); this.poolFor.push(-1); }
+    if (this.t >= this.nextPick) {
+      this.nextPick = this.t + 0.3;
+      const ps = this.firePositions();
+      const near = ps.map((p, i) => [i, p.distanceToSquared(at)] as const).filter(([, d]) => d < 45 * 45).sort((a, b) => a[1] - b[1]).slice(0, Places.POOL);
+      this.poolFor = this.pool.map((_, i) => near[i]?.[0] ?? -1);
     }
+    const flick = (f: { base: number }) => 0.85 + Math.sin(this.t * 13 + f.base) * 0.08 + Math.sin(this.t * 7.3) * 0.07;
+    this.pool.forEach((l, i) => {
+      const f = this.fires[this.poolFor[i]];
+      if (!f) { l.intensity = 0; return; }
+      l.position.copy(f.pos!);
+      l.color.setHex(f.color);
+      l.distance = f.range;
+      l.intensity = f.base * flick(f) * (1 + this.night * 0.25);
+    });
+    for (const f of this.fires) { const k = flick(f); for (const m of f.mats) m.emissiveIntensity = 2.2 * k; }
     if (this.stableHorse) animateHorse(this.stableHorse, 0, dt);
     for (const { c } of this.npcs) {
       animateCharacter(c, 0, Math.sin(this.t * 0.4) * 0.15, false, dt);

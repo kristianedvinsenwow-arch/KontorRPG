@@ -25,7 +25,6 @@ const bolt = (color: number) => {
   g.add(new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8), new THREE.MeshBasicMaterial({ color })));
   const halo = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.35, depthWrite: false }));
   g.add(halo);
-  g.add(new THREE.PointLight(color, 3, 5, 2));
   return g;
 };
 
@@ -37,7 +36,10 @@ export class Fx {
   private bobberBite = false;
   private t = 0;
 
-  constructor(private readonly scene: THREE.Scene) {}
+  /** One persistent light for flashes (adding and removing lights recompiles every shader). */
+  private flashLight = new THREE.PointLight(0xff7a2a, 0, 6, 2);
+
+  constructor(private readonly scene: THREE.Scene) { this.flashLight.position.set(0, -500, 0); scene.add(this.flashLight); }
 
   private add(obj: THREE.Object3D, dur: number, tick: Live['tick']) {
     this.scene.add(obj);
@@ -72,9 +74,9 @@ export class Fx {
 
   /** A short flash of light (ignite, hits). */
   flash(at: THREE.Vector3, color: number): void {
-    const l = new THREE.PointLight(color, 8, 6, 2);
-    l.position.copy(at);
-    this.add(l, 0.35, (k, o) => ((o as THREE.PointLight).intensity = 8 * (1 - k)));
+    const l = this.flashLight;
+    l.position.copy(at); l.color.setHex(color);
+    this.add(new THREE.Object3D(), 0.35, (k) => { l.intensity = 8 * (1 - k); if (k >= 1) l.intensity = 0; });
   }
 
   // ---------------------------------------------------------------- fishing bobber

@@ -27,11 +27,11 @@ export const RACES: Record<Race, RaceDef> = {
   human: { name: 'Human', blurb: 'The standard adventurer. About 1.85 m.', scale: 1, legs: 1, width: 1, head: 1, eye: 1.62, height: 1.85, belly: 0,
     bonus: { rangedDmg: 0.1, fishSpeed: 0.1, rareFish: 0.1 }, perks: ['+10% ranged damage', '+10% bite speed and rare catches'] },
   dwarf: { name: 'Dwarf', blurb: 'Round, broad and bearded on short legs. About 1.3 m.', scale: 0.88, legs: 0.55, width: 1.38, head: 1.1, eye: 1.16, height: 1.3, belly: 1,
-    bonus: { armour: 2, physRed: 0.05, miningSpeed: 0.1 }, perks: ['+2 armour and 5% physical damage reduction', '+10% mining speed'] },
+    bonus: { armour: 2, physRed: 0.1, miningSpeed: 0.1 }, perks: ['+2 armour and 10% physical damage reduction', '+10% mining speed'] },
   gnome: { name: 'Gnome', blurb: 'Even smaller: tiny legs and a big head. About 0.95 m.', scale: 0.66, legs: 0.48, width: 1.05, head: 1.22, eye: 0.84, height: 0.95, belly: 0,
     bonus: { magicDmg: 0.1, luck: 5 }, perks: ['+10% magic damage', '+5 luck (gems, double yields, better crafts)'] },
   ogre: { name: 'Ogre', blurb: 'Huge, fat and round. About 2.2 m.', scale: 1.16, legs: 0.95, width: 1.6, head: 0.95, eye: 1.98, height: 2.2, belly: 1.4,
-    bonus: { meleeDmg: 0.15, moveSpeed: -0.15, woodSpeed: 0.15 }, perks: ['+15% melee damage, but −15% move speed', '+15% woodcutting speed'] },
+    bonus: { meleeDmg: 0.15, moveSpeed: -0.1, woodSpeed: 0.15 }, perks: ['+15% melee damage, but −10% move speed', '+15% woodcutting speed'] },
 };
 
 export const ATTRS: { key: AttrKey; short: string; name: string; desc: string }[] = [

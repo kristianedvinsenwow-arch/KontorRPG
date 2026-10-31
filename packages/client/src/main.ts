@@ -77,7 +77,7 @@ let stats: PlayerStats | null = null;
 let eyeHeight = EYE_HEIGHT;
 /** Your horse while riding (drawn under the first-person camera), and how far the camera is lifted. */
 let myHorse: Horse | null = null, mountLift = 0, myName = '', mountedNow = false, wasOnGround = true, nextAmbAt = 0;
-let ambFire: THREE.Vector3 | null = null, ambWater = 0;
+let ambFire: THREE.Vector3 | null = null, ambWater = 0, nextSlowAt = 0;
 /** Console/debug: shift the sky clock (ms) or force a weather. */
 const debugSky: { offset: number; weather: ReturnType<typeof weatherAt> | null } = { offset: 0, weather: null };
 let seq = 0;
@@ -640,10 +640,15 @@ function frame() {
     gfx.setRegion(region);
     // Time of day and weather (the same for everyone: worked out from the clock).
     const ms = Date.now() + debugSky.offset, sunDir = sunAt(ms), day = daylight(ms), weather = debugSky.weather ?? weatherAt(region, ms);
-    gfx.setAtmosphere(sunDir, day, weather);
+    // Sky, fog, clock and ambience change slowly: a few updates a second is plenty.
+    const slow = now >= nextSlowAt;
+    if (slow) {
+      nextSlowAt = now + 200;
+      gfx.setAtmosphere(sunDir, day, weather);
+      places.setNight(1 - day);
+      hud.setClock(ms, under ? null : weather.kind);
+    }
     precip.update(dt, cam.position, weather.rain, weather.snow, under || homeAt(me.x, me.z) >= 0);
-    places.setNight(1 - day);
-    hud.setClock(ms, under ? null : weather.kind);
     caveView.setVisible(under);
     if (!under) terrain.update(me.x, me.z);
 
@@ -669,7 +674,7 @@ function frame() {
       if (!under) for (let a = 0; a < 8; a++) { const wx = me.x + Math.cos(a * 0.785) * 10, wz = me.z + Math.sin(a * 0.785) * 10; if (heightAtWorld(wx, wz) < WATER_LEVEL) water += 0.125; }
       ambFire = fire; ambWater = water;
     }
-    sound.ambience({ day, rain: weather.rain, snow: weather.snow, region, indoors: homeAt(me.x, me.z) >= 0, height: me.y, nearWater: ambWater, fire: ambFire });
+    if (slow) sound.ambience({ day, rain: weather.rain, snow: weather.snow, region, indoors: homeAt(me.x, me.z) >= 0, height: me.y, nearWater: ambWater, fire: ambFire });
     const bob = me.onGround ? Math.min(1, me.speed / 5) : 0;
     cam.position.set(me.x, me.y + eyeHeight + mountLift + Math.abs(Math.sin(walkPh)) * 0.04 * bob * (eyeHeight / EYE_HEIGHT), me.z);
     cam.rotation.set(me.pitch, me.yaw + (spinT > 0 ? (1 - spinT / 0.45) * Math.PI * 2 : 0), 0, 'YXZ');
@@ -696,9 +701,9 @@ function frame() {
   fx.update(dt);
   viewmodel.update(dt, me?.speed ?? 0, playing ? look.dx : 0, playing ? look.dy : 0);
   veins.animate(dt);
-  plants.animate(dt, performance.now() / 1000);
+  plants.animate(dt, performance.now() / 1000, cam.position);
   animateTrees(dt);
-  places.animate(dt);
+  places.animate(dt, cam.position);
   caveView.animate(dt);
   panels.frame();
   hotbar.frame();

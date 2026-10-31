@@ -4,7 +4,7 @@
  */
 import * as THREE from 'three';
 
-const N = 2400, BOX = 36, HIGH = 18;
+const N = 900, BOX = 30, HIGH = 16;
 
 export class Precip {
   private rain: THREE.LineSegments;

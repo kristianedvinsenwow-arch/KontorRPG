@@ -3,7 +3,38 @@
  * roseroot, grave moss (herbalism). Picked by hand; a picked-out patch drops to bare stubble until it regrows.
  */
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { PLANTS, type Plant } from '@kontor/shared';
+
+/**
+ * Collapse a patch's dozens of little stem/leaf/flower meshes into one mesh per material:
+ * a patch is then 1–2 draw calls instead of ~40 (there are ~100 patches).
+ */
+function merge(group: THREE.Group): void {
+  group.updateMatrixWorld(true);
+  const byMat = new Map<THREE.Material, THREE.BufferGeometry[]>();
+  for (const c of [...group.children] as THREE.Mesh[]) {
+    if (!c.isMesh) continue;
+    c.updateMatrix();
+    const geo = c.geometry.clone().applyMatrix4(c.matrix);
+    const list = byMat.get(c.material as THREE.Material) ?? [];
+    list.push(geo.index ? geo : geo);
+    byMat.set(c.material as THREE.Material, list);
+    group.remove(c);
+  }
+  for (const [m, geos] of byMat) {
+    const merged = mergeGeometries(geos.map((g) => (g.index ? g.toNonIndexed() : g)).map((g) => { for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k); return g; }));
+    if (merged) group.add(new THREE.Mesh(merged, m));
+  }
+}
+/** Materials shared by every patch of a kind. */
+const matCache = new Map<number, THREE.MeshStandardMaterial>();
+const sharedMat = (color: number, emissive = 0) => {
+  const key = color * 7 + emissive;
+  let m = matCache.get(key);
+  if (!m) { m = new THREE.MeshStandardMaterial({ color, roughness: 0.8, emissive }); matCache.set(key, m); }
+  return m;
+};
 
 interface PlantView { p: Plant; g: THREE.Group; full: THREE.Group; stubble: THREE.Mesh; depleted: boolean; shake: number }
 
@@ -38,8 +69,7 @@ export class Plants {
       const herb = HERB[p.kind];
       if (herb) {
         const [sc, tc, ts, hh, n, shape] = herb;
-        const sm = new THREE.MeshStandardMaterial({ color: sc, roughness: 0.9 });
-        const tm = new THREE.MeshStandardMaterial({ color: tc, roughness: 0.6, emissive: shape === 'moss' ? 0x203028 : 0x000000 });
+        const sm = sharedMat(sc), tm = sharedMat(tc, shape === 'moss' ? 0x203028 : 0x000000);
         for (let i = 0; i < n; i++) {
           const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * (shape === 'umbel' ? 0.45 : 0.55), h = hh * (0.7 + rnd() * 0.5);
           if (shape !== 'moss') {
@@ -52,6 +82,7 @@ export class Plants {
           if (shape === 'moss') top.scale.set(1.6, 0.35, 1.6);
           full.add(top);
         }
+        merge(full);
         g.add(full);
         const stubble = new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.5, 0.04, 10), stubbleMat);
         stubble.position.y = 0.02; stubble.visible = false; g.add(stubble);
@@ -72,6 +103,7 @@ export class Plants {
         if (p.kind === 'bog_cotton') top.scale.set(1, 1.3, 1);
         full.add(top);
       }
+      merge(full);
       g.add(full);
       const stubble = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.6, 0.06, 10), stubbleMat);
       stubble.position.y = 0.03;
@@ -120,8 +152,10 @@ export class Plants {
     if (next) next.g.scale.setScalar(1.06);
   }
 
-  animate(dt: number, t: number): void {
+  animate(dt: number, t: number, at?: THREE.Vector3): void {
     for (const v of this.views.values()) {
+      // Only draw patches within 70 m.
+      if (at) { const far = Math.abs(v.p.x - at.x) > 70 || Math.abs(v.p.z - at.z) > 70; v.g.visible = !far; if (far) continue; }
       v.full.rotation.z = Math.sin(t * 1.3 + v.p.x) * 0.04 + Math.sin(v.shake * 25) * v.shake * 0.12;
       if (v.shake > 0) v.shake = Math.max(0, v.shake - dt * 4);
     }
