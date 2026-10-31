@@ -3,11 +3,37 @@
  * username, so next time it's just the PIN. There's no email and no recovery: forget the PIN and
  * the character is lost. With a saved character the creator becomes read-only ("Continue as …").
  */
-import type { Auth } from '../net/auth.js';
+import { EQUIP_SLOTS, ITEMS, RACES, SKILLS, levelFromXp, titleOf } from '@kontor/shared';
+import type { Auth, SavedCharacter } from '../net/auth.js';
+import { icon } from './panels.js';
+import { attachTip, itemTip } from './tooltip.js';
 import { settingsStore } from '../state/store.js';
 import { setCreatorLocked, setEnterBlocked } from './creator.js';
 
 const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') => { const e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
+
+/** Your saved character at a glance, shown instead of the creator once you're logged in. */
+function renderSummary(c: SavedCharacter | null): void {
+  const box = document.getElementById('savedSummary')!;
+  if (!c) { box.replaceChildren(); return; }
+  const xp = c.xp ?? {};
+  const lvl = levelFromXp(xp.combat ?? 0);
+  const title = titleOf(c.title);
+  const head = el('div', 'savedhead');
+  head.append(el('b', '', c.name), el('span', 'note', [RACES[c.build.race]?.name, `Level ${lvl}`, title, `${(c.gold ?? 0).toLocaleString('en')} g`].filter(Boolean).join(' · ')));
+  const gear = el('div', 'savedgear');
+  for (const { slot, label } of EQUIP_SLOTS) {
+    const s = c.equip?.[slot];
+    if (s && ITEMS[s.id]) { const i = icon(s); attachTip(i, () => itemTip(s)); gear.append(i); }
+    else { const e = el('div', 'icon empty'); e.title = label; gear.append(e); }
+  }
+  const skills = el('div', 'savedskills');
+  for (const s of SKILLS) {
+    if (s.id === 'combat') continue;
+    const row = el('span', 'sk'); row.append(el('span', '', s.name), el('b', '', String(levelFromXp(xp[s.id] ?? 0)))); skills.append(row);
+  }
+  box.replaceChildren(head, el('div', 'lbl', 'Equipment'), gear, el('div', 'lbl', 'Skills'), skills);
+}
 
 export function initAccount(auth: Auth): void {
   const box = document.getElementById('account')!;
@@ -21,6 +47,7 @@ export function initAccount(auth: Auth): void {
     box.replaceChildren(el('div', 'lbl', 'Account'));
 
     if (!auth.loggedIn) {
+      renderSummary(null);
       setCreatorLocked(null);
       setEnterBlocked(auth.config.requireLogin ? 'Log in to play' : null);
       const remembered = auth.remembered;
@@ -81,10 +108,10 @@ export function initAccount(auth: Auth): void {
     who.append(out);
     box.append(who);
     const saved = auth.character;
+    renderSummary(saved);
     if (saved) {
       settingsStore.set({ name: saved.name, color: saved.color, build: saved.build });
       setCreatorLocked({ name: saved.name });
-      box.append(el('p', 'note welcome', `Welcome back, ${saved.name}. Your progress is saved to your account.`));
       if (!resetting) {
         const r = el('button', 'linkbtn', 'Reset character…');
         r.onclick = () => { resetting = true; msg = ''; render(); };

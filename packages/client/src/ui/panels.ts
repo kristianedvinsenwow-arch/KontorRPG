@@ -246,7 +246,10 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
   // ---------------------------------------------------------------- crafting
 
   const want = new Map<string, number>();
-  const craftTab = new Map<string, string>();
+  // The tab you last picked at each kind of station, remembered in this browser.
+  const TAB_KEY = 'kontorrpg.craftTabs';
+  const craftTab = new Map<string, string>((() => { try { return Object.entries(JSON.parse(localStorage.getItem(TAB_KEY) ?? '{}')) as [string, string][]; } catch { return []; } })());
+  const saveTabs = () => { try { localStorage.setItem(TAB_KEY, JSON.stringify(Object.fromEntries(craftTab))); } catch { /* ignore */ } };
   function craft(g: GameState, stationId: string): HTMLElement[] {
     const st = STATION_BY_ID.get(stationId)!;
     const list = el('div', 'recipes');
@@ -257,7 +260,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     const tabs = el('div', 'tabs');
     if (groups.length > 1) for (const gname of groups) {
       const n = here.filter((r) => recipeGroup(r) === gname && levelFromXp(g.xp[r.skill] ?? 0) >= r.level && r.inputs.every((i) => countItem(g.bag, i.item) >= i.qty)).length;
-      tabs.append(btn(n ? `${gname} (${n})` : gname, gname === tab ? 'tab on' : 'tab', () => { craftTab.set(st.kind, gname); render(); }));
+      tabs.append(btn(n ? `${gname} (${n})` : gname, gname === tab ? 'tab on' : 'tab', () => { craftTab.set(st.kind, gname); saveTabs(); render(); }));
     }
     // Skill progress at the top: where you are in the level, and how far to the next.
     const ps = computeStats(settingsStore.get().build, g.equip, g.talents, g.xp, g.buffs);
@@ -370,8 +373,8 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     let text: string;
     if (here) text = `${target ? homeLabel(target) : 'It'} is yours until ${until}. Pay up to ${INN.maxWeeks} weeks ahead.`;
     else if (holder && h) text = `${holder} lives here.`;
-    else if (h) text = `Free · ${price} g a week · ${sizes}.${mine ? ` Renting here moves you out of the ${homeLabel(mine).toLowerCase()}; your chest comes with you.` : ''}`;
-    else text = `${HOMES.filter((x) => x.kind === 'room' && !g.rooms[x.id]).length} of ${INN.rooms} rooms free · ${price} g a week · ${sizes}. One home at a time${mine ? ` — you live in the ${homeLabel(mine).toLowerCase()} now` : ''}. Cottages (Bjørkvik) and miners’ huts (Gruben) are rented at their doors.`;
+    else if (h) text = `Vacant · ${price} g a week · ${sizes}.${mine ? ` Renting here moves you out of the ${homeLabel(mine).toLowerCase()}; your chest comes with you.` : ''}`;
+    else text = `${HOMES.filter((x) => x.kind === 'room' && !g.rooms[x.id]).length} of ${INN.rooms} rooms vacant · ${price} g a week · ${sizes}. One home at a time${mine ? ` — you live in the ${homeLabel(mine).toLowerCase()} now` : ''}. Cottages (Bjørkvik) and miners’ huts (Gruben) are rented at their doors.`;
     box.append(el('p', 'note', text));
     if (!(holder && h && !here) && !(!h && mine && mine.kind !== 'room')) {
       const rent = el('div', 'ract');

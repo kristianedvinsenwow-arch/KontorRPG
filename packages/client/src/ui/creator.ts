@@ -131,6 +131,10 @@ export function initCreator(onEnter: (name: string, color: number, build: Charac
     enter.disabled = !!bad || !!blockReason;
     enter.textContent = blockReason ?? (locked ? `Continue as ${locked.name}` : free > 0 ? `Place ${free} more point${free === 1 ? '' : 's'}` : 'Enter the world');
     document.querySelector('.brief.creator')!.classList.toggle('locked', !!locked);
+    // With a saved character the creator is replaced by its summary (drawn by account.ts).
+    $('creatorSecs').hidden = !!locked;
+    $('savedSummary').hidden = !locked;
+    $('menuEyebrow').textContent = locked ? 'Welcome back' : 'Create your character';
     nameIn.readOnly = !!locked;
     nameIn.value = settingsStore.get().name;
   }
@@ -168,7 +172,7 @@ export function initCreator(onEnter: (name: string, color: number, build: Charac
   });
   netStore.subscribe((n) => {
     menuNet.textContent = n.status === 'rejected' ? 'The server refused this character — check your points and perks.'
-      : n.status === 'online' ? 'Connected.' : n.status === 'offline' ? 'Your character is saved in this browser until accounts arrive in M1.' : 'Connecting to server…';
+      : n.status === 'online' ? 'Connected.' : n.status === 'offline' ? 'Not connected to the server.' : 'Connecting to server…';
   });
 }
 

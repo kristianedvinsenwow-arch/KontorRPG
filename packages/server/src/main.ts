@@ -79,7 +79,7 @@ async function login(req: import('node:http').IncomingMessage, res: import('node
     if ('error' in r) return reply(r.error.startsWith('Too many') ? 429 : 400, r);
     const c = await store.load(r.accountId);
     log(`${b.create ? 'new account' : 'login'} ${r.username}`);
-    reply(200, { token: r.token, username: r.username, character: c ? { name: c.name, color: c.color, build: c.build } : null });
+    reply(200, { token: r.token, username: r.username, character: c ? { name: c.name, color: c.color, build: c.build, gold: c.gold, equip: c.equip, xp: c.xp, title: c.achievements?.title ?? null } : null });
   } catch (e) {
     log('login failed', e);
     reply(500, { error: 'Something went wrong. Try again.' });

@@ -37,11 +37,19 @@
   <!-- Start menu = character creator. The right-hand window is drawn by the renderer (live preview). -->
   <section id="menu" class="overlay">
     <div class="brief creator">
-      <div class="eyebrow">Create your character</div>
+      <div class="eyebrow" id="menuEyebrow">Create your character</div>
       <h1>Kontor<span>RPG</span></h1>
 
       <div id="account" class="account" hidden></div>
 
+      <div class="enterbox">
+        <button id="enter" class="btn big">Enter the world</button>
+        <p class="note" id="menuNet">Pick a name and enter the world.</p>
+      </div>
+
+      <div id="savedSummary" class="saved" hidden></div>
+
+      <div id="creatorSecs" class="secs">
       <div class="sec">
         <label for="nameIn">Name</label>
         <input id="nameIn" maxlength="16" autocomplete="off" placeholder="Your name" />
@@ -82,6 +90,7 @@
         <span class="lbl">Resulting stats</span>
         <div id="derived" class="derived"></div>
       </div>
+      </div>
 
       <div class="sec">
         <label for="quality">Graphics</label>
@@ -91,8 +100,6 @@
           <option value="low">Low — for thin laptops</option>
         </select>
       </div>
-      <button id="enter" class="btn big">Enter the world</button>
-      <p class="note" id="menuNet">Pick a name and enter the world.</p>
     </div>
     <div class="previewcol">
       <div id="createPreview" title="Drag to rotate"></div>

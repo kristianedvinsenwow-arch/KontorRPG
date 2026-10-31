@@ -386,7 +386,7 @@ export class Places {
       const h = HOMES[i];
       if (!h) return;
       const label = h.kind === 'room' ? `Room ${i + 1}` : h.name;
-      el.textContent = names[i] ? `${label} · ${names[i]}` : `${label} · free · ${h.price} g/wk`;
+      el.textContent = names[i] ? `${label} · ${names[i]}` : `${label} · vacant · ${h.price} g/wk`;
       el.classList.toggle('free', !names[i]);
     });
   }

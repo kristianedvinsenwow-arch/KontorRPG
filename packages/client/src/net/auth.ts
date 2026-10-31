@@ -3,10 +3,10 @@
  * username is remembered in this browser, so coming back is just the PIN. The PIN itself is never
  * stored. The login token lives in memory for this tab (reconnects reuse it).
  */
-import type { CharacterBuild } from '@kontor/shared';
+import type { CharacterBuild, Equipment, SkillXp } from '@kontor/shared';
 
 export interface ClientConfig { accounts: boolean; requireLogin: boolean }
-export interface SavedCharacter { name: string; color: number; build: CharacterBuild }
+export interface SavedCharacter { name: string; color: number; build: CharacterBuild; gold?: number; equip?: Equipment; xp?: SkillXp; title?: string | null }
 
 const USER_KEY = 'kontorrpg.username';
 

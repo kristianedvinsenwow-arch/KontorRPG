@@ -60,6 +60,8 @@ export interface ItemDef {
   mount?: { mult: number; coat: number; mane: number };
   /** Only ever exists at this rarity (boss uniques). */
   fixedRarity?: Rarity;
+  /** Extra move-speed penalty on heavy plate (monster-dropped uniques that hit harder in return). */
+  heavy?: number;
   blurb: string;
 }
 
@@ -353,6 +355,11 @@ add({ id: 'leather_backpack', name: 'Leather backpack', kind: 'bag', stack: 1, s
 add({ id: 'fjord_horse', name: 'Fjord horse', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.6, coat: 0xc8a878, mane: 0x3a2a1c }, sellValue: 60, buyPrice: 250, blurb: 'A sturdy dun Fjord horse with a striped mane. Ride at 160% speed. Not in the mine or indoors.' });
 add({ id: 'black_fjord_horse', name: 'Black Fjord horse', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.75, coat: 0x2a2624, mane: 0xd8d0c0 }, sellValue: 120, buyPrice: 600, blurb: 'Rare, dark and quick. Ride at 175% speed.' });
 add({ id: 'dovre_stallion', name: 'Dovre stallion', kind: 'mount', stack: 1, slot: 'mount', fixedRarity: 4, mount: { mult: 2.0, coat: 0x8a9298, mane: 0xeef2f6 }, sellValue: 300, blurb: 'A grey giant of a horse that walked out of the Mine King’s pit. Ride at 200% speed.' });
+// Heavy plate: rare monster drops. They slow you down, and pay for it with big stats.
+add({ id: 'knuts_bellyplate', name: 'Old Knut’s belly plate', kind: 'armour', stack: 1, tier: 2, look: 'iron', slot: 'chest', armourType: 'metal', armour: 9, fixedRarity: 3, heavy: 0.04, mods: { maxHp: 15, thorns: 4 }, sellValue: 40, blurb: 'A cauldron lid Knut beat into a breastplate. Heavy as sin. Anything that hits you gets hurt back.' });
+add({ id: 'barrow_helm', name: 'Barrow-king’s helm', kind: 'armour', stack: 1, tier: 3, look: 'steel', slot: 'head', armourType: 'metal', armour: 5, ward: 2, fixedRarity: 3, heavy: 0.02, mods: { maxHp: 8, physRed: 0.04 }, sellValue: 45, blurb: 'Dug up with a draug still inside. Cold, heavy, and very hard to dent.' });
+add({ id: 'trolliron_greaves', name: 'Troll-iron greaves', kind: 'armour', stack: 1, tier: 3, look: 'steel', slot: 'legs', armourType: 'metal', armour: 8, fixedRarity: 3, heavy: 0.03, mods: { meleeDmg: 0.08, maxHp: 10 }, sellValue: 50, blurb: 'Hammered by hill trolls for hill trolls. You plod — but you kick like one.' });
+add({ id: 'mine_kings_pauldrons', name: 'Mine King’s pauldrons', kind: 'armour', stack: 1, tier: 4, look: 'silversteel', slot: 'shoulders', armourType: 'metal', armour: 7, ward: 3, fixedRarity: 4, heavy: 0.03, mods: { allDmg: 0.06, physRed: 0.05 }, sellValue: 90, blurb: 'Silversteel the size of cart wheels. They weigh you down, and nothing much gets through.' });
 add({ id: 'mine_kings_ring', name: 'Mine King’s signet', kind: 'trinket', stack: 1, slot: 'ring', fixedRarity: 4, mods: { maxHp: 8, allDmg: 0.06, miningSpeed: 0.1, gemChance: 0.3 }, sellValue: 90, blurb: 'Heavy, cold silver. The Mine King wore it for three hundred years.' });
 add({ id: 'trolltooth_necklace', name: 'Trolltooth necklace', kind: 'trinket', stack: 1, slot: 'neck', fixedRarity: 4, mods: { maxHp: 10, meleeDmg: 0.06, luck: 5 }, sellValue: 60, blurb: 'Old Knut’s own. Rarely, he drops it.' });
 
@@ -498,7 +505,8 @@ export function itemStats(s: Stack): Partial<Stats> {
   const out = emptyStats();
   if (d.armour) out.armour += Math.round(d.armour * m * 10) / 10;
   if (d.ward) out.ward += Math.round(d.ward * m * 10) / 10;
-  if (d.armourType === 'metal' && d.slot !== 'offHand') { out.moveSpeed -= 0.015; out.magicTaken += 0.03; }
+  // Plate barely slows you (−0.5% a piece); heavy uniques slow you more but give a lot more back.
+  if (d.armourType === 'metal' && d.slot !== 'offHand') { out.moveSpeed -= 0.005 + (d.heavy ?? 0); out.magicTaken += 0.03; }
   if (d.armourType === 'leather') out.moveSpeed += 0.01;
   if (d.slot === 'offHand' && d.armourType === 'metal') out.block += 0.1;
   addStats(out, d.mods);

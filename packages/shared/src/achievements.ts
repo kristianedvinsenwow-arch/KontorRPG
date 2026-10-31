@@ -29,7 +29,7 @@ for (const [n, t] of [[50, 'Bait Thief'], [250, 'Angler'], [1000, 'Master of the
   add({ id: `fish_${n}`, name: t, text: `Land ${n} catches.`, key: 'fish', goal: n, title: t, group: 'Gathering' });
 add({ id: 'golden', name: 'Golden Hook', text: 'Land a golden perch.', key: 'golden', goal: 1, title: 'Golden Hook', group: 'Gathering' });
 add({ id: 'gems_10', name: 'Glitter Eye', text: 'Find 10 gems while mining.', key: 'gems', goal: 10, title: 'Glitter Eye', group: 'Gathering' });
-add({ id: 'herbs_500', name: 'Herbwife', text: 'Pick 500 herbs.', key: 'herbs', goal: 500, title: 'Herbwife', group: 'Gathering' });
+add({ id: 'herbs_500', name: 'Herbalist', text: 'Pick 500 herbs.', key: 'herbs', goal: 500, title: 'the Herbalist', group: 'Gathering' });
 add({ id: 'fibre_500', name: 'Flax Fingers', text: 'Pick flax, jute, ramie, cotton or bamboo 500 times.', key: 'fibre', goal: 500, title: 'Flax Fingers', group: 'Gathering' });
 add({ id: 'pelts_100', name: 'Skinner', text: 'Skin 100 hides without ruining them.', key: 'pelts', goal: 100, title: 'Skinner', group: 'Gathering' });
 
