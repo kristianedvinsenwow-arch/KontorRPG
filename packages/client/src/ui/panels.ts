@@ -4,7 +4,7 @@
  * world map (M). They only ever send requests; what you own changes when the server answers.
  */
 import {
-  COMING_SKILLS, EQUIP_SLOTS, HOMES, IMBUE, INN, ITEMS, homeLabel, type Home, NPC_BY_ID, QUESTS, RECIPES, SKILLS, STATION_BY_ID, TALENT_TREE, TREES,
+  ACHIEVEMENTS, titleOf, COMING_SKILLS, EQUIP_SLOTS, HOMES, IMBUE, INN, ITEMS, homeLabel, type Home, NPC_BY_ID, QUESTS, RECIPES, SKILLS, STATION_BY_ID, TALENT_TREE, TREES,
   canLearn, countItem, knifeRepair, knifeUses, recipeGroup, formatStat, levelFromXp, levelProgress, pointsLeft, questAvailable, recipeAt, respecCost, xpForLevel,
   type ClientMsg, type Stack, type StatKey, type TreeId,
 } from '@kontor/shared';
@@ -163,6 +163,39 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
   // ---------------------------------------------------------------- talents
 
   let tree: TreeId = 'mining';
+  // ---------------------------------------------------------------- achievements
+
+  function achievements(g: GameState): HTMLElement[] {
+    const a = g.ach;
+    const body = el('div', 'pbody');
+    // Title picker.
+    const earned = ACHIEVEMENTS.filter((x) => x.title && a.done.includes(x.id));
+    const tbox = el('div', 'titles');
+    tbox.append(el('div', 'lbl', 'Your title (shown under your name)'));
+    const row = el('div', 'ract');
+    row.append(btn('None', a.title ? 'btn ghost' : 'btn', () => send({ t: 'title', id: null })));
+    for (const x of earned) row.append(btn(x.title!, a.title === x.id ? 'btn' : 'btn ghost', () => send({ t: 'title', id: x.id })));
+    if (!earned.length) row.append(el('span', 'note', 'Earn an achievement with a title to wear it.'));
+    tbox.append(row);
+    body.append(tbox);
+    for (const group of ['Gathering', 'Crafting', 'Combat', 'Life'] as const) {
+      const list = el('div', 'achs');
+      list.append(el('div', 'lbl', group));
+      for (const x of ACHIEVEMENTS.filter((y) => y.group === group)) {
+        const have = Math.min(a.c[x.key] ?? 0, x.goal), done = a.done.includes(x.id);
+        const r = el('div', done ? 'ach done' : 'ach');
+        const info = el('div', 'rinfo');
+        info.append(el('b', '', `${done ? '★ ' : ''}${x.name}`), el('span', 'note', `${x.text}${x.title ? ` Title: “${x.title}”.` : ''}`));
+        const bar = el('div', 'bar'); const fill = el('i'); fill.style.width = `${(have / x.goal) * 100}%`; bar.append(fill);
+        const prog = el('div', 'aprog'); prog.append(el('span', 'note', `${have.toLocaleString('en')} / ${x.goal.toLocaleString('en')}`), bar);
+        r.append(info, prog);
+        list.append(r);
+      }
+      body.append(list);
+    }
+    return [header('Achievements', `${a.done.length} of ${ACHIEVEMENTS.length} earned`, 'J'), body];
+  }
+
   function talents(g: GameState): HTMLElement[] {
     const tabs = el('div', 'tabs');
     for (const t of TREES) {
@@ -434,8 +467,8 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
 
   function render() {
     const u = uiStore.get(), g = gameStore.get();
-    if (u.panel === 'character') { $('charInv').replaceChildren(...inventory(g)); $('charSkills').replaceChildren(...skillList(g)); }
-    const open = ['skills', 'craft', 'npc', 'home', 'talents', 'map'].includes(u.panel);
+    if (u.panel === 'character') { $('charInv').replaceChildren(...inventory(g)); $('charSkills').replaceChildren(...skillList(g)); $('charTitle').textContent = titleOf(g.ach.title) ? `“${titleOf(g.ach.title)}” · J for achievements` : 'No title yet · J for achievements'; }
+    const open = ['skills', 'craft', 'npc', 'home', 'talents', 'map', 'achievements'].includes(u.panel);
     root.hidden = !open;
     if (!open) return;
     card.className = `pcard ${u.panel}`;
@@ -444,6 +477,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     else if (u.panel === 'npc') card.replaceChildren(...npc(g, u.npc));
     else if (u.panel === 'home') card.replaceChildren(...homePanel(g, u.home));
     else if (u.panel === 'talents') card.replaceChildren(...talents(g));
+    else if (u.panel === 'achievements') card.replaceChildren(...achievements(g));
     else if (u.panel === 'map') { const c = drawMap(); card.replaceChildren(header('Map', mapTitle(), 'M'), c); }
     hideTip();
   }
@@ -453,7 +487,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     if (u.panel !== lastPanel) {
       const was = lastPanel;
       lastPanel = u.panel;
-      if (['skills', 'craft', 'npc', 'home', 'talents', 'map', 'character'].includes(was) && u.panel === 'none') onClose();
+      if (['skills', 'craft', 'npc', 'home', 'talents', 'map', 'achievements', 'character'].includes(was) && u.panel === 'none') onClose();
     }
     render();
   });

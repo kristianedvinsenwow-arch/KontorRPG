@@ -74,6 +74,10 @@ The design doc lives in the claude.ai doc "KontorRPG — Product Design Doc".
   light summer nights, moonlight and stars after dark, windows and fires glow). Weather changes
   every 20 minutes per region — clear, cloudy, rain, fog, and snow in Gruben — the same for everyone.
   Fish bite better in the rain. The clock and weather show under the place name.
+- **Achievements and titles (J):** 35 achievements across gathering, crafting, combat and life in
+  Bjørkvik — e.g. 1000 catches (“Master of the Lake”), 2000 pickaxe hits (“Mountain Breaker”),
+  2000 axe chops (“Timberwolf”), Trollbane, Kingslayer. Most give a title you can wear under your
+  name; unlocks are announced to everyone. Counters are saved with your character.
 - **World state is saved:** depleted veins and trees, boss and monster respawn timers and items on
   the ground survive server restarts and deploys (Supabase `world_state`, server-only).
 - **Interface:** hotbar (1–5), health and buffs, item tooltips (type, damage, effects, vendor

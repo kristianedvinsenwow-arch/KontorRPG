@@ -121,7 +121,7 @@ const hotbar = initHotbar(
   (index) => net.send({ t: 'eat', index }),
   () => { net.send({ t: 'respawn' }); input.lock(); },
 );
-const PANELS: UiState['panel'][] = ['character', 'skills', 'craft', 'npc', 'home', 'talents', 'map'];
+const PANELS: UiState['panel'][] = ['character', 'skills', 'craft', 'npc', 'home', 'talents', 'map', 'achievements'];
 function openPanel(panel: UiState['panel'], extra: Partial<UiState> = {}) {
   uiStore.set({ panel, ...extra });
   input.unlock();
@@ -154,7 +154,7 @@ document.addEventListener('pointerlockerror', () => {
 input.onKey((code) => {
   const u = uiStore.get();
   if (u.panel === 'menu' || u.bossKey || u.chatOpen) return;
-  const want: UiState['panel'] | null = code === 'KeyC' || code === 'KeyI' || code === 'KeyK' ? 'character' : code === 'KeyT' ? 'talents' : code === 'KeyM' ? 'map' : null;
+  const want: UiState['panel'] | null = code === 'KeyC' || code === 'KeyI' || code === 'KeyK' ? 'character' : code === 'KeyT' ? 'talents' : code === 'KeyM' ? 'map' : code === 'KeyJ' ? 'achievements' : null;
   if (PANELS.includes(u.panel)) {
     const close = code === 'Escape' || want === u.panel || (code === 'KeyE' && (u.panel === 'craft' || u.panel === 'npc'));
     if (close) { uiStore.set({ panel: 'none' }); input.lock(); return; }
@@ -219,6 +219,7 @@ net.on((msg) => {
     case 'skills': gameStore.set({ xp: msg.xp }); break;
     case 'talents': gameStore.set({ talents: msg.alloc, respecs: msg.respecs }); break;
     case 'quests': gameStore.set({ quests: msg.state }); break;
+    case 'achievements': gameStore.set({ ach: { c: msg.c, done: msg.done, title: msg.title } }); break;
     case 'lease': gameStore.set({ lease: { room: msg.room, until: msg.until, storage: msg.storage } }); break;
     case 'rooms': gameStore.set({ rooms: msg.taken }); places.setRooms(msg.taken); break;
     case 'doors': places.setDoors(msg.open); break;

@@ -248,6 +248,9 @@ export function damageMob(w: World, m: Mob, dmg: number, by: string, now: number
     const xp = w.addXp(p, 'combat', m.def.xp);
     p.client.send({ t: 'gain', skill: 'combat', xp });
     w.questKill(p, m.def.kind);
+    w.count(p, `kill:${m.def.kind}`);
+    w.count(p, 'kills');
+    if (m.def.kind === 'goblin' || m.def.kind === 'cave_goblin' || m.def.kind === 'cave_shaman') w.count(p, 'kill:goblins');
   }
   if (m.def.boss) w.broadcast({ t: 'notice', kind: 'rare', text: `${m.def.name} has fallen${top ? ` — ${top.state.name} struck hardest` : ''}!` });
   dropLoot(w, m, top);
@@ -304,6 +307,7 @@ export function skin(w: World, p: ServerPlayer, targetId: string): void {
     let qty = sk.qty[0] + Math.floor(w.rand() * (sk.qty[1] - sk.qty[0] + 1));
     if (w.rand() < knifeBonus(knife)) qty++;
     w.giveOrDrop(p, { id: sk.item, qty });
+    w.count(p, 'pelts');
     const xp = w.addXp(p, 'leatherworking', 6 * (levelOf(p.xp, 'leatherworking') < 5 ? 1.5 : 1));
     p.client.send({ t: 'gain', skill: 'leatherworking', xp, item: sk.item, qty });
   }

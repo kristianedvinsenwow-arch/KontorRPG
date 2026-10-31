@@ -46,10 +46,12 @@ export function gather(w: World, p: ServerPlayer, kind: 'mine' | 'chop' | 'pick'
   w.give(p, { id: type.item, qty });
   const xp = w.addXp(p, skill, type.xp);
   p.client.send({ t: 'gain', skill, xp, item: type.item, qty });
+  w.count(p, skill === 'mining' ? 'oreHits' : 'treeHits');
   if (type.gem) {
     const chance = type.gem.chance * (1 + st.gemChance) * (1 + st.luck * 0.01);
     if (w.rand() < chance && roomFor(p.bag, type.gem.item) > 0) {
       w.give(p, { id: type.gem.item, qty: 1 });
+      w.count(p, 'gems');
       p.client.send({ t: 'gain', item: type.gem.item, qty: 1, rare: true });
       w.broadcast({ t: 'notice', kind: 'rare', text: `${p.state.name} found ${ITEMS[type.gem.item].name}!` });
     }
@@ -90,6 +92,7 @@ function pick(w: World, p: ServerPlayer, nodeId: string): void {
   w.give(p, { id: type.item, qty });
   const xp = w.addXp(p, skill, type.xp);
   p.client.send({ t: 'gain', skill, xp, item: type.item, qty });
+  w.count(p, skill === 'herbalism' ? 'herbs' : 'fibre');
   if (state.left <= 0) {
     const [lo, hi] = type.respawnSec;
     state.until = now + (lo + w.rand() * (hi - lo)) * 1000;
@@ -156,6 +159,8 @@ export function reel(w: World, p: ServerPlayer, ok: boolean): void {
   if (left === qty) return stopFishing(w, p, 'lost');
   const xp = w.addXp(p, 'fishing', f.xp);
   p.client.send({ t: 'gain', skill: 'fishing', xp, item: f.item, qty: qty - left, rare: f.rare });
+  w.count(p, 'fish');
+  if (f.item === 'golden_perch') w.count(p, 'golden');
   if (f.rare) w.broadcast({ t: 'notice', kind: 'rare', text: `${p.state.name} landed a ${ITEMS[f.item].name}!` });
   p.dirty = true;
   w.sendInv(p);

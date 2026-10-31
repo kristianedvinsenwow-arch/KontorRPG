@@ -409,3 +409,14 @@ select:focus { border-color: var(--amber); outline: none; }
 }
 
 #where .clock { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+/* Achievements */
+.achs { display: flex; flex-direction: column; gap: 6px; }
+.ach { display: grid; grid-template-columns: minmax(0, 1fr) 180px; gap: 12px; align-items: center; padding: 8px 10px; background: rgba(255, 255, 255, .03); border: 1px solid var(--line); border-radius: 10px; opacity: .8; }
+.ach.done { opacity: 1; border-color: rgba(242, 162, 58, .45); background: rgba(242, 162, 58, .06); }
+.ach.done .rinfo b { color: var(--amber); }
+.aprog { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+.aprog .note { text-align: right; }
+.titles .ract { flex-wrap: wrap; gap: 6px; }
+.tag .title { display: block; font-size: 10.5px; font-style: italic; color: var(--amber); opacity: .9; }
+.chartitle { font-size: 12px; font-style: italic; color: var(--amber); margin-top: -6px; }

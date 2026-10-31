@@ -61,13 +61,16 @@ export class Remotes {
         el.className = 'tag player';
         const b = document.createElement('b'); b.textContent = s.name; b.style.color = PLAYER_COLORS[s.color % PLAYER_COLORS.length];
         const bar = document.createElement('div'); bar.className = 'hpbar'; const fill = document.createElement('i'); bar.append(fill);
-        el.append(b, bar);
+        const ti = document.createElement('span'); ti.className = 'title';
+        el.append(b, ti, bar);
         const g = model.g, h = RACES[s.race]?.height ?? 1.85;
         const label = addLabel(el, () => g.position.clone().setY(g.position.y + h + 0.35), 40);
         r = { id: s.id, name: s.name, color: s.color, race: s.race, face: s.face ?? 0, model, label, hp: fill, buf: [], lastSeen: now };
         this.map.set(s.id, r);
       }
       applyGear(r.model, s.gear);
+      const ti = r.label.el.querySelector('.title') as HTMLElement | null;
+      if (ti && ti.textContent !== (s.title ?? '')) ti.textContent = s.title ?? '';
       if (s.hp != null && s.mhp) { r.hp.style.width = `${(s.hp / s.mhp) * 100}%`; r.label.el.classList.toggle('hurt', s.hp < s.mhp); }
       r.buf.push({ at, s });
       if (r.buf.length > 20) r.buf.shift();

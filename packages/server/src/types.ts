@@ -1,6 +1,6 @@
 /** Server-side state shapes shared by the world and its systems. */
 import type {
-  Bag, Buff, CharacterBuild, Equipment, GroundItem, HoldSlot, MobDef, PlayerState, PlayerStats, QuestState,
+  AchievementState, Bag, Buff, CharacterBuild, Equipment, GroundItem, HoldSlot, MobDef, PlayerState, PlayerStats, QuestState,
   ServerMsg, SkillXp, Spawn, TalentAlloc,
 } from '@kontor/shared';
 
@@ -46,6 +46,7 @@ export interface ServerPlayer {
   quests: QuestState;
   lease: Lease | null;
   storage: Bag;
+  achievements: AchievementState;
   // live state
   held: HoldSlot;
   stats: PlayerStats;

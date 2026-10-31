@@ -6,7 +6,7 @@
  * Plain fetch, no SDK, so the server bundle stays small.
  */
 import {
-  HOMES, STORAGE_MAX, SKILLS, computeStats, sanitiseBag, sanitiseEquipment, sanitiseTalents,
+  HOMES, STORAGE_MAX, SKILLS, sanitiseAchievements, type AchievementState, computeStats, sanitiseBag, sanitiseEquipment, sanitiseTalents,
   type Bag, type Stack, type CharacterBuild, type Equipment, type QuestState, type SkillXp, type TalentAlloc,
 } from '@kontor/shared';
 import type { Lease } from './types.js';
@@ -29,6 +29,7 @@ export interface StoredCharacter {
   quests: QuestState;
   lease: Lease | null;
   storage: Bag;
+  achievements: AchievementState;
 }
 
 /** Everything that changes while playing. */
@@ -98,7 +99,7 @@ export function sanitiseLease(raw: any): Lease | null {
 }
 
 /** Clean a stored character so content changes never crash a login. */
-export function cleanCharacter(c: Omit<StoredCharacter, 'bag' | 'equip' | 'xp' | 'talents' | 'quests' | 'lease' | 'storage'> & Record<string, any>): StoredCharacter {
+export function cleanCharacter(c: Omit<StoredCharacter, 'bag' | 'equip' | 'xp' | 'talents' | 'quests' | 'lease' | 'storage' | 'achievements'> & Record<string, any>): StoredCharacter {
   const equip = sanitiseEquipment(c.equip);
   const xp = sanitiseXp(c.xp);
   const talents = sanitiseTalents(c.talents, xp);
@@ -107,6 +108,7 @@ export function cleanCharacter(c: Omit<StoredCharacter, 'bag' | 'equip' | 'xp' |
     userId: c.userId, name: c.name, color: c.color, build: c.build, pos: c.pos, gold: Math.max(0, Math.floor(c.gold ?? 0)),
     equip, xp, talents, bag: sanitiseBag(c.bag, slots), respecs: Math.max(0, Math.floor(c.respecs ?? 0)),
     quests: sanitiseQuests(c.quests), lease: sanitiseLease(c.lease), storage: sanitiseBag(c.storage, STORAGE_SLOTS),
+    achievements: sanitiseAchievements(c.achievements),
   };
 }
 
@@ -115,7 +117,7 @@ interface Row {
   attrs: CharacterBuild['attrs']; major_perk: string; minor_perk: string; face: number | null;
   pos_x: number | null; pos_y: number | null; pos_z: number | null; yaw: number; gold: number;
   inventory: unknown; equipment: unknown; skills: unknown; talents: unknown; respecs: number | null;
-  quests: unknown; lease: unknown; storage: unknown;
+  quests: unknown; lease: unknown; storage: unknown; achievements: unknown;
 }
 
 export class SupabaseStore implements CharacterStore {
@@ -144,7 +146,7 @@ export class SupabaseStore implements CharacterStore {
       build: { race: row.race, attrs: row.attrs, major: row.major_perk, minor: row.minor_perk, face: row.face ?? 0 },
       pos: row.pos_x == null || row.pos_y == null || row.pos_z == null ? null : { x: row.pos_x, y: row.pos_y, z: row.pos_z, yaw: row.yaw },
       bag: row.inventory, equip: row.equipment, xp: row.skills, talents: row.talents, respecs: row.respecs ?? 0,
-      quests: row.quests, lease: row.lease, storage: row.storage,
+      quests: row.quests, lease: row.lease, storage: row.storage, achievements: row.achievements,
     });
   }
 
@@ -152,7 +154,7 @@ export class SupabaseStore implements CharacterStore {
     const body = {
       user_id: c.userId, name: c.name, color: c.color, race: c.build.race, attrs: c.build.attrs,
       major_perk: c.build.major, minor_perk: c.build.minor, face: c.build.face ?? 0, gold: c.gold,
-      inventory: c.bag, equipment: c.equip, skills: c.xp, talents: c.talents, quests: c.quests, storage: c.storage,
+      inventory: c.bag, equipment: c.equip, skills: c.xp, talents: c.talents, quests: c.quests, storage: c.storage, achievements: c.achievements,
     };
     const r = await fetch(`${this.url}/rest/v1/characters`, { method: 'POST', headers: this.headers({ Prefer: 'return=minimal' }), body: JSON.stringify(body) });
     if (!r.ok) throw new Error(`create character: ${r.status} ${await r.text()}`);
@@ -162,7 +164,7 @@ export class SupabaseStore implements CharacterStore {
     const body = {
       pos_x: p.pos.x, pos_y: p.pos.y, pos_z: p.pos.z, yaw: p.pos.yaw,
       gold: p.gold, inventory: p.bag, equipment: p.equip, skills: p.xp, talents: p.talents, respecs: p.respecs,
-      quests: p.quests, lease: p.lease, storage: p.storage,
+      quests: p.quests, lease: p.lease, storage: p.storage, achievements: p.achievements,
       last_seen: new Date().toISOString(),
     };
     const r = await fetch(`${this.url}/rest/v1/characters?user_id=eq.${encodeURIComponent(userId)}`, { method: 'PATCH', headers: this.headers({ Prefer: 'return=minimal' }), body: JSON.stringify(body) });

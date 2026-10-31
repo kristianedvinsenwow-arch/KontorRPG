@@ -32,6 +32,8 @@ export interface PlayerState {
   mhp?: number;
   /** Riding this mount (item id). */
   mnt?: string;
+  /** Chosen title (shown under the name). */
+  title?: string;
 }
 
 /** Status flags on mobs. */
@@ -72,6 +74,8 @@ export type ClientMsg =
   | { t: 'rest' }
   /** Mount up / get off (the mount in your mount slot). */
   | { t: 'mount' }
+  /** Show an earned title under your name (achievement id), or none. */
+  | { t: 'title'; id: string | null }
   /** Open or close your lodge room's door. */
   | { t: 'door'; home: number }
   | { t: 'storage'; op: 'put' | 'take'; index: number; qty: number }
@@ -120,7 +124,9 @@ export type ServerMsg =
   /** Potion cooldown: the next potion can be drunk at this time (epoch ms). */
   | { t: 'potion'; ready: number }
   /** You mounted (item id) or dismounted (null). */
-  | { t: 'mounted'; id: string | null };
+  | { t: 'mounted'; id: string | null }
+  /** Your achievement counters, finished achievements and chosen title. */
+  | { t: 'achievements'; c: Record<string, number>; done: string[]; title: string | null };
 
 export function encode(msg: ClientMsg | ServerMsg): string {
   return JSON.stringify(msg);
@@ -173,6 +179,7 @@ export function decodeClient(raw: string): ClientMsg | null {
     case 'rent': return num(m.weeks) ? { t: 'rent', weeks: Math.max(1, Math.min(4, int(m.weeks))), home: num(m.home) ? int(m.home) : undefined } : null;
     case 'rest': return { t: 'rest' };
     case 'mount': return { t: 'mount' };
+    case 'title': return m.id === null || (typeof m.id === 'string' && m.id.length < 40) ? { t: 'title', id: m.id } : null;
     case 'door': return num(m.home) ? { t: 'door', home: int(m.home) } : null;
     case 'storage': return (m.op === 'put' || m.op === 'take') && num(m.index) && num(m.qty) ? { t: 'storage', op: m.op, index: int(m.index), qty: Math.max(1, int(m.qty)) } : null;
     case 'quest': return str(m.quest) && ['accept', 'turnin', 'abandon'].includes(m.op) ? { t: 'quest', quest: m.quest, op: m.op } : null;

@@ -38,7 +38,7 @@ export interface NetState {
 }
 
 export interface UiState {
-  panel: 'none' | 'menu' | 'character' | 'pause' | 'skills' | 'craft' | 'npc' | 'home' | 'talents' | 'map';
+  panel: 'none' | 'menu' | 'character' | 'pause' | 'skills' | 'craft' | 'npc' | 'home' | 'talents' | 'map' | 'achievements';
   /** Which home the door dialog is for (HOMES id). */
   home: number;
   /** Which station the crafting panel is for (station id). */
@@ -103,6 +103,8 @@ export interface GameState {
   rooms: (string | null)[];
   /** When the next potion can be drunk (epoch ms). */
   potionReady: number;
+  /** Achievement counters, finished ones and the chosen title. */
+  ach: { c: Record<string, number>; done: string[]; title: string | null };
   /** Riding this mount (item id), or null. */
   mounted: string | null;
   /** Right-click ready again at (Date.now ms). */
@@ -114,7 +116,7 @@ export interface GameState {
 }
 export const gameStore = createStore<GameState>({
   bag: [], equip: {}, gold: 0, held: 'mainHand', xp: {}, hp: 1, maxHp: 1, dead: false, buffs: [], talents: {}, respecs: 0, quests: {},
-  lease: { room: null, until: null, storage: [] }, rooms: [], potionReady: 0, mounted: null, specialReady: 0, hurtAt: 0, job: null,
+  lease: { room: null, until: null, storage: [] }, rooms: [], potionReady: 0, ach: { c: {}, done: [], title: null }, mounted: null, specialReady: 0, hurtAt: 0, job: null,
 });
 export const settingsStore = createStore<Settings>(loadSettings());
 settingsStore.subscribe(saveSettings);

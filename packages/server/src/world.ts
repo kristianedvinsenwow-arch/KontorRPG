@@ -5,7 +5,7 @@
  * It never touches sockets: each player has a `send` function, so tests drive it without a network.
  */
 import {
-  AOI_CHUNKS, PORTAL_BY_ID, HOMES, maxSpeed, regionAt, homeAt, homeDoorway, homeLabel, type Home, CHUNK_SIZE, IMBUE, INN, ITEMS, MAX_CHAT_LEN, MAX_NAME_LEN,
+  ACHIEVEMENTS, titleOf, AOI_CHUNKS, PORTAL_BY_ID, HOMES, maxSpeed, regionAt, homeAt, homeDoorway, homeLabel, type Home, CHUNK_SIZE, IMBUE, INN, ITEMS, MAX_CHAT_LEN, MAX_NAME_LEN,
   NPC_BY_ID, PLAYER_COLORS, PROTOCOL_VERSION, QUEST_BY_ID, RECIPE_BY_ID, START_GOLD, STATION_BY_ID, TICK_HZ, USE_RANGE,
   EAT_LOCK_MS, POTION_CD_MS, addStack, burnChance, knifeRepair, knifeUses, STATIONS, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
   questAvailable, r2, r3, recipeAt, removeItem, resizeBag, respecCost, rollCraftRarity, rollEffects, rollsRarity,
@@ -130,6 +130,7 @@ export class World {
       case 'input': return this.input(p, msg);
       case 'chat': return this.chat(p, msg.text);
       case 'mount': return this.toggleMount(p);
+      case 'title': return this.setTitle(p, msg.id);
       case 'mine': return this.dismount(p), gather(this, p, 'mine', msg.node);
       case 'chop': return this.dismount(p), gather(this, p, 'chop', msg.node);
       case 'pick': return this.dismount(p), gather(this, p, 'pick', msg.node);
@@ -176,7 +177,7 @@ export class World {
     const store = this.opts.store;
     const fresh = (build: Extract<ClientMsg, { t: 'hello' }>['build'], userId: string | null): Joining => ({
       userId, name: sanitizeName(msg.name), color: Math.abs(Math.floor(msg.color)) % PLAYER_COLORS.length, build, pos: null, gold: START_GOLD,
-      bag: emptyBag(computeStats(build, {}, {}, {}).bagSlots), equip: {}, xp: {}, talents: {}, respecs: 0, quests: {}, lease: null, storage: emptyBag(STORAGE_SLOTS),
+      bag: emptyBag(computeStats(build, {}, {}, {}).bagSlots), equip: {}, xp: {}, talents: {}, respecs: 0, quests: {}, lease: null, storage: emptyBag(STORAGE_SLOTS), achievements: { c: {}, done: [], title: null },
     });
     if (!store || (!msg.token && !this.opts.requireLogin)) {
       const bad = validateBuild(msg.build);
@@ -211,11 +212,11 @@ export class World {
     const y = groundAt(x, z);
     const stats = computeStats(c.build, c.equip, c.talents, c.xp);
     const bag = resizeBag(c.bag, stats.bagSlots) ?? c.bag;
-    const state: PlayerState = { id, name: c.name, color: c.color, race: c.build.race, face: faceOf(c.build), x: r2(x), y: r2(y), z: r2(z), yaw: r3(yaw), pitch: 0, spd: 0 };
+    const state: PlayerState = { id, name: c.name, color: c.color, race: c.build.race, face: faceOf(c.build), x: r2(x), y: r2(y), z: r2(z), yaw: r3(yaw), pitch: 0, spd: 0, title: titleOf(c.achievements.title) };
     const p: ServerPlayer = {
       state, client, lastValid: { x, y, z, at: now }, lastSeq: -1, strikes: 0, lastChatAt: 0, actUntil: 0, act: undefined,
       build: c.build, userId: c.userId, savedAt: now, dirty: false,
-      bag, equip: c.equip, gold: c.gold, xp: c.xp, talents: c.talents, respecs: c.respecs, quests: c.quests, lease: c.lease, storage: c.storage,
+      bag, equip: c.equip, gold: c.gold, xp: c.xp, talents: c.talents, respecs: c.respecs, quests: c.quests, lease: c.lease, storage: c.storage, achievements: c.achievements,
       held: c.equip.mainHand ? 'mainHand' : c.equip.pickaxe ? 'pickaxe' : 'mainHand', stats, buffs: [], hp: stats.maxHp, lastHurtAt: 0, hot: null, potionReadyAt: 0, dead: false,
       lastGatherAt: 0, job: null, nextAttackAt: 0, nextSpecialAt: 0, fishing: null,
     };
@@ -228,6 +229,7 @@ export class World {
     client.send({ t: 'skills', xp: p.xp });
     client.send({ t: 'talents', alloc: p.talents, respecs: p.respecs });
     client.send({ t: 'quests', state: p.quests });
+    this.sendAchievements(p);
     this.sendLease(p);
     client.send({ t: 'rooms', taken: this.roomNames() });
     client.send({ t: 'doors', open: [...this.doorsOpen] });
@@ -278,6 +280,40 @@ export class World {
     return amount;
   }
 
+  /**
+   * Count something towards achievements (fish caught, pickaxe hits, kills…). Unlocks are
+   * announced to everyone; titles become selectable.
+   */
+  count(p: ServerPlayer, key: string, n = 1): void {
+    const a = p.achievements;
+    a.c[key] = (a.c[key] ?? 0) + n;
+    let unlocked = false;
+    for (const ach of ACHIEVEMENTS) {
+      if (ach.key !== key || a.done.includes(ach.id) || a.c[key] < ach.goal) continue;
+      a.done.push(ach.id);
+      unlocked = true;
+      this.broadcast({ t: 'notice', kind: 'rare', text: `${p.state.name} earned “${ach.name}”${ach.title ? ` — title: ${ach.title}` : ''}!` });
+      if (ach.title && !a.title) { a.title = ach.id; p.state.title = ach.title; }
+    }
+    p.dirty = true;
+    // Counters change often (every swing): send the list on unlocks, otherwise now and then.
+    if (unlocked || (a.c[key] % 10 === 0)) this.sendAchievements(p);
+  }
+
+  sendAchievements(p: ServerPlayer): void {
+    const a = p.achievements;
+    p.client.send({ t: 'achievements', c: a.c, done: a.done, title: a.title });
+  }
+
+  private setTitle(p: ServerPlayer, id: string | null): void {
+    const a = p.achievements;
+    if (id !== null && (!a.done.includes(id) || !titleOf(id))) return;
+    a.title = id;
+    p.state.title = titleOf(id);
+    p.dirty = true;
+    this.sendAchievements(p);
+  }
+
   /** Mount up or get off. Not in the mine, indoors, mid-fight or while dead. */
   private toggleMount(p: ServerPlayer): void {
     if (p.state.mnt) return this.dismount(p, true);
@@ -288,6 +324,7 @@ export class World {
     if (this.now() - p.lastHurtAt < 5000) return this.notice(p, 'You can’t mount up mid-fight.', 'error');
     p.state.mnt = m.id;
     p.job = null;
+    this.count(p, 'rides');
     this.recompute(p);
     p.client.send({ t: 'mounted', id: m.id });
   }
@@ -353,6 +390,7 @@ export class World {
 
   kill(p: ServerPlayer, by: string): void {
     this.dismount(p);
+    this.count(p, 'deaths');
     p.hp = 0;
     p.dead = true;
     p.job = null;
@@ -477,6 +515,8 @@ export class World {
     p.client.send({ t: 'gain', skill: r.skill, xp, item: out.id, qty: out.qty, r: out.r, rare: (out.r ?? 0) >= 2 });
     if ((out.r ?? 0) >= 2) this.broadcast({ t: 'notice', kind: 'rare', text: `${p.state.name} crafted a ${['', '', 'rare', 'epic'][out.r!]} ${ITEMS[out.id].name}!` });
     job.done++;
+    if (out.id !== 'burnt_fish') this.count(p, `craft:${r.skill}`);
+    if ((out.r ?? 0) >= 3) this.count(p, 'epicCraft');
     p.dirty = true;
     this.sendInv(p);
     if (job.done >= job.total) { p.job = null; this.sendJob(p); return; }
@@ -604,6 +644,7 @@ export class World {
     s.qty--;
     if (s.qty <= 0) p.bag[index] = null;
     p.potionReadyAt = now + POTION_CD_MS;
+    this.count(p, 'drunk');
     p.client.send({ t: 'potion', ready: Date.now() + POTION_CD_MS });
     if (pot.heal && pot.sec) {
       const total = pot.heal * (1 + st.potionPower);
@@ -747,6 +788,7 @@ export class World {
         const xp = this.addXp(p, q.reward.xp[0], q.reward.xp[1]);
         p.client.send({ t: 'gain', skill: q.reward.xp[0], xp, item: 'coins', qty: q.reward.gold });
         this.notice(p, `Quest complete: ${q.name}.`, 'info');
+        this.count(p, 'quests');
         this.sendInv(p);
       }
     }
@@ -840,6 +882,7 @@ export class World {
     }
     p.gold -= cost;
     p.lease = { room: target.id, until };
+    if (target.kind !== 'room') this.count(p, 'house');
     if (!extending && this.doorsOpen.delete(target.id)) this.broadcast({ t: 'doors', open: [...this.doorsOpen] });
     this.rooms[target.id] = { key, name: p.state.name, until };
     p.dirty = true;
@@ -898,6 +941,7 @@ export class World {
     const lvl = levelOf(p.xp, 'combat');
     this.teleport(p, portal.to.x, portal.to.z);
     if (id === 'cave') this.notice(p, 'The Old Mine. It’s cold, and something is breathing down here.');
+    if (id === 'gruben') this.count(p, 'gruben');
     if (id === 'gruben') this.notice(p, 'Gruben. The old mine valley. Lights move in the bog, and the dead still work the row.');
     if (portal.level && lvl < portal.level) this.notice(p, `Careful: the monsters here are level 13–22, and you’re level ${lvl}.`, 'error');
     p.job = null;
@@ -963,7 +1007,7 @@ export class World {
     try {
       await this.opts.store.save(p.userId, {
         pos: { x: s.x, y: s.y, z: s.z, yaw: s.yaw }, bag: p.bag, equip: p.equip, gold: p.gold, xp: p.xp,
-        talents: p.talents, respecs: p.respecs, quests: p.quests, lease: p.lease, storage: p.storage,
+        talents: p.talents, respecs: p.respecs, quests: p.quests, lease: p.lease, storage: p.storage, achievements: p.achievements,
       });
     } catch (e) { this.log('save failed', p.userId, e); }
   }

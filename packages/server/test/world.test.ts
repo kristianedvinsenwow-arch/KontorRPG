@@ -744,3 +744,28 @@ test('mounts: buy a horse from Eirik, ride faster, get knocked off when hit; no 
   assert.equal(p.state.mnt, undefined);
   assert.match(last('notice')!.text, /No room/);
 });
+
+test('achievements: pickaxe hits, axe chops and catches count; titles unlock, can be worn, and are saved', async () => {
+  const store = new MemoryStore();
+  const world = new World({ build: 'test', store });
+  const c = fakeClient(); world.connect(c);
+  await world.handle(c, { t: 'hello', name: 'Digger', color: 0, proto: PROTOCOL_VERSION, build: defaultBuild(), token: 'dev:ach1' });
+  const p = world.inspect((c.inbox.find((m) => m.t === 'welcome') as any).id)!;
+  for (let i = 0; i < 100; i++) world.count(p, 'oreHits');
+  assert.ok(p.achievements.done.includes('ore_100'));
+  assert.equal(p.state.title, 'Rock Knocker', 'first title is worn automatically');
+  for (let i = 0; i < 2000; i++) world.count(p, 'treeHits');
+  for (let i = 0; i < 1000; i++) world.count(p, 'fish');
+  assert.ok(['tree_2000', 'fish_1000'].every((id) => p.achievements.done.includes(id)));
+  world.handle(c, { t: 'title', id: 'fish_1000' });
+  assert.equal(p.state.title, 'Master of the Lake');
+  world.handle(c, { t: 'title', id: 'king' });
+  assert.equal(p.state.title, 'Master of the Lake', 'can’t wear an unearned title');
+  world.disconnect(c);
+  await new Promise((r) => setTimeout(r, 0));
+  const c2 = fakeClient(); world.connect(c2);
+  await world.handle(c2, { t: 'hello', name: 'Digger', color: 0, proto: PROTOCOL_VERSION, build: defaultBuild(), token: 'dev:ach1' });
+  const q = world.inspect((c2.inbox.find((m) => m.t === 'welcome') as any).id)!;
+  assert.equal(q.achievements.c.fish, 1000);
+  assert.equal(q.state.title, 'Master of the Lake');
+});
