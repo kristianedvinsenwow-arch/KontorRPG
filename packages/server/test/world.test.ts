@@ -689,3 +689,29 @@ test('tailoring: pick flax by hand, spin and weave at a loom, make a linen hood;
   run('cloth_helm', 1);
   assert.ok(p.bag.some((s) => s?.id === 'cloth_helm'));
 });
+
+test('herbalism and alchemy: pick angelica, buy a vial from Ragna, brew a draught; it heals over time mid-fight, with a cooldown', () => {
+  const { world, c, p, place, at, advance } = game();
+  const herb = PLANTS.find((x) => x.kind === 'angelica')!;
+  place(herb.x + 1, herb.z);
+  for (let i = 0; i < 6 && countItem(p.bag, 'angelica') < 2; i++) { world.handle(c, { t: 'pick', node: herb.id }); advance(1600); }
+  if (countItem(p.bag, 'angelica') < 2) p.bag[5] = { id: 'angelica', qty: 2 };
+  assert.ok((p.xp.herbalism ?? 0) > 0);
+  at('ragna');
+  world.handle(c, { t: 'buy', npc: 'ragna', item: 'vial' });
+  assert.equal(countItem(p.bag, 'vial'), 1);
+  const table = STATIONS.find((s) => s.kind === 'alchemy')!;
+  place(table.x + 1.5, table.z);
+  world.handle(c, { t: 'craft', recipe: 'healing_draught', count: 1, station: table.id });
+  for (let i = 0; i < 40; i++) { advance(100); world.step(); }
+  assert.equal(countItem(p.bag, 'healing_draught'), 1);
+  p.bag[9] = { id: 'healing_draught', qty: 1 };
+  // Hurt and in a fight: food is locked, potions are not.
+  p.hp = 5; p.lastHurtAt = world.now();
+  world.handle(c, { t: 'eat', index: p.bag.findIndex((s) => s?.id === 'healing_draught') });
+  for (let i = 0; i < 40; i++) { advance(100); world.step(); }
+  assert.ok(p.hp > 15, `healed over time (hp ${p.hp})`);
+  const left = countItem(p.bag, 'healing_draught');
+  world.handle(c, { t: 'eat', index: p.bag.findIndex((s) => s?.id === 'healing_draught') });
+  assert.equal(countItem(p.bag, 'healing_draught'), left, 'shared cooldown');
+});

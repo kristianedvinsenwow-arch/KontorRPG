@@ -161,6 +161,7 @@ input.onKey((code) => {
   const n = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(code);
   if (n >= 0) return net.send({ t: 'hold', slot: (['mainHand', 'pickaxe', 'hatchet', 'rod'] as HoldSlot[])[n] });
   if (code === 'Digit5') { const g = gameStore.get(); const i = g.bag.findIndex((s) => s && ITEMS[s.id]?.food); if (i >= 0) net.send({ t: 'eat', index: i }); }
+  if (code === 'Digit6') { const g = gameStore.get(); const i = g.bag.findIndex((s) => s && ITEMS[s.id]?.potion?.heal); if (i >= 0) net.send({ t: 'eat', index: i }); else hud.toast('No healing potion in your bag.', 1500, 'error'); }
 });
 document.getElementById('closeChar')!.onclick = () => { uiStore.set({ panel: 'none' }); input.lock(); };
 uiStore.subscribe((u) => {
@@ -220,6 +221,7 @@ net.on((msg) => {
       fishing.stop(); fx.setBobber(null); castAt = null;
       input.unlock();
       break;
+    case 'potion': gameStore.set({ potionReady: msg.ready }); break;
     case 'cooldown': gameStore.set({ specialReady: msg.until }); break;
     case 'gain':
       if (msg.item) {
@@ -342,9 +344,9 @@ function use() {
 function blocker(a: NonNullable<Aim>): string | null {
   const g = gameStore.get();
   if (a.kind === 'plant') {
-    const type = PLANT_TYPES[a.p.kind], lvl = levelFromXp(g.xp.tailoring ?? 0);
+    const type = PLANT_TYPES[a.p.kind], lvl = levelFromXp(g.xp[type.skill] ?? 0);
     if (plants.isDepleted(a.p.id)) return `${type.name} — picked clean`;
-    if (lvl < type.level) return `${type.name} — needs Tailoring ${type.level} (you have ${lvl})`;
+    if (lvl < type.level) return `${type.name} — needs ${type.skill === 'tailoring' ? 'Tailoring' : 'Herbalism'} ${type.level} (you have ${lvl})`;
     return null;
   }
   if (a.kind !== 'vein' && a.kind !== 'tree') return null;
@@ -481,7 +483,7 @@ function interact(now: number, playing: boolean) {
       setTimeout(() => { net.send(skill === 'mining' ? { t: 'mine', node: id } : { t: 'chop', node: id }); if (skill === 'mining') veins.hit(id); }, SWING_SEC * STRIKE_AT * 1000);
       swingUntil = now + SWING_SEC * 1000;
     } else if (aimed?.kind === 'plant' && !block && now >= nextSwingAt) {
-      const lvl = levelFromXp(g.xp.tailoring ?? 0);
+      const lvl = levelFromXp(g.xp[PLANT_TYPES[aimed.p.kind].skill] ?? 0);
       nextSwingAt = now + Math.max(PICK_SEC * (1 - 0.01 * (lvl - 1)) * 1000, SWING_SEC * 1000);
       const id = aimed.p.id;
       setTimeout(() => { net.send({ t: 'pick', node: id }); plants.hit(id); }, 250);

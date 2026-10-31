@@ -52,6 +52,9 @@ export interface ServerPlayer {
   buffs: Buff[];
   hp: number;
   lastHurtAt: number;
+  /** Potion healing over time, and when the next potion can be drunk. */
+  hot: { perSec: number; until: number; nextTick: number } | null;
+  potionReadyAt: number;
   dead: boolean;
   lastGatherAt: number;
   job: CraftJob | null;

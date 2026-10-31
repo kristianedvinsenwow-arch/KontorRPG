@@ -10,7 +10,7 @@ import type { SkillId } from './skills.js';
 import { levelFromXp, type SkillXp } from './skills.js';
 import type { Stats } from './stats.js';
 
-export type TreeId = 'mining' | 'woodcutting' | 'fishing' | 'smithing' | 'carpentry' | 'leatherworking' | 'tailoring' | 'cooking' | 'melee' | 'ranged' | 'magic' | 'defence';
+export type TreeId = 'mining' | 'woodcutting' | 'fishing' | 'smithing' | 'carpentry' | 'leatherworking' | 'tailoring' | 'herbalism' | 'alchemy' | 'cooking' | 'melee' | 'ranged' | 'magic' | 'defence';
 
 export interface TalentNode {
   id: string;
@@ -98,6 +98,18 @@ export const TREES: TalentTree[] = [
     n('green_thumb', 'Green Thumb', 3, -1, 1, ['nimble_fingers'], { doubleYield: 0.05 }),
     n('fine_weave', 'Fine Weave', 3, 1, 1, ['nimble_fingers'], { luck: 2 }),
     n('master_weaver', 'Master Weaver', 1, 0, 2, ['green_thumb', 'fine_weave'], { luck: 6, craftSpeed: 0.1 }),
+  ] },
+  { id: 'herbalism', name: 'Herbalism', skill: 'herbalism', nodes: [
+    n('forager', 'Forager', 3, 0, 0, [], { doubleYield: 0.04 }),
+    n('herb_lore', 'Herb Lore', 3, -1, 1, ['forager'], { skillXp: 0.04 }),
+    n('keen_eye', 'Keen Eye', 3, 1, 1, ['forager'], { doubleYield: 0.04 }),
+    n('wise_woman', 'Wise Woman', 1, 0, 2, ['herb_lore', 'keen_eye'], { doubleYield: 0.1, luck: 4 }),
+  ] },
+  { id: 'alchemy', name: 'Alchemy', skill: 'alchemy', nodes: [
+    n('steady_hand', 'Steady Hand', 3, 0, 0, [], { craftSpeed: 0.04 }),
+    n('potent_brews', 'Potent Brews', 3, -1, 1, ['steady_hand'], { potionPower: 0.05 }),
+    n('long_brews', 'Long Brews', 3, 1, 1, ['steady_hand'], { potionTime: 0.1 }),
+    n('master_alchemist', 'Master Alchemist', 1, 0, 2, ['potent_brews', 'long_brews'], { potionPower: 0.15, potionTime: 0.2 }),
   ] },
   { id: 'cooking', name: 'Cooking', skill: 'cooking', nodes: [
     n('kitchen_hand', 'Kitchen Hand', 3, 0, 0, [], { burnChance: 0.03 }),

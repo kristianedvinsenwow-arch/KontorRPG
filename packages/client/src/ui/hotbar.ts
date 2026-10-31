@@ -1,9 +1,9 @@
 /**
  * Action bar and status: weapon / pickaxe / hatchet / rod (1–4; the held one is highlighted and
- * the right-click cooldown sweeps over the weapon), food (5), health, buffs, tracked quests, and
+ * the right-click cooldown sweeps over the weapon), food (5), healing potion (6), health, buffs, tracked quests, and
  * the "knocked out" screen.
  */
-import { EAT_LOCK_MS, ITEMS, QUEST_BY_ID, SPECIALS, countItem, formatStat, weaponClass, type HoldSlot, type StatKey } from '@kontor/shared';
+import { EAT_LOCK_MS, POTION_CD_MS, ITEMS, QUEST_BY_ID, SPECIALS, countItem, formatStat, weaponClass, type HoldSlot, type StatKey } from '@kontor/shared';
 import { gameStore, type GameState } from '../state/store.js';
 import { icon, el } from './panels.js';
 import { attachTip, itemTip } from './tooltip.js';
@@ -39,6 +39,7 @@ export function initHotbar(onHold: (s: HoldSlot) => void, onEat: (index: number)
 
   const cells: { cell: HTMLElement; cd: HTMLElement }[] = [];
   let foodLock: HTMLElement | null = null;
+  let potionCd: HTMLElement | null = null;
   const build = (g: GameState) => {
     bar.replaceChildren();
     cells.length = 0;
@@ -65,6 +66,16 @@ export function initHotbar(onHold: (s: HoldSlot) => void, onEat: (index: number)
     const lock = el('div', 'cd'); fc.append(lock);
     foodLock = lock;
     bar.append(fc);
+    // Potion: the first healing potion in the bag (usable mid-fight, shared cooldown).
+    const pi = g.bag.findIndex((s) => s && ITEMS[s.id]?.potion?.heal);
+    const pot = pi >= 0 ? g.bag[pi]! : null;
+    const pc = el('button', `hcell potion${pot ? '' : ' empty'}`);
+    pc.type = 'button';
+    if (pot) { pc.append(icon({ ...pot, qty: countItem(g.bag, pot.id) })); attachTip(pc, () => itemTip(pot)); pc.onclick = () => onEat(pi); }
+    pc.append(el('kbd', '', '6'), el('small', '', 'Potion'));
+    const pcd = el('div', 'cd'); pc.append(pcd);
+    potionCd = pcd;
+    bar.append(pc);
     // Health and buffs.
     hpFill.style.width = `${Math.max(0, Math.min(1, g.hp / g.maxHp)) * 100}%`;
     hpText.textContent = `${Math.ceil(g.hp)} / ${g.maxHp}`;
@@ -106,6 +117,11 @@ export function initHotbar(onHold: (s: HoldSlot) => void, onEat: (index: number)
       if (c) {
         if (left > 0) { c.cd.style.height = `${Math.min(1, left / total) * 100}%`; c.cd.textContent = String(Math.ceil(left / 1000)); }
         else if (c.cd.textContent) { c.cd.style.height = '0'; c.cd.textContent = ''; }
+      }
+      const pLeft = g.potionReady - now;
+      if (potionCd) {
+        if (pLeft > 0) { potionCd.style.height = `${(pLeft / POTION_CD_MS) * 100}%`; potionCd.textContent = String(Math.ceil(pLeft / 1000)); }
+        else if (potionCd.textContent) { potionCd.style.height = '0'; potionCd.textContent = ''; }
       }
       // Food is locked for 10 s after taking damage.
       const lockLeft = g.hurtAt + EAT_LOCK_MS - now;

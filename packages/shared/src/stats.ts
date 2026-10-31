@@ -41,6 +41,8 @@ export interface Stats {
   burnChance: number;     // cooking: less burnt food (fraction subtracted)
   craftSpeed: number;     // smithing/carpentry/cooking speed
   nodeSave: number;       // chance a swing doesn't use up the vein/tree
+  potionPower: number;    // alchemy: potions heal more and elixirs are stronger (for whoever drinks them)
+  potionTime: number;     // alchemy: elixirs last longer
   // progression and economy
   xp: number;
   skillXp: number;        // extra XP for the skill the tool belongs to (applied per tool)
@@ -54,7 +56,7 @@ export function emptyStats(): Stats {
   return {
     moveSpeed: 0, maxHp: 0, hpPct: 0, regen: 0, armour: 0, ward: 0, physRed: 0, magicRed: 0, magicTaken: 0, dodge: 0, block: 0, thorns: 0,
     meleeDmg: 0, rangedDmg: 0, magicDmg: 0, allDmg: 0, crit: 0, cdr: 0, specialDmg: 0, burnDmg: 0, frostPower: 0, arrowSave: 0,
-    miningSpeed: 0, woodSpeed: 0, fishSpeed: 0, luck: 0, gemChance: 0, doubleYield: 0, rareFish: 0, fishEase: 0, burnChance: 0, craftSpeed: 0, nodeSave: 0,
+    miningSpeed: 0, woodSpeed: 0, fishSpeed: 0, luck: 0, gemChance: 0, doubleYield: 0, rareFish: 0, fishEase: 0, burnChance: 0, craftSpeed: 0, nodeSave: 0, potionPower: 0, potionTime: 0,
     xp: 0, skillXp: 0, sell: 0, bagSlots: 0,
   };
 }
@@ -80,6 +82,7 @@ export const STAT_LABEL: Record<StatKey, [string, 'pct' | 'flat' | 'pts']> = {
   miningSpeed: ['mining speed', 'pct'], woodSpeed: ['woodcutting speed', 'pct'], fishSpeed: ['bite speed', 'pct'],
   luck: ['luck', 'pts'], gemChance: ['gem find chance', 'pct'], doubleYield: ['double yield chance', 'pct'], rareFish: ['rare catch chance', 'pct'],
   fishEase: ['catch bar size', 'pct'], burnChance: ['less burnt food', 'pct'], craftSpeed: ['crafting speed', 'pct'], nodeSave: ['chance a hit doesn’t deplete', 'pct'],
+  potionPower: ['potion strength', 'pct'], potionTime: ['elixir duration', 'pct'],
   xp: ['XP', 'pct'], skillXp: ['skill XP', 'pct'], sell: ['vendor prices', 'pct'], bagSlots: ['bag slots', 'flat'],
 };
 

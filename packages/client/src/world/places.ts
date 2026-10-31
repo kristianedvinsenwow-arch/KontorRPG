@@ -95,7 +95,7 @@ export class Places {
 
   private station(s: Station): void {
     const centre = s.id.startsWith('camp') ? { x: 0, z: 0 } : s.id.startsWith('gruben') ? GRUBEN_CAMP : VILLAGE;
-    const foot: Record<string, [number, number]> = { furnace: [2.2, 2.2], anvil: [1.2, 1.2], workbench: [2, 1], stove: [1.4, 1], tanning: [2.2, 1], loom: [1.8, 1.2] };
+    const foot: Record<string, [number, number]> = { furnace: [2.2, 2.2], anvil: [1.2, 1.2], workbench: [2, 1], stove: [1.4, 1], tanning: [2.2, 1], loom: [1.8, 1.2], alchemy: [1.6, 0.9] };
     const g = this.place(s.x, s.z, centre.x, centre.z, foot[s.kind]);
     let h = 1.6;
     if (s.kind === 'furnace') {
@@ -167,6 +167,22 @@ export class Places {
       const wheel = mesh(new THREE.TorusGeometry(0.32, 0.03, 6, 16), M.wood, g); wheel.position.set(1.35, 0.6, 0.1); wheel.rotation.y = Math.PI / 2;
       bx(g, 0.06, 0.6, 0.06, M.darkWood, 1.35, 0.3, 0.1);
       h = 2;
+    } else if (s.kind === 'alchemy') {
+      // A table with a bubbling flask over a burner, bottles and drying herbs.
+      bx(g, 1.5, 0.08, 0.8, M.plank, 0, 0.9, 0);
+      for (const [px, pz] of [[-0.68, -0.33], [0.68, -0.33], [-0.68, 0.33], [0.68, 0.33]]) bx(g, 0.07, 0.9, 0.07, M.darkWood, px, 0.45, pz);
+      const glass = (c: number) => new THREE.MeshStandardMaterial({ color: c, roughness: 0.15, metalness: 0.1, transparent: true, opacity: 0.75, emissive: c, emissiveIntensity: 0.35 });
+      const flask = mesh(new THREE.SphereGeometry(0.13, 10, 8), glass(0x6fd88a), g); flask.position.set(-0.3, 1.12, 0);
+      mesh(new THREE.CylinderGeometry(0.035, 0.04, 0.16, 8), glass(0xd8e8e0), g).position.set(-0.3, 1.3, 0);
+      const burner = this.fire(g, 1.0, 1.2, 3); void burner;
+      g.children.at(-1)!.position.set(-0.3, 1.0, 0);
+      bx(g, 0.18, 0.08, 0.18, M.iron, -0.3, 0.97, 0);
+      [0xd84a3a, 0x4a8ad8, 0xe8c040].forEach((c, i) => { const b = mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.2, 8), glass(c), g); b.position.set(0.15 + i * 0.16, 1.04, -0.18); });
+      // Herbs hung to dry from a rail.
+      for (const sx of [-0.7, 0.7]) bx(g, 0.05, 0.9, 0.05, M.darkWood, sx, 1.35, 0.35);
+      bx(g, 1.45, 0.04, 0.04, M.darkWood, 0, 1.78, 0.35);
+      for (let i = 0; i < 5; i++) { const bunch = mesh(new THREE.ConeGeometry(0.06, 0.25, 5), mat([0x6f9a42, 0x8a9a5a, 0x5f8a3a][i % 3], null), g); bunch.position.set(-0.55 + i * 0.27, 1.62, 0.35); bunch.rotation.x = Math.PI; }
+      h = 2;
     } else if (s.kind === 'stove') {
       bx(g, 1.3, 1.0, 0.9, M.stone, 0, 0.5, 0);
       bx(g, 1.4, 0.1, 1.0, M.dark, 0, 1.05, 0);
@@ -191,7 +207,7 @@ export class Places {
     g.add(c.g);
     const look: Record<string, Parameters<typeof applyGear>[1]> = {
       ingrid: { b: 'leather_backpack' }, mats: { h: 'iron_pickaxe', hd: 'stone_helm' }, sigrid: { h: 'iron_sword', c: 'iron_breastplate' },
-      halvard: { h: 'pine_longbow', c: 'leather_breastplate' }, tor: { h: 'iron_hatchet' }, frida: { h: 'pine_rod' }, ragna: { h: 'birch_frost_staff' },
+      halvard: { h: 'pine_longbow', c: 'leather_breastplate' }, tor: { h: 'iron_hatchet' }, frida: { h: 'pine_rod' }, ragna: { h: 'birch_frost_staff', b: 'small_rucksack' },
       johan: { h: 'steel_pickaxe', hd: 'iron_helm', c: 'leather_breastplate' },
     };
     applyGear(c, look[n.id] ?? {});

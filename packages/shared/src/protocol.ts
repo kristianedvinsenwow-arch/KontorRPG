@@ -112,7 +112,9 @@ export type ServerMsg =
   | { t: 'fish'; state: 'bite'; difficulty: number; seconds: number }
   | { t: 'fish'; state: 'cast' | 'lost' | 'caught' | 'cancel' }
   | { t: 'dead'; by: string }
-  | { t: 'cooldown'; until: number };
+  | { t: 'cooldown'; until: number }
+  /** Potion cooldown: the next potion can be drunk at this time (epoch ms). */
+  | { t: 'potion'; ready: number };
 
 export function encode(msg: ClientMsg | ServerMsg): string {
   return JSON.stringify(msg);

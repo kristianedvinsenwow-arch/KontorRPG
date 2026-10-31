@@ -12,7 +12,7 @@ export type Slot =
   | 'head' | 'shoulders' | 'chest' | 'legs' | 'hands' | 'feet' | 'back'
   | 'mainHand' | 'offHand' | 'ring' | 'neck' | 'pickaxe' | 'hatchet' | 'rod' | 'knife' | 'ammo';
 
-export type ItemKind = 'ore' | 'gem' | 'material' | 'bar' | 'log' | 'ammo' | 'fish' | 'meat' | 'food' | 'junk' | 'tool' | 'weapon' | 'armour' | 'bag' | 'coins' | 'trinket';
+export type ItemKind = 'ore' | 'gem' | 'material' | 'bar' | 'log' | 'ammo' | 'fish' | 'meat' | 'food' | 'herb' | 'potion' | 'junk' | 'tool' | 'weapon' | 'armour' | 'bag' | 'coins' | 'trinket';
 export type WeaponClass = 'sword' | 'longsword' | 'battleaxe' | 'bow' | 'staff' | 'fireStaff' | 'frostStaff';
 export type ArmourType = 'cloth' | 'leather' | 'metal';
 export type ToolKind = 'pickaxe' | 'hatchet' | 'rod' | 'knife';
@@ -47,6 +47,8 @@ export interface ItemDef {
   /** Arrows: extra damage per shot. */
   ammoDmg?: number;
   food?: { heal: number; buff?: { name: string; stats: Partial<Stats>; sec: number } };
+  /** Potions: heal `heal` HP over `sec` seconds (usable mid-fight), and/or an elixir buff. */
+  potion?: { heal?: number; sec?: number; buff?: { name: string; stats: Partial<Stats>; sec: number } };
   /** Fixed bonuses every copy has (e.g. rods make the catch bar bigger). */
   mods?: Partial<Stats>;
   /** What the trading post pays (0 = it won't buy it). */
@@ -217,6 +219,22 @@ add({ id: 'linen', name: 'Linen', kind: 'material', stack: 10, tier: 1, look: 'l
 add({ id: 'cotton_thread', name: 'Cotton thread', kind: 'material', stack: 20, tier: 2, look: 'cotton', sellValue: 1, blurb: 'Spun bog cotton. Weave it into wool-soft cloth.' });
 add({ id: 'cotton_cloth', name: 'Bog-cotton cloth', kind: 'material', stack: 10, tier: 2, look: 'cotton', sellValue: 4, blurb: 'Soft, light and warm. Tier 2 cloth.' });
 add({ id: 'spirit_silk', name: 'Spirit silk', kind: 'material', stack: 10, tier: 3, look: 'silk', sellValue: 10, blurb: 'Bog-cotton cloth woven through with wisp essence. It hums faintly. Tier 3 cloth.' });
+// herbs (herbalism) and potions (alchemy)
+add({ id: 'angelica', name: 'Angelica', kind: 'herb', stack: 20, tier: 1, sellValue: 0, blurb: 'Kvann: a tall, sweet-smelling herb from the meadows and stream banks. Brews healing draughts.' });
+add({ id: 'cloudberry', name: 'Cloudberries', kind: 'herb', stack: 20, tier: 1, sellValue: 1, blurb: 'Multe: amber berries from the wet ground by the lake and in the bog.' });
+add({ id: 'roseroot', name: 'Roseroot', kind: 'herb', stack: 20, tier: 2, sellValue: 2, blurb: 'Rosenrot: a hardy root from rocky high ground. Old folk swear it gives strength.' });
+add({ id: 'grave_moss', name: 'Grave moss', kind: 'herb', stack: 20, tier: 3, sellValue: 3, blurb: 'Pale moss that only grows where the dead walk. Gruben.' });
+add({ id: 'vial', name: 'Empty vial', kind: 'material', stack: 20, sellValue: 0, buyPrice: 2, blurb: 'Ragna sells them. Every potion needs one.' });
+export const POTION_CD_MS = 20_000;
+const POTIONS: [string, string, NonNullable<ItemDef['potion']>, number, string][] = [
+  ['healing_draught', 'Healing draught', { heal: 30, sec: 10 }, 3, 'Heals 30 HP over 10 s. Works mid-fight.'],
+  ['cloudberry_tonic', 'Cloudberry tonic', { heal: 55, sec: 10 }, 6, 'Heals 55 HP over 10 s. Works mid-fight.'],
+  ['grave_draught', 'Grave draught', { heal: 100, sec: 12 }, 12, 'Heals 100 HP over 12 s. Works mid-fight. Tastes like a cellar.'],
+  ['strength_elixir', 'Roseroot elixir', { buff: { name: 'Elixir: roseroot', stats: { meleeDmg: 0.08, rangedDmg: 0.08 }, sec: 900 } }, 8, '+8% melee and ranged damage for 15 min.'],
+  ['mind_elixir', 'Lantern elixir', { buff: { name: 'Elixir: lantern', stats: { magicDmg: 0.1, ward: 2 }, sec: 900 } }, 10, '+10% magic damage and +2 ward for 15 min.'],
+  ['warding_elixir', 'Warding elixir', { buff: { name: 'Elixir: warding', stats: { magicRed: 0.08, armour: 3 }, sec: 900 } }, 10, '+8% magic damage reduction and +3 armour for 15 min.'],
+];
+for (const [id, name, potion, sell, blurb] of POTIONS) add({ id, name, kind: 'potion', stack: 10, potion, sellValue: sell, blurb: `${blurb} Potions share a 20 s cooldown; one elixir at a time.` });
 add({ id: 'goblin_trinket', name: 'Goblin trinket', kind: 'junk', stack: 10, sellValue: 4, blurb: 'Shiny junk goblins hoard.' });
 add({ id: 'bat_wing', name: 'Bat wing', kind: 'material', stack: 10, sellValue: 1, blurb: 'Leathery. Alchemy will want these.' });
 add({ id: 'troll_tooth', name: 'Troll tooth', kind: 'trinket', stack: 5, sellValue: 25, blurb: 'Proof you beat Old Knut.' });
@@ -337,7 +355,7 @@ export const EQUIP_SLOTS: { slot: Slot; label: string }[] = [
 ];
 
 export const KIND_LABEL: Record<ItemKind, string> = {
-  ore: 'Ore', gem: 'Gem', material: 'Material', bar: 'Bar', log: 'Log', ammo: 'Ammunition', fish: 'Raw fish', meat: 'Raw meat', food: 'Food', junk: 'Junk',
+  ore: 'Ore', gem: 'Gem', material: 'Material', bar: 'Bar', log: 'Log', ammo: 'Ammunition', fish: 'Raw fish', meat: 'Raw meat', food: 'Food', herb: 'Herb', potion: 'Potion', junk: 'Junk',
   tool: 'Tool', weapon: 'Weapon', armour: 'Armour', bag: 'Bag', coins: 'Coins', trinket: 'Trinket',
 };
 

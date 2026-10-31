@@ -144,6 +144,11 @@ export function iconFor(id: string): string {
     goblin_leather: () => { poly(g, [[10, 20], [54, 20], [50, 46], [14, 46]], '#6a7a3a'); line(g, '#3a4a1a', 2, [[14, 30], [50, 30]]); },
     goblin_trinket: () => { dot(g, 32, 36, 14, '#c8a040'); dot(g, 32, 36, 6, '#4a8a3a'); line(g, '#6a5434', 2, [[32, 22], [32, 8]]); },
     bat_wing: () => poly(g, [[8, 20], [56, 14], [50, 30], [42, 26], [36, 40], [28, 30], [18, 42]], '#4a3a40'),
+    angelica: () => { line(g, '#6f9a42', 3, [[32, 58], [32, 22]]); for (const dx of [-12, 0, 12]) { line(g, '#6f9a42', 2, [[32, 24], [32 + dx, 14]]); dot(g, 32 + dx, 13, 5, '#e8ecc0'); } },
+    cloudberry: () => { for (const [x, y] of [[24, 34], [38, 30], [32, 44]]) { dot(g, x, y, 9, '#f0a030'); dot(g, x - 3, y - 3, 3, '#f8d080'); } },
+    roseroot: () => { poly(g, [[22, 56], [42, 56], [38, 36], [26, 36]], '#a87848'); for (const dx of [-10, 0, 10]) dot(g, 32 + dx, 26, 7, '#7a9a5a'); dot(g, 32, 18, 5, '#e8c040'); },
+    grave_moss: () => { for (const [x, y, r] of [[22, 40, 10], [38, 36, 12], [30, 48, 9]]) dot(g, x, y, r, '#a8b8b0'); },
+    vial: () => { poly(g, [[28, 10], [36, 10], [36, 24], [46, 40], [42, 56], [22, 56], [18, 40], [28, 24]], 'rgba(220,235,240,.55)'); },
     flax: () => { for (const dx of [-10, 0, 10]) { line(g, '#6f8c42', 3, [[32 + dx, 58], [32 + dx * 0.6, 14]]); dot(g, 32 + dx * 0.6, 12, 5, '#7a9ae8'); } },
     bog_cotton: () => { for (const dx of [-10, 0, 10]) { line(g, '#6f8c42', 3, [[32 + dx, 58], [32 + dx * 0.7, 22]]); dot(g, 32 + dx * 0.7, 18, 8, '#f6f4ec'); } },
     linen_thread: () => { dot(g, 32, 34, 18, '#d8ccb0'); for (const y of [24, 30, 36, 42]) line(g, '#a89c80', 2, [[18, y], [46, y + 2]]); },
@@ -166,6 +171,12 @@ export function iconFor(id: string): string {
   else if (d?.kind === 'log') log(g, a, b);
   else if (d?.kind === 'fish') fish(g, '#8aa0a8', '#5a7078');
   else if (d?.kind === 'food') fish(g, '#c8884a', '#8a5428', true);
+  else if (d?.kind === 'potion') {
+    const c = id === 'healing_draught' ? '#d84a3a' : id === 'cloudberry_tonic' ? '#f0a030' : id === 'grave_draught' ? '#7ab89a' : id === 'strength_elixir' ? '#e8c040' : id === 'mind_elixir' ? '#6fb8ff' : '#b77be8';
+    poly(g, [[28, 8], [36, 8], [36, 22], [48, 38], [44, 56], [20, 56], [16, 38], [28, 22]], 'rgba(220,235,240,.5)');
+    poly(g, [[20, 40], [44, 40], [44, 54], [20, 54]], c, 'transparent');
+    g.fillStyle = '#6a5434'; g.fillRect(27, 4, 10, 6);
+  }
   else if (d?.kind === 'ammo') arrows(g, a);
   else if (d?.tool === 'pickaxe') pick(g, a);
   else if (d?.tool === 'hatchet') hatchet(g, a);

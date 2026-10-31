@@ -7,7 +7,7 @@
 import {
   AOI_CHUNKS, PORTAL_BY_ID, HOMES, homeAt, homeDoorway, homeLabel, type Home, CHUNK_SIZE, IMBUE, INN, ITEMS, MAX_CHAT_LEN, MAX_NAME_LEN,
   NPC_BY_ID, PLAYER_COLORS, PROTOCOL_VERSION, QUEST_BY_ID, RECIPE_BY_ID, START_GOLD, STATION_BY_ID, TICK_HZ, USE_RANGE,
-  EAT_LOCK_MS, addStack, burnChance, knifeRepair, knifeUses, STATIONS, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
+  EAT_LOCK_MS, POTION_CD_MS, addStack, burnChance, knifeRepair, knifeUses, STATIONS, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
   questAvailable, r2, r3, recipeAt, removeItem, resizeBag, respecCost, rollCraftRarity, rollEffects, rollsRarity,
   validateBuild, xpMult, COMBAT_TREES, TALENT_TREE,
   type Buff, type ClientMsg, type HoldSlot, type MobKind, type PlayerState, type ServerMsg, type SkillId, type Slot,
@@ -215,7 +215,7 @@ export class World {
       state, client, lastValid: { x, y, z, at: now }, lastSeq: -1, strikes: 0, lastChatAt: 0, actUntil: 0, act: undefined,
       build: c.build, userId: c.userId, savedAt: now, dirty: false,
       bag, equip: c.equip, gold: c.gold, xp: c.xp, talents: c.talents, respecs: c.respecs, quests: c.quests, lease: c.lease, storage: c.storage,
-      held: c.equip.mainHand ? 'mainHand' : c.equip.pickaxe ? 'pickaxe' : 'mainHand', stats, buffs: [], hp: stats.maxHp, lastHurtAt: 0, dead: false,
+      held: c.equip.mainHand ? 'mainHand' : c.equip.pickaxe ? 'pickaxe' : 'mainHand', stats, buffs: [], hp: stats.maxHp, lastHurtAt: 0, hot: null, potionReadyAt: 0, dead: false,
       lastGatherAt: 0, job: null, nextAttackAt: 0, nextSpecialAt: 0, fishing: null,
     };
     // A guest's or expired lease doesn't hold a room.
@@ -563,7 +563,38 @@ export class World {
     this.sendInv(p);
   }
 
+  /** Drink a potion: healing over time works mid-fight; elixirs buff you (one at a time). Shared cooldown. */
+  private drink(p: ServerPlayer, index: number): void {
+    const s = p.bag[index];
+    const pot = s ? ITEMS[s.id]?.potion : undefined;
+    if (!s || !pot) return;
+    const now = this.now();
+    if (now < p.potionReadyAt) return this.notice(p, `Potions are on cooldown for ${Math.ceil((p.potionReadyAt - now) / 1000)} s.`, 'error');
+    const st = p.stats.scoped.alchemy;
+    s.qty--;
+    if (s.qty <= 0) p.bag[index] = null;
+    p.potionReadyAt = now + POTION_CD_MS;
+    p.client.send({ t: 'potion', ready: Date.now() + POTION_CD_MS });
+    if (pot.heal && pot.sec) {
+      const total = pot.heal * (1 + st.potionPower);
+      p.hot = { perSec: total / pot.sec, until: now + pot.sec * 1000, nextTick: now + 1000 };
+      p.buffs = p.buffs.filter((b) => b.name !== 'Healing');
+      p.buffs.push({ name: 'Healing', stats: {}, until: p.hot.until });
+    }
+    if (pot.buff) {
+      const k = 1 + st.potionPower;
+      const stats = Object.fromEntries(Object.entries(pot.buff.stats).map(([key, v]) => [key, Math.round((v as number) * k * 1000) / 1000]));
+      p.buffs = p.buffs.filter((b) => !b.name.startsWith('Elixir'));
+      p.buffs.push({ name: pot.buff.name, stats, until: now + pot.buff.sec * 1000 * (1 + st.potionTime) });
+    }
+    this.recompute(p);
+    p.client.send({ t: 'buffs', list: p.buffs });
+    p.dirty = true;
+    this.sendInv(p);
+  }
+
   private eat(p: ServerPlayer, index: number): void {
+    if (p.bag[index] && ITEMS[p.bag[index]!.id]?.potion) return this.drink(p, index);
     const s = p.bag[index];
     const food = s ? ITEMS[s.id]?.food : undefined;
     if (!s || !food) return;
@@ -858,6 +889,16 @@ export class World {
       this.stepCraft(p, now);
       stepFishing(this, p, now);
       if (p.buffs.some((b) => b.until <= now)) { this.recompute(p); p.client.send({ t: 'buffs', list: p.buffs }); }
+      // Potion healing ticks once a second, fight or not.
+      if (p.hot) {
+        if (p.dead || now > p.hot.until + 50) p.hot = null;
+        else if (now >= p.hot.nextTick) {
+          p.hot.nextTick += 1000;
+          const before = p.hp;
+          p.hp = Math.min(p.stats.maxHp, p.hp + p.hot.perSec);
+          if (p.hp > before) { p.client.send({ t: 'hit', to: p.state.id, dmg: Math.round((p.hp - before) * 10) / 10, kind: 'heal' }); this.sendHp(p); }
+        }
+      }
       // Out of combat for 8 s: regenerate (1 HP/s + regen stat per 10 s).
       if (!p.dead && p.hp < p.stats.maxHp && now - p.lastHurtAt > 8000 && this.tick % TICK_HZ === 0) {
         p.hp = Math.min(p.stats.maxHp, p.hp + 1 + p.stats.all.regen / 10 + p.stats.maxHp * 0.01);

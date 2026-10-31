@@ -41,12 +41,17 @@ The design doc lives in the claude.ai doc "KontorRPG — Product Design Doc".
 - **Tailoring:** pick flax in the meadow fields and bog cotton by the lake or in Gruben's bog
   (by hand, no tool), spin and weave at a loom (Bjørkvik, Gruben camp), and make cloth armour in
   three tiers: linen, bog cotton, spirit silk (woven with wisp essence). Ingrid no longer sells cloth.
+- **Herbalism and Alchemy:** pick angelica (meadows), cloudberries (lake shore, Gruben's bog),
+  roseroot (high rocky ground) and grave moss (Gruben's dead miners' row and the pit). Brew at an
+  alchemy table (Bjørkvik, Gruben camp) with vials from Ragna: healing draughts, cloudberry tonics
+  and grave draughts heal over time and work mid-fight (hotbar **6**); roseroot, lantern and
+  warding elixirs buff you for 15 minutes (one at a time). Potions share a 20 s cooldown.
 - **Skinning and leather:** smith a skinning knife and wear it, then press E on a dead wolf or
   goblin (bodies stay 30 s) for pelts or goblin skin. Hides can be ruined (stone knife 35%, iron
   18%); either way the body is gone for everyone. Knives wear out — repair them at an anvil; rarer
   knives last longer and give extra pelts. Tan hides at a tanning rack, then make leather armour.
 - **Progression:** skills (mining, smithing, woodcutting, carpentry, leatherworking, tailoring,
-  fishing, cooking) and a
+  herbalism, alchemy, fishing, cooking) and a
   player level from combat. Every level is a talent point; talent trees (**T**) start with a
   three-rank root and branch out to bigger one-point notables. Repeatable daily / twice-weekly /
   weekly quests from NPCs.
@@ -64,7 +69,7 @@ The design doc lives in the claude.ai doc "KontorRPG — Product Design Doc".
 - **World state is saved:** depleted veins and trees, boss and monster respawn timers and items on
   the ground survive server restarts and deploys (Supabase `world_state`, server-only).
 - **Interface:** hotbar (1–5), health and buffs, item tooltips (type, damage, effects, vendor
-  value), right-click to drop, quest tracker, character sheet with skills, gear and bag (**C** / **I** / **K**).
+  value), right-click to drop, quest tracker, character sheet with skills, gear and bag (**C** / **I** / **K**). Hotbar 1–4 tools and weapon, 5 food, 6 healing potion.
 - **Multiplayer:** authoritative Node server checks every move, swing, cast and craft; rolls every
   random thing. Accounts via Supabase magic links; everything is saved for logged-in players.
 - **Office features:** chat, roster, ping, boss key (**F9**), auto-reload after deploys.

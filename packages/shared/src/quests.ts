@@ -38,6 +38,9 @@ export const QUESTS: QuestDef[] = [
   { id: 'johan_lynx', npc: 'johan', name: 'Lynx furs', period: 'daily', text: 'Nights are cold up here. Three lynx pelts, please.', need: { item: 'lynx_pelt', qty: 3 }, reward: { gold: 30, xp: ['leatherworking', 500] } },
   { id: 'johan_wisps', npc: 'johan', name: 'Lanterns in the bog', period: 'daily', text: 'Those lights lead folk into the bog. Bring me 4 wisp essences.', need: { item: 'wisp_essence', qty: 4 }, reward: { gold: 28, xp: ['combat', 700] } },
   { id: 'johan_king', npc: 'johan', name: 'The Mine King', period: 'weekly', text: 'The old foreman never left the pit. He’s the Mine King now. End it.', need: { kill: 'mine_king', qty: 1 }, reward: { gold: 220, xp: ['combat', 4000] } },
+  { id: 'ragna_angelica', npc: 'ragna', name: 'Kvann for the pot', period: 'daily', text: 'Pick me 10 angelica from the meadows. Mind the wolves.', need: { item: 'angelica', qty: 10 }, reward: { gold: 14, xp: ['herbalism', 260] } },
+  { id: 'ragna_draughts', npc: 'ragna', name: 'Draughts for the lodge', period: 'twice-weekly', text: 'Hilde wants healing draughts for her guests. Brew me 5.', need: { item: 'healing_draught', qty: 5 }, reward: { gold: 30, xp: ['alchemy', 500] } },
+  { id: 'ragna_moss', npc: 'ragna', name: 'Moss from the dead', period: 'weekly', text: 'Grave moss grows where the draugs walk in Gruben. Bring me 6.', need: { item: 'grave_moss', qty: 6 }, reward: { gold: 70, xp: ['herbalism', 1500] } },
   { id: 'tor_birch', npc: 'tor', name: 'Firewood', period: 'daily', text: 'Ten birch logs for the lodge’s fires.', need: { item: 'birch_log', qty: 10 }, reward: { gold: 10, xp: ['woodcutting', 120] } },
   { id: 'tor_pine', npc: 'tor', name: 'Roof beams', period: 'weekly', text: 'The lodge roof needs new beams: 10 pine logs.', need: { item: 'pine_log', qty: 10 }, reward: { gold: 45, xp: ['woodcutting', 600] } },
 ];

@@ -58,6 +58,10 @@ export function itemTip(s: Stack, sellMult = 1): HTMLElement[] {
     if (left) out.push(row(formatStat(k, left), left < 0 ? 'tneg' : 'tbase'));
   }
   for (const [k, v] of s.fx ?? []) out.push(row(formatStat(k, v), 'tfx'));
+  if (d.potion) {
+    if (d.potion.heal) out.push(row(`Drink: heals ${d.potion.heal} HP over ${d.potion.sec} s, even mid-fight`, 'tmain'));
+    if (d.potion.buff) out.push(row(`${d.potion.buff.name}, ${Math.round(d.potion.buff.sec / 60)} min: ${Object.entries(d.potion.buff.stats).map(([k, v]) => formatStat(k as StatKey, v as number)).join(', ')}`, 'tfx'));
+  }
   if (d.food) {
     out.push(row(`Eat: heals ${d.food.heal} HP`, 'tmain'));
     if (d.food.buff) out.push(row(`${d.food.buff.name}, ${Math.round(d.food.buff.sec / 60)} min: ${Object.entries(d.food.buff.stats).map(([k, v]) => formatStat(k as StatKey, v as number)).join(', ')}`, 'tfx'));

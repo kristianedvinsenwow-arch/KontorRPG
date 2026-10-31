@@ -67,6 +67,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
       attachTip(cell, () => itemTip(s, sellMult()));
       const actions: [string, () => void][] = [];
       if (d?.food) actions.push(['Eat', () => send({ t: 'eat', index: i })]);
+      if (d?.potion) actions.push(['Drink', () => send({ t: 'eat', index: i })]);
       if (d?.slot) actions.push(['Equip', () => send({ t: 'equip', index: i })]);
       if (mode.kind === 'shop' && d?.sellValue) { actions.push(['Sell one', () => send({ t: 'sell', npc: mode.npc, index: i, qty: 1 })]); if (s.qty > 1) actions.push([`Sell all ${s.qty}`, () => send({ t: 'sell', npc: mode.npc, index: i, qty: s.qty })]); }
       if (mode.kind === 'storage') actions.push([s.qty > 1 ? `Put all ${s.qty} in chest` : 'Put in chest', () => send({ t: 'storage', op: 'put', index: i, qty: s.qty })]);
@@ -76,7 +77,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
       cell.onclick = (e) => {
         if (mode.kind === 'shop' && d?.sellValue) return send({ t: 'sell', npc: mode.npc, index: i, qty: e.shiftKey ? s.qty : 1 });
         if (mode.kind === 'storage') return send({ t: 'storage', op: 'put', index: i, qty: s.qty });
-        if (d?.food) return send({ t: 'eat', index: i });
+        if (d?.food || d?.potion) return send({ t: 'eat', index: i });
         if (d?.slot) return send({ t: 'equip', index: i });
         contextMenu(e, actions);
       };
@@ -289,7 +290,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     }
     if (groups.length > 1) body.append(tabs);
     body.append(list, goldLine(g));
-    return [header(st.name, { furnace: 'Smelt ore into bars', anvil: 'Shape stone, smith weapons and metal armour', workbench: 'Carpentry: shafts, arrows, bows, staffs, rods', campfire: 'Cook your catch', stove: 'Cook your catch (burns less)', tanning: 'Leatherworking: tan hides, make leather armour', loom: 'Tailoring: spin, weave, make cloth armour' }[st.kind] ?? '', 'E'), body];
+    return [header(st.name, { furnace: 'Smelt ore into bars', anvil: 'Shape stone, smith weapons and metal armour', workbench: 'Carpentry: shafts, arrows, bows, staffs, rods', campfire: 'Cook your catch', stove: 'Cook your catch (burns less)', tanning: 'Leatherworking: tan hides, make leather armour', loom: 'Tailoring: spin, weave, make cloth armour', alchemy: 'Alchemy: brew potions and elixirs (vials from Ragna)' }[st.kind] ?? '', 'E'), body];
   }
 
   // ---------------------------------------------------------------- NPC dialogs

@@ -4,7 +4,7 @@
  * each player level gives a talent point to spend in the melee, ranged, magic or defence trees.
  */
 
-export type SkillId = 'mining' | 'smithing' | 'woodcutting' | 'carpentry' | 'leatherworking' | 'tailoring' | 'fishing' | 'cooking' | 'combat';
+export type SkillId = 'mining' | 'smithing' | 'woodcutting' | 'carpentry' | 'leatherworking' | 'tailoring' | 'herbalism' | 'alchemy' | 'fishing' | 'cooking' | 'combat';
 
 export const SKILLS: { id: SkillId; name: string; live: boolean; blurb: string }[] = [
   { id: 'combat', name: 'Player level', live: true, blurb: 'From fighting. Each level gives a talent point for melee, ranged, magic or defence, and +3 max HP.' },
@@ -14,11 +14,13 @@ export const SKILLS: { id: SkillId; name: string; live: boolean; blurb: string }
   { id: 'carpentry', name: 'Carpentry', live: true, blurb: 'Workbench: bows, staffs, rods, arrow shafts and arrows.' },
   { id: 'leatherworking', name: 'Leatherworking', live: true, blurb: 'Tanning rack: tan pelts and goblin skins, make leather armour. Skin wolves and goblins with a skinning knife.' },
   { id: 'tailoring', name: 'Tailoring', live: true, blurb: 'Pick flax and bog cotton, spin and weave at a loom, and make cloth armour (strong against magic).' },
+  { id: 'herbalism', name: 'Herbalism', live: true, blurb: 'Pick angelica, cloudberries, roseroot and grave moss by hand.' },
+  { id: 'alchemy', name: 'Alchemy', live: true, blurb: 'Brew potions at an alchemy table: healing over time (usable mid-fight) and elixirs that buff you.' },
   { id: 'fishing', name: 'Fishing', live: true, blurb: 'Cast at the lake, then keep the fish in the bar.' },
   { id: 'cooking', name: 'Cooking', live: true, blurb: 'Campfires and the inn stove. Food heals and gives buffs.' },
 ];
 
-export const COMING_SKILLS = ['Herbalism', 'Alchemy', 'Hunting', 'Enchanting'];
+export const COMING_SKILLS = ['Hunting', 'Enchanting'];
 
 export const MAX_LEVEL = 60;
 
