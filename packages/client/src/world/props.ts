@@ -5,7 +5,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CHUNK_SIZE, VEINS, inBounds, WATER_LEVEL, heightAt, mulberry32, keepClear, pathDist, treesInChunk } from '@kontor/shared';
+import { CHUNK_SIZE, HOMES, INN, VEINS, inBounds, WATER_LEVEL, heightAt, mulberry32, keepClear, pathDist, treesInChunk } from '@kontor/shared';
 import { registerTrees } from './trees.js';
 import { canvasTex, TEX } from '../engine/procgen.js';
 
@@ -86,6 +86,12 @@ function bushGeo(seed: number, berries: boolean): THREE.BufferGeometry {
 export function rockGeo(seed: number, flat: number): THREE.BufferGeometry {
   const g = new THREE.IcosahedronGeometry(0.8, 1).scale(1, flat, 1);
   return faceted(g, seed, 0.38, new THREE.Color(0x6c6a64), new THREE.Color(0x9a978f), -0.5, 0.6, new THREE.Color(0x667a3c));
+}
+
+/** Inside a building (the lodge, cottages, huts), where nothing should grow. */
+function underRoof(x: number, z: number): boolean {
+  if (Math.abs(x - INN.x) < INN.w / 2 + 0.4 && Math.abs(z - INN.z) < INN.d / 2 + 0.4) return true;
+  return HOMES.some((h) => h.house && Math.hypot(x - h.house.x, z - h.house.z) < 2.8);
 }
 
 /** A tuft: three crossed quads textured with grass blades; uv.y drives the wind (tips move, roots don't). */
@@ -239,6 +245,7 @@ export function buildProps(cx: number, cz: number, colliders: Collider[], dense:
     if (y < WATER_LEVEL + 0.35) { if (y > WATER_LEVEL - 0.7 && rng() < 0.5) add('reed', x, y - 0.05, z, 0.8 + rng() * 0.5, rng() * 3, 1 + rng() * 0.6, 0.8 + rng() * 0.3); continue; }
     if (normalAt(x, z).y < 0.86) continue;
     if (pathDist(x, z) < 1.1) continue; // keep the paths clear
+    if (underRoof(x, z)) continue; // no grass through floors
     const s = 0.7 + rng() * 0.7, ry = rng() * Math.PI;
     const patch = Math.sin(x * 0.13 + z * 0.07) * Math.cos(z * 0.11 - x * 0.05);
     const r = rng();

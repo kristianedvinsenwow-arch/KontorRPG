@@ -786,7 +786,9 @@ export class World {
     this.sendLease(p);
     this.broadcast({ t: 'rooms', taken: this.roomNames() });
     const date = new Date(until).toLocaleDateString('en-GB', { timeZone: 'Europe/Oslo', day: 'numeric', month: 'short' });
-    this.notice(p, `The ${homeLabel(target).toLowerCase()} is yours until ${date}. Your chest is by the door — rest there for a Rested bonus.`);
+    this.notice(p, target.kind === 'room'
+      ? `Room ${target.id + 1} is yours until ${date}. Only you can open its door; your chest is at the foot of the bed, and resting in bed gives a Rested bonus.`
+      : `The ${homeLabel(target).toLowerCase()} is yours until ${date}. Your chest is by the door — rest there for a Rested bonus.`);
   }
 
   /** Sleep at your own door: Rested (more XP, faster regen) for 30 minutes. */
