@@ -307,7 +307,7 @@ export const STATIONS: Station[] = [
   { id: 'camp_tanning', kind: 'tanning', name: 'Tanning rack', x: -4, z: -12.5, r: 1 },
   { id: 'village_tanning', kind: 'tanning', name: 'Tanning rack', x: V.x + 13, z: V.z + 6, r: 1 },
   { id: 'village_loom', kind: 'loom', name: 'Loom', x: V.x + 7, z: V.z + 1, r: 1 },
-  { id: 'village_alchemy', kind: 'alchemy', name: 'Alchemy table', x: V.x - 7.5, z: V.z + 13, r: 1 },
+  { id: 'village_alchemy', kind: 'alchemy', name: 'Alchemy table', x: V.x - 1, z: V.z + 13.5, r: 1 },
   { id: 'gruben_alchemy', kind: 'alchemy', name: 'Alchemy table', x: G.x - 10, z: G.z + 52, r: 1 },
   { id: 'gruben_loom', kind: 'loom', name: 'Loom', x: G.x - 6, z: G.z + 61, r: 1 },
   // Gruben's arrival camp: a fire, a forge and a rack, so you can work what you find up here.
