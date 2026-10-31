@@ -10,9 +10,9 @@ import { addStats, emptyStats, type StatKey, type Stats } from './stats.js';
 
 export type Slot =
   | 'head' | 'shoulders' | 'chest' | 'legs' | 'hands' | 'feet' | 'back'
-  | 'mainHand' | 'offHand' | 'ring' | 'neck' | 'pickaxe' | 'hatchet' | 'rod' | 'knife' | 'ammo';
+  | 'mainHand' | 'offHand' | 'ring' | 'neck' | 'pickaxe' | 'hatchet' | 'rod' | 'knife' | 'ammo' | 'mount';
 
-export type ItemKind = 'ore' | 'gem' | 'material' | 'bar' | 'log' | 'ammo' | 'fish' | 'meat' | 'food' | 'herb' | 'potion' | 'junk' | 'tool' | 'weapon' | 'armour' | 'bag' | 'coins' | 'trinket';
+export type ItemKind = 'ore' | 'gem' | 'material' | 'bar' | 'log' | 'ammo' | 'fish' | 'meat' | 'food' | 'herb' | 'potion' | 'mount' | 'junk' | 'tool' | 'weapon' | 'armour' | 'bag' | 'coins' | 'trinket';
 export type WeaponClass = 'sword' | 'longsword' | 'battleaxe' | 'bow' | 'staff' | 'fireStaff' | 'frostStaff';
 export type ArmourType = 'cloth' | 'leather' | 'metal';
 export type ToolKind = 'pickaxe' | 'hatchet' | 'rod' | 'knife';
@@ -56,6 +56,8 @@ export interface ItemDef {
   buyPrice?: number;
   /** Skinning knives: chance a skinning attempt ruins the hide, and uses before it breaks. */
   knife?: { fail: number; uses: number };
+  /** Mounts: speed multiplier while riding, and coat colours for the model. */
+  mount?: { mult: number; coat: number; mane: number };
   /** Only ever exists at this rarity (boss uniques). */
   fixedRarity?: Rarity;
   blurb: string;
@@ -326,6 +328,10 @@ for (const j of JEWELS) {
 // bags and boss uniques
 add({ id: 'small_rucksack', name: 'Small rucksack', kind: 'bag', stack: 1, slot: 'back', bagSlots: 4, sellValue: 10, buyPrice: 40, blurb: '+4 bag slots.' });
 add({ id: 'leather_backpack', name: 'Leather backpack', kind: 'bag', stack: 1, slot: 'back', bagSlots: 8, sellValue: 30, buyPrice: 120, blurb: '+8 bag slots.' });
+// mounts (wear one in the mount slot, press R to ride)
+add({ id: 'fjord_horse', name: 'Fjord horse', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.6, coat: 0xc8a878, mane: 0x3a2a1c }, sellValue: 60, buyPrice: 250, blurb: 'A sturdy dun Fjord horse with a striped mane. Ride at 160% speed. Not in the mine or indoors.' });
+add({ id: 'black_fjord_horse', name: 'Black Fjord horse', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.75, coat: 0x2a2624, mane: 0xd8d0c0 }, sellValue: 120, buyPrice: 600, blurb: 'Rare, dark and quick. Ride at 175% speed.' });
+add({ id: 'dovre_stallion', name: 'Dovre stallion', kind: 'mount', stack: 1, slot: 'mount', fixedRarity: 4, mount: { mult: 2.0, coat: 0x8a9298, mane: 0xeef2f6 }, sellValue: 300, blurb: 'A grey giant of a horse that walked out of the Mine King’s pit. Ride at 200% speed.' });
 add({ id: 'mine_kings_ring', name: 'Mine King’s signet', kind: 'trinket', stack: 1, slot: 'ring', fixedRarity: 4, mods: { maxHp: 8, allDmg: 0.06, miningSpeed: 0.1, gemChance: 0.3 }, sellValue: 90, blurb: 'Heavy, cold silver. The Mine King wore it for three hundred years.' });
 add({ id: 'trolltooth_necklace', name: 'Trolltooth necklace', kind: 'trinket', stack: 1, slot: 'neck', fixedRarity: 4, mods: { maxHp: 10, meleeDmg: 0.06, luck: 5 }, sellValue: 60, blurb: 'Old Knut’s own. Rarely, he drops it.' });
 
@@ -352,10 +358,11 @@ export const EQUIP_SLOTS: { slot: Slot; label: string }[] = [
   { slot: 'hatchet', label: 'Hatchet' },
   { slot: 'rod', label: 'Rod' },
   { slot: 'knife', label: 'Skinning knife' },
+  { slot: 'mount', label: 'Mount' },
 ];
 
 export const KIND_LABEL: Record<ItemKind, string> = {
-  ore: 'Ore', gem: 'Gem', material: 'Material', bar: 'Bar', log: 'Log', ammo: 'Ammunition', fish: 'Raw fish', meat: 'Raw meat', food: 'Food', herb: 'Herb', potion: 'Potion', junk: 'Junk',
+  ore: 'Ore', gem: 'Gem', material: 'Material', bar: 'Bar', log: 'Log', ammo: 'Ammunition', fish: 'Raw fish', meat: 'Raw meat', food: 'Food', herb: 'Herb', potion: 'Potion', mount: 'Mount', junk: 'Junk',
   tool: 'Tool', weapon: 'Weapon', armour: 'Armour', bag: 'Bag', coins: 'Coins', trinket: 'Trinket',
 };
 

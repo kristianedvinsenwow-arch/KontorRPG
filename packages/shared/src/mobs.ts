@@ -63,7 +63,7 @@ export const MOBS: Record<MobKind, MobDef> = {
     drops: [{ item: 'silver_ore', chance: 0.5, qty: [2, 4] }, { item: 'coal', chance: 0.5, qty: [2, 5] }, { item: 'garnet', chance: 0.1, qty: [1, 1] }, { gear: 3, chance: 0.12 }],
     respawnSec: [240, 360], slam: { every: 12, r: 4, mult: 1.6 }, scale: 1.7 },
   mine_king: { kind: 'mine_king', name: 'The Mine King', level: 22, hp: 1600, dmg: 22, interval: 2.4, range: 3.4, speed: 3.4, aggro: 14, armour: 26, ward: 14, xp: 2500, gold: [100, 200],
-    drops: [{ item: 'kings_crown', chance: 1, qty: [1, 1] }, { gear: 3, chance: 0.6, legendary: 0.05 }, { gear: 4, chance: 0.25, legendary: 0.05 }, { item: 'mine_kings_ring', chance: 0.04, qty: [1, 1] }, { item: 'garnet', chance: 0.4, qty: [1, 2] }],
+    drops: [{ item: 'kings_crown', chance: 1, qty: [1, 1] }, { gear: 3, chance: 0.6, legendary: 0.05 }, { gear: 4, chance: 0.25, legendary: 0.05 }, { item: 'mine_kings_ring', chance: 0.04, qty: [1, 1] }, { item: 'dovre_stallion', chance: 0.02, qty: [1, 1] }, { item: 'garnet', chance: 0.4, qty: [1, 2] }],
     respawnSec: [120 * 60, 180 * 60], boss: true, slam: { every: 9, r: 5.5, mult: 2.2 }, scale: 1.6 },
 };
 

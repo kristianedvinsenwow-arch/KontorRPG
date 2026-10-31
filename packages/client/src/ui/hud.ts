@@ -1,5 +1,5 @@
 /** HUD: location, connection, who's online, toasts, chat. Plain DOM; rendered from the stores. */
-import { regionAt } from '@kontor/shared';
+import { WEATHER_LABEL, daylight, regionAt, type WeatherKind } from '@kontor/shared';
 import { PLAYER_COLORS } from '@kontor/shared';
 import { netStore, uiStore } from '../state/store.js';
 
@@ -9,6 +9,8 @@ export function initHud(onSendChat: (text: string) => void) {
   const hud = $('hud');
   const coords = $('coords');
   const whereName = document.querySelector('#where b') as HTMLElement;
+  const clock = document.createElement('span'); clock.className = 'clock';
+  document.getElementById('where')!.append(clock);
   const netdot = $('netdot'), nettext = $('nettext');
   const roster = $('roster');
   const toasts = $('toasts');
@@ -76,6 +78,13 @@ export function initHud(onSendChat: (text: string) => void) {
       d.textContent = text;
       toasts.append(d);
       setTimeout(() => d.remove(), ms);
+    },
+    /** Oslo clock and the weather, next to the place name. */
+    setClock(ms: number, weather: WeatherKind | null) {
+      const t = new Date(ms).toLocaleTimeString('en-GB', { timeZone: 'Europe/Oslo', hour: '2-digit', minute: '2-digit' });
+      const icon = weather ? { clear: daylight(ms) > 0.3 ? '☀' : '☾', cloudy: '☁', rain: '🌧', fog: '🌫', snow: '❄' }[weather] : '';
+      const text = `${t}${weather ? ` · ${icon} ${WEATHER_LABEL[weather]}` : ''}`;
+      if (clock.textContent !== text) clock.textContent = text;
     },
     frame(x: number, z: number) {
       coords.textContent = `${x.toFixed(0)}, ${z.toFixed(0)}`;

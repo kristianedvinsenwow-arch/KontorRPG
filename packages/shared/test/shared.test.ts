@@ -245,3 +245,18 @@ test('trees exist and the lake is fishable', () => {
   assert.ok(TREE_BY_ID.size > 100);
   assert.ok(isFishable(LAKE.x, LAKE.z));
 });
+
+import { sunAt as sunAt2, daylight as daylight2, weatherAt as weatherAt2 } from '../src/index.js';
+test('sky: the sun is high at noon and down at night in Oslo; weather is the same for everyone and snowless in the valley', () => {
+  const noon = Date.parse('2026-06-21T11:20:00Z'), midnight = Date.parse('2026-12-21T23:00:00Z');
+  assert.ok(sunAt2(noon).y > 0.7 && sunAt2(noon).z > 0, 'high and to the south');
+  assert.equal(daylight2(midnight), 0);
+  assert.equal(daylight2(noon), 1);
+  for (let i = 0; i < 200; i++) {
+    const ms = 1_800_000_000_000 + i * 1_000_000;
+    assert.deepEqual(weatherAt2('valley', ms), weatherAt2('valley', ms));
+    assert.notEqual(weatherAt2('valley', ms).kind, 'snow');
+    assert.notEqual(weatherAt2('gruben', ms).kind, 'rain');
+  }
+  assert.equal(weatherAt2('cave', 0).rain, 0);
+});

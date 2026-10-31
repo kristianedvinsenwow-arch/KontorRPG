@@ -6,7 +6,7 @@
 import './styles.css';
 import * as THREE from 'three';
 import {
-  CAST_RANGE, HOMES, HOUSES, PORTALS, regionAt, homeAt, homeDoorway, innRoom, toWorld, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS,
+  CAST_RANGE, daylight, sunAt, weatherAt, HOMES, HOUSES, PORTALS, regionAt, homeAt, homeDoorway, innRoom, toWorld, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS,
   STATIONS, TREE_BY_ID, TREE_TYPES, USE_RANGE, VEIN_BY_ID, VEIN_TYPES, WATER_LEVEL,
   MOBS, groundAt, attackInterval, attackRange, computeStats, faceOf, inCaveRegion, isFishable, levelFromXp, r2, r3, swingSeconds, weaponClass,
   PICK_SEC, PLANT_BY_ID, PLANT_TYPES, type Plant, type CharacterBuild, type HoldSlot, type MobState, type PlayerStats, type Tree, type Vein,
@@ -20,6 +20,8 @@ import { gearFromEquip } from './entities/held.js';
 import { Mobs } from './entities/mobs.js';
 import { Veins } from './world/veins.js';
 import { Plants } from './world/plants.js';
+import { Precip } from './world/precip.js';
+import { makeHorse, animateHorse, SADDLE_Y, type Horse } from './entities/horse.js';
 import { Places } from './world/places.js';
 import { CaveView } from './world/cave.js';
 import { Fx } from './world/fx.js';
@@ -51,6 +53,7 @@ terrain.dense = settingsStore.get().quality !== 'low';
 terrain.update(0, 0, 99); // build the spawn area up front
 const veins = new Veins(scene);
 const plants = new Plants(scene);
+const precip = new Precip(scene);
 const places = new Places(scene);
 const caveView = new CaveView(scene);
 const mobs = new Mobs(scene);
@@ -70,6 +73,10 @@ let myId: string | null = null;
 let myBuild: CharacterBuild | null = null;
 let stats: PlayerStats | null = null;
 let eyeHeight = EYE_HEIGHT;
+/** Your horse while riding (drawn under the first-person camera), and how far the camera is lifted. */
+let myHorse: Horse | null = null, mountLift = 0;
+/** Console/debug: shift the sky clock (ms) or force a weather. */
+const debugSky: { offset: number; weather: ReturnType<typeof weatherAt> | null } = { offset: 0, weather: null };
 let seq = 0;
 let lastSent = { x: 0, y: 0, z: 0, yaw: 0, pitch: 0, at: 0 };
 let castAt: THREE.Vector3 | null = null;
@@ -161,6 +168,7 @@ input.onKey((code) => {
   const n = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(code);
   if (n >= 0) return net.send({ t: 'hold', slot: (['mainHand', 'pickaxe', 'hatchet', 'rod'] as HoldSlot[])[n] });
   if (code === 'Digit5') { const g = gameStore.get(); const i = g.bag.findIndex((s) => s && ITEMS[s.id]?.food); if (i >= 0) net.send({ t: 'eat', index: i }); }
+  if (code === 'KeyR') { if (!gameStore.get().equip.mount) hud.toast('No mount — Eirik the stablemaster in Bjørkvik sells horses.', 2200, 'error'); else net.send({ t: 'mount' }); return; }
   if (code === 'Digit6') { const g = gameStore.get(); const i = g.bag.findIndex((s) => s && ITEMS[s.id]?.potion?.heal); if (i >= 0) net.send({ t: 'eat', index: i }); else hud.toast('No healing potion in your bag.', 1500, 'error'); }
 });
 document.getElementById('closeChar')!.onclick = () => { uiStore.set({ panel: 'none' }); input.lock(); };
@@ -222,6 +230,11 @@ net.on((msg) => {
       input.unlock();
       break;
     case 'potion': gameStore.set({ potionReady: msg.ready }); break;
+    case 'mounted':
+      gameStore.set({ mounted: msg.id });
+      if (myHorse) { scene.remove(myHorse.g); myHorse = null; }
+      if (msg.id) { myHorse = makeHorse(msg.id); scene.add(myHorse.g); }
+      break;
     case 'cooldown': gameStore.set({ specialReady: msg.until }); break;
     case 'gain':
       if (msg.item) {
@@ -556,20 +569,34 @@ function frame() {
     places.updateDoors(dt, me.x, me.z, myRoom());
     const colliders = terrain.collidersNear(me.x, me.z).concat(veins.collidersNear(me.x, me.z), places.colliders);
     const moveIn = playing && !fishing.active ? input.axes() : { forward: 0, right: 0, jump: false };
-    stepPlayer(me, moveIn, colliders, dt, stats?.all.moveSpeed ?? 0);
+    const mounted = gameStore.get().mounted;
+    stepPlayer(me, moveIn, colliders, dt, stats?.all.moveSpeed ?? 0, mounted ? ITEMS[mounted]?.mount?.mult ?? 1 : 1);
+    mountLift += ((mounted ? SADDLE_Y - 0.88 : 0) - mountLift) * Math.min(1, dt * 6);
+    if (myHorse) {
+      myHorse.g.position.set(me.x, me.y, me.z);
+      myHorse.g.rotation.y = me.yaw;
+      animateHorse(myHorse, me.speed, dt);
+    }
     const g = gameStore.get();
     const style = weaponClass(g.equip.mainHand);
     const act = now < swingUntil ? (spinT > 0 ? 'spin' : g.held === 'mainHand' ? (style === 'bow' ? 'shoot' : style === 'fireStaff' || style === 'frostStaff' ? 'cast' : 'swing') : 'swing') : undefined;
     sendInput(now, act);
     const under = inCaveRegion(me.x, me.z);
     gfx.setUnderground(under);
-    gfx.setRegion(regionAt(me.x, me.z));
+    const region = regionAt(me.x, me.z);
+    gfx.setRegion(region);
+    // Time of day and weather (the same for everyone: worked out from the clock).
+    const ms = Date.now() + debugSky.offset, sunDir = sunAt(ms), day = daylight(ms), weather = debugSky.weather ?? weatherAt(region, ms);
+    gfx.setAtmosphere(sunDir, day, weather);
+    precip.update(dt, cam.position, weather.rain, weather.snow, under || homeAt(me.x, me.z) >= 0);
+    places.setNight(1 - day);
+    hud.setClock(ms, under ? null : weather.kind);
     caveView.setVisible(under);
     if (!under) terrain.update(me.x, me.z);
 
     walkPh += dt * me.speed * 1.6;
     const bob = me.onGround ? Math.min(1, me.speed / 5) : 0;
-    cam.position.set(me.x, me.y + eyeHeight + Math.abs(Math.sin(walkPh)) * 0.04 * bob * (eyeHeight / EYE_HEIGHT), me.z);
+    cam.position.set(me.x, me.y + eyeHeight + mountLift + Math.abs(Math.sin(walkPh)) * 0.04 * bob * (eyeHeight / EYE_HEIGHT), me.z);
     cam.rotation.set(me.pitch, me.yaw + (spinT > 0 ? (1 - spinT / 0.45) * Math.PI * 2 : 0), 0, 'YXZ');
     spinT = Math.max(0, spinT - dt);
     gfx.follow(cam.position);
@@ -618,5 +645,5 @@ frame();
 // Exposed for automated smoke tests and debugging in the console.
 (window as any).__kontor = {
   get me() { return me; }, get build() { return myBuild; }, get aimed() { return aimed; }, get near() { return near; }, get stats() { return stats; },
-  trees: TREE_BY_ID, remotes, net, terrain, veins, mobs, places, fx, viewmodel, netStore, uiStore, gameStore, settingsStore, creatorPreview, preview, auth, openPanel, fishing, use, special,
+  trees: TREE_BY_ID, remotes, net, terrain, veins, mobs, places, debugSky, fx, viewmodel, netStore, uiStore, gameStore, settingsStore, creatorPreview, preview, auth, openPanel, fishing, use, special,
 };

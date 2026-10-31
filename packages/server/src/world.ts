@@ -5,7 +5,7 @@
  * It never touches sockets: each player has a `send` function, so tests drive it without a network.
  */
 import {
-  AOI_CHUNKS, PORTAL_BY_ID, HOMES, homeAt, homeDoorway, homeLabel, type Home, CHUNK_SIZE, IMBUE, INN, ITEMS, MAX_CHAT_LEN, MAX_NAME_LEN,
+  AOI_CHUNKS, PORTAL_BY_ID, HOMES, maxSpeed, regionAt, homeAt, homeDoorway, homeLabel, type Home, CHUNK_SIZE, IMBUE, INN, ITEMS, MAX_CHAT_LEN, MAX_NAME_LEN,
   NPC_BY_ID, PLAYER_COLORS, PROTOCOL_VERSION, QUEST_BY_ID, RECIPE_BY_ID, START_GOLD, STATION_BY_ID, TICK_HZ, USE_RANGE,
   EAT_LOCK_MS, POTION_CD_MS, addStack, burnChance, knifeRepair, knifeUses, STATIONS, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
   questAvailable, r2, r3, recipeAt, removeItem, resizeBag, respecCost, rollCraftRarity, rollEffects, rollsRarity,
@@ -129,10 +129,11 @@ export class World {
     switch (msg.t) {
       case 'input': return this.input(p, msg);
       case 'chat': return this.chat(p, msg.text);
-      case 'mine': return gather(this, p, 'mine', msg.node);
-      case 'chop': return gather(this, p, 'chop', msg.node);
-      case 'pick': return gather(this, p, 'pick', msg.node);
-      case 'cast': return cast(this, p, msg.x, msg.z);
+      case 'mount': return this.toggleMount(p);
+      case 'mine': return this.dismount(p), gather(this, p, 'mine', msg.node);
+      case 'chop': return this.dismount(p), gather(this, p, 'chop', msg.node);
+      case 'pick': return this.dismount(p), gather(this, p, 'pick', msg.node);
+      case 'cast': return this.dismount(p), cast(this, p, msg.x, msg.z);
       case 'reel': return reel(this, p, msg.ok);
       case 'craft': return this.craft(p, msg.recipe, msg.count, msg.station);
       case 'cancelCraft': p.job = null; return this.sendJob(p);
@@ -143,7 +144,7 @@ export class World {
       case 'sell': return this.sell(p, msg.npc, msg.index, msg.qty);
       case 'drop': return this.drop(p, msg.index, msg.qty);
       case 'pickup': return this.pickup(p, msg.id);
-      case 'attack': return attack(this, p, msg.target, msg.special);
+      case 'attack': return this.dismount(p), attack(this, p, msg.target, msg.special);
       case 'eat': return this.eat(p, msg.index);
       case 'talent': return this.learn(p, msg.tree, msg.node);
       case 'respec': return this.respec(p, msg.tree);
@@ -277,12 +278,37 @@ export class World {
     return amount;
   }
 
+  /** Mount up or get off. Not in the mine, indoors, mid-fight or while dead. */
+  private toggleMount(p: ServerPlayer): void {
+    if (p.state.mnt) return this.dismount(p, true);
+    const m = p.equip.mount, def = m ? ITEMS[m.id] : undefined;
+    if (!m || !def?.mount) return this.notice(p, 'You have no mount. Eirik the stablemaster in Bjørkvik sells horses.', 'error');
+    if (regionAt(p.state.x, p.state.z) === 'cave') return this.notice(p, 'No room for a horse down here.', 'error');
+    if (homeAt(p.state.x, p.state.z) >= 0) return this.notice(p, 'Not indoors!', 'error');
+    if (this.now() - p.lastHurtAt < 5000) return this.notice(p, 'You can’t mount up mid-fight.', 'error');
+    p.state.mnt = m.id;
+    p.job = null;
+    this.recompute(p);
+    p.client.send({ t: 'mounted', id: m.id });
+  }
+
+  /** Get off your horse (attacking, gathering, getting hit, going underground or indoors). */
+  dismount(p: ServerPlayer, quiet = false): void {
+    if (!p.state.mnt) return;
+    p.state.mnt = undefined;
+    this.recompute(p);
+    p.client.send({ t: 'mounted', id: null });
+    void quiet;
+  }
+
   /** Recompute stats after gear, talents, levels or buffs change. */
   recompute(p: ServerPlayer): void {
     const now = this.now();
     p.buffs = p.buffs.filter((b) => b.until > now);
     const before = p.stats.maxHp;
     p.stats = computeStats(p.build, p.equip, p.talents, p.xp, p.buffs, now);
+    const mount = p.state.mnt ? ITEMS[p.state.mnt]?.mount : undefined;
+    if (mount) p.stats.speedCap = maxSpeed(mount.mult, p.stats.all.moveSpeed);
     if (p.stats.maxHp > before) p.hp += p.stats.maxHp - before;
     p.hp = Math.min(p.hp, p.stats.maxHp);
     this.sendHp(p);
@@ -326,6 +352,7 @@ export class World {
   }
 
   kill(p: ServerPlayer, by: string): void {
+    this.dismount(p);
     p.hp = 0;
     p.dead = true;
     p.job = null;
@@ -350,6 +377,7 @@ export class World {
   }
 
   private teleport(p: ServerPlayer, x: number, z: number): void {
+    if (regionAt(x, z) === 'cave') this.dismount(p);
     const y = groundAt(x, z);
     Object.assign(p.state, { x: r2(x), y: r2(y), z: r2(z) });
     p.lastValid = { x, y, z, at: this.now() };
@@ -463,6 +491,7 @@ export class World {
     if (!s) return;
     const def = ITEMS[s.id];
     if (!def?.slot) return;
+    if (def.slot === 'mount') this.dismount(p);
     const err = (text: string) => this.notice(p, text, 'error');
     const bag = p.bag.map((x) => (x ? { ...x } : null));
     const equip = { ...p.equip };
@@ -491,6 +520,7 @@ export class World {
   private unequip(p: ServerPlayer, slot: Slot): void {
     const st = p.equip[slot];
     if (!st) return;
+    if (slot === 'mount') this.dismount(p);
     const equip = { ...p.equip };
     delete equip[slot];
     const resized = resizeBag(p.bag, computeStats(p.build, equip, p.talents, p.xp).bagSlots);

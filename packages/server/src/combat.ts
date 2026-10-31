@@ -143,6 +143,7 @@ function hurtPlayer(w: World, p: ServerPlayer, m: Mob, raw: number, magic: boole
   dmg = Math.max(0.5, Math.round(dmg * 10) / 10);
   p.hp -= dmg;
   p.lastHurtAt = now;
+  w.dismount(p);
   w.broadcastNear(p.state, { t: 'hit', to: p.state.id, dmg, kind, from: m.id });
   if (s.thorns > 0 && !magic) damageMob(w, m, s.thorns, p.state.id, now);
   if (p.hp <= 0) w.kill(p, m.def.name);

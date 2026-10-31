@@ -5,10 +5,11 @@
  * checks the same spots.
  */
 import * as THREE from 'three';
-import { CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
+import { STABLE, CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
 import { mat, bx, mesh, canvasTex } from '../engine/procgen.js';
 import { makeCharacter, animateCharacter, type Character } from '../entities/character.js';
 import { applyGear } from '../entities/held.js';
+import { makeHorse, animateHorse, type Horse } from '../entities/horse.js';
 import { addLabel } from '../engine/labels.js';
 import { rockGeo } from './props.js';
 import type { Collider } from './props.js';
@@ -41,6 +42,9 @@ export class Places {
   private npcs: { c: Character; n: Npc; g: THREE.Group }[] = [];
   private t = 0;
   private doorTags: HTMLElement[] = [];
+  private stableHorse: Horse | null = null;
+  private windows: THREE.MeshStandardMaterial[] = [];
+  private night = 0;
   private roomDoors: { hinge: THREE.Group; open: boolean; angle: number; col: Collider; home: { x: number; z: number }; outward?: boolean }[] = [];
 
   constructor(scene: THREE.Scene) {
@@ -60,6 +64,7 @@ export class Places {
     this.signpost(86, 40, [['Gruben pass ⚠', GRUBEN_PASS.x, GRUBEN_PASS.z], ['Wolf pack ⚠', 66, 33], ['Camp', 0, 0]]);
     this.passGate(GRUBEN_PASS.x, GRUBEN_PASS.z, 70, 34, 'Pass to Gruben', 'Walk through · monsters level 13–22 · the Mine King');
     this.gruben();
+    this.stable();
   }
 
   /**
@@ -209,6 +214,7 @@ export class Places {
       ingrid: { b: 'leather_backpack' }, mats: { h: 'iron_pickaxe', hd: 'stone_helm' }, sigrid: { h: 'iron_sword', c: 'iron_breastplate' },
       halvard: { h: 'pine_longbow', c: 'leather_breastplate' }, tor: { h: 'iron_hatchet' }, frida: { h: 'pine_rod' }, ragna: { h: 'birch_frost_staff', b: 'small_rucksack' },
       johan: { h: 'steel_pickaxe', hd: 'iron_helm', c: 'leather_breastplate' },
+      eirik: { c: 'leather_breastplate', l: 'leather_greaves' },
     };
     applyGear(c, look[n.id] ?? {});
     this.npcs.push({ c, n, g });
@@ -328,6 +334,13 @@ export class Places {
     void gy;
   }
 
+  /** Windows glow and fires burn brighter after dark. */
+  setNight(n: number): void {
+    if (Math.abs(n - this.night) < 0.01) return;
+    this.night = n;
+    for (const w of this.windows) w.emissiveIntensity = n * 1.6;
+  }
+
   doorOpen(n: number): boolean { return !!this.roomDoors[n]?.open; }
 
   /** Lodge room doors: which stand open (from the server). */
@@ -400,9 +413,11 @@ export class Places {
     const side = (w - doorW) / 2;
     for (const sx of [-1, 1]) wall(sx * (doorW / 2 + side / 2), -d / 2, side + T / 2, T);
     wall(0, -d / 2, doorW, T, 2.05, H - 2.05);
-    // Window on the right-hand wall.
-    bx(g, 0.06, 0.6, 0.8, mat(0xe8d8a8, null, { r: 0.3 }), w / 2 + 0.05, 1.45, -0.3);
-    bx(g, 0.06, 0.6, 0.8, mat(0xe8d8a8, null, { r: 0.3 }), w / 2 - 0.05, 1.45, -0.3);
+    // Window on the right-hand wall; it glows at night.
+    const win = new THREE.MeshStandardMaterial({ color: 0xe8d8a8, roughness: 0.3, emissive: 0xffb060, emissiveIntensity: 0 });
+    this.windows.push(win);
+    bx(g, 0.06, 0.6, 0.8, win, w / 2 + 0.05, 1.45, -0.3);
+    bx(g, 0.06, 0.6, 0.8, win, w / 2 - 0.05, 1.45, -0.3);
     // Ceiling and roof.
     bx(g, w, 0.06, d, M.darkWood, 0, H + 0.03, 0);
     // Two roof slabs meeting at the ridge, their low edges resting on the wall tops.
@@ -515,6 +530,29 @@ export class Places {
         this.colliders.push({ x: (a.x + b.x) / 2, z: (a.z + b.z) / 2, r: 0.3 });
       }
     }
+  }
+
+  /** Bjørkvik's stable: an open-fronted shed with a hay rack, a trough and a horse in it. */
+  private stable(): void {
+    const S = STABLE;
+    const g = this.place(S.x, S.z, VILLAGE.x, VILLAGE.z, [S.w, S.d]);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) bx(g, 0.18, 2.6, 0.18, M.darkWood, sx * (S.w / 2 - 0.1), 1.3, sz * (S.d / 2 - 0.1));
+    bx(g, S.w, 2.4, 0.12, M.plank, 0, 1.2, S.d / 2 - 0.05);
+    for (const sx of [-1, 1]) bx(g, 0.12, 2.4, S.d, M.plank, sx * (S.w / 2 - 0.05), 1.2, 0);
+    bx(g, S.w + 0.6, 0.14, S.d + 0.8, M.roof, 0, 2.75, 0.15, -0.18, 0, 0);
+    bx(g, 0.1, 1.0, S.d - 0.6, M.darkWood, 0, 0.5, 0.1); // stall divider
+    const trough = mesh(new THREE.BoxGeometry(1.4, 0.35, 0.45), M.darkWood, g); trough.position.set(1.4, 0.18, S.d / 2 - 0.45);
+    bx(g, 1.3, 0.06, 0.38, new THREE.MeshStandardMaterial({ color: 0x4a6a7a, roughness: 0.2 }), 1.4, 0.34, S.d / 2 - 0.45);
+    for (let i = 0; i < 3; i++) { const bale = bx(g, 0.9, 0.45, 0.55, mat(0xc8b060, 'cloth', { r: 1 }), -1.6, 0.23 + i * 0.45, S.d / 2 - 0.5 - (i % 2) * 0.1); void bale; }
+    const horse = makeHorse('fjord_horse');
+    horse.g.position.set(1.2, 0, -0.2); horse.g.rotation.y = Math.PI / 2 + 0.2;
+    g.add(horse.g);
+    this.stableHorse = horse;
+    for (const [lx, lz, r] of [[-S.w / 2, 0, 0.5], [S.w / 2, 0, 0.5], [0, S.d / 2, 0.5], [-S.w / 4, S.d / 2, 0.5], [S.w / 4, S.d / 2, 0.5], [1.2, -0.2, 0.9]] as const) {
+      const c = Math.cos(g.rotation.y), s2 = Math.sin(g.rotation.y);
+      this.colliders.push({ x: S.x + lx * c + lz * s2, z: S.z - lx * s2 + lz * c, r });
+    }
+    tag('Stable', 'Eirik sells horses · R to ride', 'place', new THREE.Vector3(S.x, heightAt(S.x, S.z) + 3.4, S.z), 30);
   }
 
   /** A stone gate with a lantern: where you walk through to another region. */
@@ -633,9 +671,10 @@ export class Places {
     this.t += dt;
     for (const f of this.fires) {
       const k = 0.85 + Math.sin(this.t * 13 + f.base) * 0.08 + Math.sin(this.t * 7.3) * 0.07;
-      f.light.intensity = f.base * k;
+      f.light.intensity = f.base * k * (1 + this.night * 0.8);
       for (const m of f.mats) m.emissiveIntensity = 2.2 * k;
     }
+    if (this.stableHorse) animateHorse(this.stableHorse, 0, dt);
     for (const { c } of this.npcs) {
       animateCharacter(c, 0, Math.sin(this.t * 0.4) * 0.15, false, dt);
       c.head.rotation.y = Math.sin(this.t * 0.3 + c.hipY * 7) * 0.4;

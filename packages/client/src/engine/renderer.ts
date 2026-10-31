@@ -43,6 +43,8 @@ export interface Gfx {
   setUnderground(on: boolean): void;
   /** Outdoor mood per region: Gruben is greyer, colder and mistier. */
   setRegion(r: 'valley' | 'cave' | 'gruben'): void;
+  /** Time of day and weather (outdoors). */
+  setAtmosphere(sunDir: { x: number; y: number; z: number }, day: number, w: { cloud: number; fog: number; rain: number; snow: number }): void;
 }
 
 /** Low northern sun from the south-west: long shadows, warm light. */
@@ -155,12 +157,28 @@ export function createGfx(container: HTMLElement, quality: Quality): Gfx {
   composer.addPass(grade);
 
   const sunOffset = sun.position.clone();
+  // A dome of stars for clear nights.
+  const stars = (() => {
+    const n = 1400, pos = new Float32Array(n * 3);
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (let i = 0; i < n; i++) {
+      const u = rnd() * Math.PI * 2, v = Math.acos(rnd() * 0.95), r = 3800;
+      pos.set([Math.sin(v) * Math.cos(u) * r, Math.cos(v) * r, Math.sin(v) * Math.sin(u) * r], i * 3);
+    }
+    const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    const pts = new THREE.Points(geo, new THREE.PointsMaterial({ color: 0xffffff, size: 2.2, sizeAttenuation: false, transparent: true, opacity: 0, fog: false, depthWrite: false }));
+    pts.visible = false;
+    scene.add(pts);
+    return pts;
+  })();
   const gfx: Gfx = {
     renderer, scene, cam, vmScene, vmCam, sun, quality,
     setUnderground(on) {
       if ((gfx as any)._under === on) return;
       (gfx as any)._under = on;
       sky.visible = !on;
+      if (on) stars.visible = false;
       scene.background = on ? new THREE.Color(0x050506) : null;
       const fog = scene.fog as THREE.Fog;
       if (on) { fog.color.setHex(0x07080a); fog.near = 6; fog.far = 34; }
@@ -170,18 +188,41 @@ export function createGfx(container: HTMLElement, quality: Quality): Gfx {
       hemi.intensity = on ? 0.35 : 0.45;
       hemi.color.setHex(on ? 0x6a7a90 : 0xcfe0ee);
     },
-    setRegion(r) {
-      if ((gfx as any)._region === r) return;
-      (gfx as any)._region = r;
-      if (r === 'cave') return;
-      const grim = r === 'gruben';
+    setRegion(r) { (gfx as any)._region = r; },
+    /**
+     * Light for the time of day and weather, outdoors (the cave keeps its own). Called every
+     * frame; cheap. Sun below the horizon → cool moonlight from the other side of the sky.
+     */
+    setAtmosphere(sunDir, day, w) {
+      if ((gfx as any)._under) return;
+      const grim = (gfx as any)._region === 'gruben';
+      const clear = 1 - w.cloud * 0.75;
+      // Sky dome follows the real sun.
+      sky.material.uniforms.sunPosition.value.set(sunDir.x, sunDir.y, sunDir.z).multiplyScalar(4000);
+      sky.material.uniforms.rayleigh.value = 1.25 + w.cloud * 1.5;
+      sky.material.uniforms.turbidity.value = 3.2 + w.cloud * 8;
+      // Direct light: the sun by day, the moon (opposite side, never below 25°) by night.
+      const night = 1 - day;
+      const lightDir = day > 0.02 ? new THREE.Vector3(sunDir.x, Math.max(0.08, sunDir.y), sunDir.z).normalize()
+        : new THREE.Vector3(-sunDir.x, Math.max(0.42, -sunDir.y), -sunDir.z).normalize();
+      sunOffset.copy(lightDir).multiplyScalar(80);
+      sun.intensity = (grim ? 2.1 : 3.0) * day * clear + 0.35 * night;
+      const warm = Math.min(1, Math.max(0, 1 - sunDir.y * 4)); // low sun → orange
+      sun.color.setRGB(1, 0.94 - warm * 0.25 * day, 0.85 - warm * 0.45 * day).lerp(new THREE.Color(0x9fb4e0), night);
+      hemi.intensity = 0.2 + 0.28 * day;
+      hemi.color.setHex(day > 0.5 ? 0xcfe0ee : 0x5a6a90);
+      scene.environmentIntensity = 0.1 + 0.65 * day * (1 - w.cloud * 0.3);
+      // Fog: colour from the sky at this hour, pulled in by fog and rain.
       const fog = scene.fog as THREE.Fog;
-      fog.color.setHex(grim ? 0x9aa3a8 : FOG); fog.near = grim ? 40 : 80; fog.far = grim ? 170 : 260;
-      sun.intensity = grim ? 2.1 : 3.0;
-      sun.color.setHex(grim ? 0xdfe4ea : 0xfff0d8);
-      hemi.intensity = grim ? 0.55 : 0.45;
-      grade.uniforms.saturation.value = grim ? 0.82 : 1.08;
-      grade.uniforms.warmth.value = grim ? -0.01 : 0.025;
+      const dayFog = new THREE.Color(grim ? 0x9aa3a8 : FOG).lerp(new THREE.Color(0x9aa0a4), w.cloud * 0.6);
+      fog.color.copy(new THREE.Color(0x0e1420).lerp(dayFog, Math.max(0.08, day)));
+      const near = (grim ? 40 : 80) * (1 - w.fog * 0.85), far = (grim ? 170 : 260) * (1 - w.fog * 0.7) * (1 - w.rain * 0.25);
+      fog.near = near; fog.far = far;
+      // Starry night sky shows through when it's dark and clear.
+      if (stars) { stars.visible = night > 0.3 && w.cloud < 0.7; (stars.material as THREE.PointsMaterial).opacity = Math.max(0, night - 0.3) * (1 - w.cloud) * 1.2; }
+      renderer.toneMappingExposure = 0.95 + night * 0.25;
+      grade.uniforms.saturation.value = (grim ? 0.82 : 1.08) * (1 - night * 0.35) * (1 - w.cloud * 0.2);
+      grade.uniforms.warmth.value = grim ? -0.01 : 0.025 * day - 0.015 * night;
     },
     setQuality(q) {
       gfx.quality = q;
@@ -215,6 +256,7 @@ export function createGfx(container: HTMLElement, quality: Quality): Gfx {
       sun.target.position.set(sx, pos.y, sz);
       sun.position.set(sx + sunOffset.x, pos.y + sunOffset.y, sz + sunOffset.z);
       sky.position.copy(pos);
+      stars.position.copy(pos);
     },
     renderWorld() {
       if (gfx.quality === 'low') {

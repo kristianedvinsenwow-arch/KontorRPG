@@ -171,6 +171,12 @@ export function iconFor(id: string): string {
   else if (d?.kind === 'log') log(g, a, b);
   else if (d?.kind === 'fish') fish(g, '#8aa0a8', '#5a7078');
   else if (d?.kind === 'food') fish(g, '#c8884a', '#8a5428', true);
+  else if (d?.kind === 'mount') {
+    const c = '#' + (d.mount!.coat).toString(16).padStart(6, '0'), mn = '#' + (d.mount!.mane).toString(16).padStart(6, '0');
+    poly(g, [[18, 58], [22, 30], [30, 12], [40, 8], [52, 22], [50, 30], [40, 26], [38, 40], [44, 58]], c);
+    poly(g, [[28, 14], [34, 8], [30, 34], [24, 32]], mn, 'transparent');
+    dot(g, 42, 16, 2.5, '#111');
+  }
   else if (d?.kind === 'potion') {
     const c = id === 'healing_draught' ? '#d84a3a' : id === 'cloudberry_tonic' ? '#f0a030' : id === 'grave_draught' ? '#7ab89a' : id === 'strength_elixir' ? '#e8c040' : id === 'mind_elixir' ? '#6fb8ff' : '#b77be8';
     poly(g, [[28, 8], [36, 8], [36, 22], [48, 38], [44, 56], [20, 56], [16, 38], [28, 22]], 'rgba(220,235,240,.5)');

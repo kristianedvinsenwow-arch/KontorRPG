@@ -4,7 +4,7 @@
  */
 import {
   FISH_TABLE, ITEMS, MINE_RANGE, RARE_FISH, TREE_BY_ID, TREE_TYPES, VEIN_BY_ID, VEIN_TYPES, CAST_RANGE,
-  PICK_SEC, PLANT_BY_ID, PLANT_TYPES, isFishable, levelOf, roomFor, swingSeconds, type NodeTypeDef,
+  PICK_SEC, PLANT_BY_ID, regionAt, weatherAt, PLANT_TYPES, isFishable, levelOf, roomFor, swingSeconds, type NodeTypeDef,
 } from '@kontor/shared';
 import type { ServerPlayer } from './types.js';
 import type { World } from './world.js';
@@ -111,7 +111,9 @@ export function cast(w: World, p: ServerPlayer, x: number, z: number): void {
   if (!isFishable(x, z)) return w.notice(p, 'Cast into the lake, where it’s deep enough.', 'error');
   if (roomFor(p.bag, 'raw_perch') < 1 && p.bag.every((s) => s)) return w.notice(p, 'Your bag is full.', 'error');
   const st = p.stats.scoped.fishing;
-  const wait = (4 + w.rand() * 9) / (1 + Math.max(0, st.fishSpeed));
+  // Fish bite better in the rain.
+  const rainy = weatherAt(regionAt(p.state.x, p.state.z), w.now()).rain > 0.5 ? 1.25 : 1;
+  const wait = (4 + w.rand() * 9) / (1 + Math.max(0, st.fishSpeed)) / rainy;
   // Decide the fish now; the client only learns what it was if the catch succeeds.
   const lvl = levelOf(p.xp, 'fishing');
   let pick = { item: FISH_TABLE[0].item, xp: FISH_TABLE[0].xp, difficulty: FISH_TABLE[0].difficulty, rare: false };

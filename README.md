@@ -66,6 +66,14 @@ The design doc lives in the claude.ai doc "KontorRPG — Product Design Doc".
   tenant can open or close; the server keeps everyone else out of a closed home, and only you can
   use your chest. Gruben is open to everyone; the monsters are the danger. Rest at your door for **Rested** (+5–10% XP
   for 30 min).
+- **Mounts:** Eirik's stable in Bjørkvik sells a Fjord horse (160% speed, 250 g) and a rare black
+  one (175%, 600 g); the Mine King can drop a Dovre stallion (200%). Wear it in the mount slot and
+  press **R** to ride. Attacking, gathering or getting hit knocks you off; no horses in the mine or
+  indoors. The server checks riding speed like walking speed.
+- **Day and night, weather:** the sun follows the real sun over Oslo (dark winter afternoons,
+  light summer nights, moonlight and stars after dark, windows and fires glow). Weather changes
+  every 20 minutes per region — clear, cloudy, rain, fog, and snow in Gruben — the same for everyone.
+  Fish bite better in the rain. The clock and weather show under the place name.
 - **World state is saved:** depleted veins and trees, boss and monster respawn timers and items on
   the ground survive server restarts and deploys (Supabase `world_state`, server-only).
 - **Interface:** hotbar (1–5), health and buffs, item tooltips (type, damage, effects, vendor

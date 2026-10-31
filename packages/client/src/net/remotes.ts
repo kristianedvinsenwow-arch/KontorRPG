@@ -8,6 +8,7 @@ import { INTERP_DELAY_MS, PLAYER_COLORS, RACES, type PlayerState } from '@kontor
 import { addLabel, removeLabel, type Label } from '../engine/labels.js';
 import { makeCharacter, animateCharacter, aimPose, type Character } from '../entities/character.js';
 import { applyGear } from '../entities/held.js';
+import { makeHorse, animateHorse, seatRider, type Horse } from '../entities/horse.js';
 
 interface Sample { at: number; s: PlayerState }
 
@@ -22,6 +23,8 @@ interface Remote {
   hp: HTMLElement;
   buf: Sample[];
   lastSeen: number;
+  horse?: Horse;
+  horseId?: string;
 }
 
 const lerpAngle = (a: number, b: number, t: number) => {
@@ -78,6 +81,7 @@ export class Remotes {
     const r = this.map.get(id);
     if (!r) return;
     this.scene.remove(r.model.g);
+    if (r.horse) this.scene.remove(r.horse.g);
     removeLabel(r.label);
     this.map.delete(id);
   }
@@ -105,6 +109,20 @@ export class Remotes {
       animateCharacter(r.model, spd, c.s.pitch, c.s.act === 'swing' || c.s.act === 'spin', dt);
       if (c.s.act === 'spin') r.model.body.rotation.y += dt * 14; else r.model.body.rotation.y = 0;
       if (c.s.act === 'shoot' || c.s.act === 'cast') aimPose(r.model, c.s.act);
+      // Riding: a horse under them, seated.
+      const mnt = c.s.mnt;
+      if (mnt !== r.horseId) {
+        if (r.horse) this.scene.remove(r.horse.g);
+        r.horse = mnt ? makeHorse(mnt) : undefined;
+        r.horseId = mnt;
+        if (r.horse) this.scene.add(r.horse.g);
+      }
+      if (r.horse) {
+        r.horse.g.position.copy(g.position);
+        r.horse.g.rotation.y = g.rotation.y;
+        animateHorse(r.horse, spd, dt);
+        seatRider(r.model);
+      }
     }
   }
 

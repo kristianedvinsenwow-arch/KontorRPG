@@ -715,3 +715,32 @@ test('herbalism and alchemy: pick angelica, buy a vial from Ragna, brew a draugh
   world.handle(c, { t: 'eat', index: p.bag.findIndex((s) => s?.id === 'healing_draught') });
   assert.equal(countItem(p.bag, 'healing_draught'), left, 'shared cooldown');
 });
+
+test('mounts: buy a horse from Eirik, ride faster, get knocked off when hit; no riding in the mine', () => {
+  const { world, c, p, at, place, advance, last } = game();
+  p.gold = 300;
+  at('eirik');
+  world.handle(c, { t: 'buy', npc: 'eirik', item: 'fjord_horse' });
+  world.handle(c, { t: 'equip', index: p.bag.findIndex((s) => s?.id === 'fjord_horse') });
+  assert.equal(p.equip.mount?.id, 'fjord_horse');
+  const walk = p.stats.speedCap;
+  world.handle(c, { t: 'mount' });
+  assert.equal(p.state.mnt, 'fjord_horse');
+  assert.ok(p.stats.speedCap > walk * 1.5);
+  // A step a walker couldn't make is fine on horseback.
+  advance(500);
+  const x = p.state.x - 3.6, z = p.state.z;
+  world.handle(c, { t: 'input', seq: 50, x, y: h(x, z), z, yaw: 0, pitch: 0 });
+  assert.ok(Math.abs(p.state.x - x) < 0.01, 'moved at riding speed');
+  // Taking a hit knocks you off.
+  const wolf = [...world.mobs.values()].find((m) => m.def.kind === 'wolf')!;
+  place(wolf.x + 1, wolf.z);
+  for (let i = 0; i < 60 && p.state.mnt; i++) { advance(100); world.step(); }
+  assert.equal(p.state.mnt, undefined);
+  // No horses underground.
+  place(CAVE_START.x, CAVE_START.z);
+  p.lastHurtAt = 0;
+  world.handle(c, { t: 'mount' });
+  assert.equal(p.state.mnt, undefined);
+  assert.match(last('notice')!.text, /No room/);
+});

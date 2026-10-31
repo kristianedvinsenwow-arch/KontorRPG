@@ -331,6 +331,7 @@ export const NPCS: Npc[] = [
   { id: 'frida', name: 'Frida', title: 'Fisher', x: PIER.x - PIER.uz * 2.4 - PIER.ux * 1.5, z: PIER.z + PIER.ux * 2.4 - PIER.uz * 1.5, face: 4, color: 1, race: 'human', roles: ['quests'] },
   { id: 'halvard', name: 'Halvard', title: 'Hunter', x: V.x + 12, z: V.z + 2, face: 3, color: 2, race: 'ogre', roles: ['quests'] },
   { id: 'tor', name: 'Tor', title: 'Woodcutter', x: V.x + 6, z: V.z + 11, face: 0, color: 7, race: 'human', roles: ['quests'] },
+  { id: 'eirik', name: 'Eirik', title: 'Stablemaster', x: V.x - 15.5, z: V.z - 6, face: 2, color: 6, race: 'human', roles: ['shop'], sells: ['fjord_horse', 'black_fjord_horse'] },
   { id: 'johan', name: 'Johan', title: 'Old miner', x: G.x + 2, z: G.z + 47, face: 1, color: 3, race: 'dwarf', roles: ['quests'] },
   { id: 'ragna', name: 'Ragna', title: 'Imbuer & herbwife', x: V.x - 4, z: V.z + 11, face: 4, color: 4, race: 'gnome', roles: ['imbuer', 'shop', 'quests'], sells: ['vial'] },
 ];
@@ -411,6 +412,9 @@ export const HOMES: Home[] = [
 ];
 /** Who rents which home, as the server sends it: one name (or null) per home. */
 export const homeLabel = (h: Home) => (h.kind === 'room' ? `Lodge room ${h.id + 1}` : h.name);
+
+/** Bjørkvik's stable (an open shed by Eirik). */
+export const STABLE = { x: V.x - 20, z: V.z - 7, w: 6, d: 3.4 };
 
 /** Staffs the Imbuer can enchant: staff → gem + gold. */
 export const IMBUE: Record<string, { gem: string; gold: number; fire: string; frost: string }> = {

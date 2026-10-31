@@ -407,3 +407,5 @@ select:focus { border-color: var(--amber); outline: none; }
   .charwrap { grid-template-columns: 1fr; }
   .charskills { order: 2; border-right: 0; border-top: 1px solid var(--line); }
 }
+
+#where .clock { display: block; font-size: 11px; color: var(--muted); margin-top: 2px; }
