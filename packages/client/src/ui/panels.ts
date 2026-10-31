@@ -5,10 +5,10 @@
  */
 import {
   ACHIEVEMENTS, titleOf, COMING_SKILLS, EQUIP_SLOTS, HOMES, IMBUE, INN, ITEMS, homeLabel, type Home, NPC_BY_ID, QUESTS, RECIPES, SKILLS, STATION_BY_ID, TALENT_TREE, TREES,
-  canLearn, countItem, knifeRepair, knifeUses, recipeGroup, formatStat, levelFromXp, levelProgress, pointsLeft, questAvailable, recipeAt, respecCost, xpForLevel,
+  canLearn, computeStats, xpMult, MAX_LEVEL, countItem, knifeRepair, knifeUses, recipeGroup, formatStat, levelFromXp, levelProgress, pointsLeft, questAvailable, recipeAt, respecCost, xpForLevel,
   type ClientMsg, type Stack, type StatKey, type TreeId,
 } from '@kontor/shared';
-import { gameStore, uiStore, type GameState } from '../state/store.js';
+import { gameStore, settingsStore, uiStore, type GameState } from '../state/store.js';
 import { iconFor, rarityColor } from './icons.js';
 import { attachTip, hideTip, itemTip } from './tooltip.js';
 import { drawMap, mapTitle } from './map.js';
@@ -259,6 +259,29 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
       const n = here.filter((r) => recipeGroup(r) === gname && levelFromXp(g.xp[r.skill] ?? 0) >= r.level && r.inputs.every((i) => countItem(g.bag, i.item) >= i.qty)).length;
       tabs.append(btn(n ? `${gname} (${n})` : gname, gname === tab ? 'tab on' : 'tab', () => { craftTab.set(st.kind, gname); render(); }));
     }
+    // Skill progress at the top: where you are in the level, and how far to the next.
+    const ps = computeStats(settingsStore.get().build, g.equip, g.talents, g.xp, g.buffs);
+    const prog = el('div', 'craftskills');
+    for (const sk of [...new Set(here.map((r) => r.skill))]) {
+      const xp = g.xp[sk] ?? 0, lvl = levelFromXp(xp);
+      const name = sk[0].toUpperCase() + sk.slice(1);
+      const row = el('div', 'skill');
+      const top = el('div', 'srow');
+      const max = lvl >= MAX_LEVEL;
+      const a = xpForLevel(lvl), b = xpForLevel(lvl + 1);
+      top.append(el('b', '', `${name} ${lvl}`), el('span', 'note', max ? 'Max level' : `${(xp - a).toLocaleString('en')} / ${(b - a).toLocaleString('en')} XP · ${(b - xp).toLocaleString('en')} to level ${lvl + 1}`));
+      const bar = el('div', 'bar'); const fill = el('i'); fill.style.width = `${Math.round(levelProgress(xp) * 100)}%`; bar.append(fill);
+      row.append(top, bar);
+      prog.append(row);
+    }
+    /** How many more of this recipe to the next level (with your XP bonuses). */
+    const moreFor = (r: (typeof here)[number]) => {
+      const xp = g.xp[r.skill] ?? 0, lvl = levelFromXp(xp);
+      if (lvl >= MAX_LEVEL) return '';
+      const per = Math.max(1, Math.round(r.xp * xpMult(ps, r.skill)));
+      const n = Math.ceil((xpForLevel(lvl + 1) - xp) / per);
+      return ` · ${n} more for level ${lvl + 1}`;
+    };
     for (const r of here.filter((x) => recipeGroup(x) === tab)) {
       const lvl = levelFromXp(g.xp[r.skill] ?? 0);
       const can = Math.min(...r.inputs.map((i) => Math.floor(countItem(g.bag, i.item) / i.qty)));
@@ -267,7 +290,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
       const out = ITEMS[r.output.item];
       const info = el('div', 'rinfo');
       const skillName = r.skill[0].toUpperCase() + r.skill.slice(1);
-      info.append(el('b', '', r.output.qty > 1 ? `${out.name} ×${r.output.qty}` : out.name), el('span', 'note', `${skillName} ${r.level} · ${r.xp} XP · ${r.seconds}s${out.slot && out.kind !== 'ammo' ? ' · can roll a rarity' : ''}${r.burns ? ' · can burn' : ''}`));
+      info.append(el('b', '', r.output.qty > 1 ? `${out.name} ×${r.output.qty}` : out.name), el('span', 'note', `${skillName} ${r.level} · ${Math.max(1, Math.round(r.xp * xpMult(ps, r.skill)))} XP${locked ? '' : moreFor(r)} · ${r.seconds}s${out.slot && out.kind !== 'ammo' ? ' · can roll a rarity' : ''}${r.burns ? ' · can burn' : ''}`));
       const ins = el('div', 'inputs');
       for (const i of r.inputs) {
         const have = countItem(g.bag, i.item);
@@ -321,6 +344,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
         list.prepend(row);
       }
     }
+    body.prepend(prog);
     if (groups.length > 1) body.append(tabs);
     body.append(list, goldLine(g));
     return [header(st.name, { furnace: 'Smelt ore into bars', anvil: 'Shape stone, smith weapons and metal armour', workbench: 'Carpentry: shafts, arrows, bows, staffs, rods', campfire: 'Cook your catch', stove: 'Cook your catch (burns less)', tanning: 'Leatherworking: tan hides, make leather armour', loom: 'Tailoring: spin, weave, make cloth armour', alchemy: 'Alchemy: brew potions and elixirs (vials from Ragna)' }[st.kind] ?? '', 'E'), body];
