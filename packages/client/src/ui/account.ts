@@ -1,82 +1,95 @@
 /**
- * Account box on the start screen: log in by email link, see who you're logged in as, and load
- * your saved character. With a saved character the creator becomes read-only ("Continue as …").
+ * Account box on the start screen: a username and a 4–6 digit PIN. This browser remembers the
+ * username, so next time it's just the PIN. There's no email and no recovery: forget the PIN and
+ * the character is lost. With a saved character the creator becomes read-only ("Continue as …").
  */
 import type { Auth } from '../net/auth.js';
 import { settingsStore } from '../state/store.js';
 import { setCreatorLocked, setEnterBlocked } from './creator.js';
 
+const el = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = '') => { const e = document.createElement(tag); if (cls) e.className = cls; if (text) e.textContent = text; return e; };
+
 export function initAccount(auth: Auth): void {
   const box = document.getElementById('account')!;
   if (!auth.enabled) return; // guests only on this server
   box.hidden = false;
-  let sent: string | null = null;
+  let mode: 'login' | 'create' = auth.remembered ? 'login' : 'create';
+  let msg = '';
 
-  async function render() {
-    box.replaceChildren();
-    const h = document.createElement('div');
-    h.className = 'lbl';
-    h.textContent = 'Account';
-    box.append(h);
+  function render() {
+    box.replaceChildren(el('div', 'lbl', 'Account'));
 
-    if (!auth.session) {
+    if (!auth.loggedIn) {
       setCreatorLocked(null);
       setEnterBlocked(auth.config.requireLogin ? 'Log in to play' : null);
-      const p = document.createElement('p');
-      p.className = 'note';
-      p.textContent = sent
-        ? `Check ${sent} for a login link. Opening it brings you back here, logged in.`
-        : auth.config.requireLogin ? 'Log in with your work email to play. Your character is saved to your account.'
-          : 'Log in with your email to save your character, or play as a guest (not saved).';
-      const row = document.createElement('div');
-      row.className = 'loginrow';
-      const email = document.createElement('input');
-      email.type = 'email'; email.placeholder = 'you@company.no'; email.autocomplete = 'email'; email.id = 'emailIn';
-      const btn = document.createElement('button');
-      btn.className = 'btn'; btn.textContent = sent ? 'Resend link' : 'Send login link';
-      btn.onclick = async () => {
-        const v = email.value.trim();
-        if (!/^\S+@\S+\.\S+$/.test(v)) { p.textContent = 'That doesn’t look like an email address.'; return; }
-        btn.disabled = true;
-        const err = await auth.sendLink(v);
-        btn.disabled = false;
-        if (err) { p.textContent = `Couldn’t send the link: ${err}`; return; }
-        sent = v;
-        void render();
+      const remembered = auth.remembered;
+      const intro = el('p', 'note', mode === 'create'
+        ? 'Pick a username and a 4–6 digit PIN. No email needed — but there’s no way to recover a forgotten PIN.'
+        : remembered ? `Welcome back, ${remembered}. Enter your PIN.` : 'Log in with your username and PIN.');
+      const row = el('div', 'loginrow');
+      const user = el('input'); user.type = 'text'; user.placeholder = 'Username'; user.maxLength = 16; user.autocomplete = 'username'; user.id = 'userIn';
+      user.value = mode === 'login' ? remembered : '';
+      const pin = el('input'); pin.type = 'password'; pin.inputMode = 'numeric'; pin.pattern = '[0-9]*'; pin.maxLength = 6; pin.placeholder = 'PIN (4–6 digits)'; pin.autocomplete = mode === 'create' ? 'new-password' : 'current-password'; pin.id = 'pinIn';
+      pin.oninput = () => { pin.value = pin.value.replace(/\D/g, '').slice(0, 6); };
+      const go = el('button', 'btn', mode === 'create' ? 'Create account' : 'Log in');
+      const err = el('p', 'note bad', msg);
+      go.onclick = async () => {
+        if (!/^\d{4,6}$/.test(pin.value)) { msg = 'Your PIN is 4 to 6 digits.'; return render(); }
+        go.disabled = true;
+        const e = await auth.login(user.value.trim(), pin.value, mode === 'create');
+        go.disabled = false;
+        msg = e ?? '';
+        if (e?.startsWith('No account')) mode = 'create';
+        render();
       };
-      email.addEventListener('keydown', (e) => { if (e.key === 'Enter') btn.click(); e.stopPropagation(); });
-      row.append(email, btn);
-      box.append(p, row);
+      for (const i of [user, pin]) i.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') go.click(); });
+      // When the name is remembered, show it as text with a "not you?" link instead of a field.
+      if (mode === 'login' && remembered) {
+        const who = el('p', 'note');
+        const notMe = el('button', 'linkbtn', 'Not you?');
+        notMe.onclick = () => { auth.forget(); mode = 'login'; msg = ''; render(); };
+        who.append(`Logged out · ${remembered} `, notMe);
+        row.append(pin, go);
+        box.append(intro, row, err, who);
+        user.value = remembered;
+        go.onclick = async () => {
+          if (!/^\d{4,6}$/.test(pin.value)) { msg = 'Your PIN is 4 to 6 digits.'; return render(); }
+          go.disabled = true;
+          const e = await auth.login(remembered, pin.value, false);
+          go.disabled = false;
+          msg = e ?? '';
+          render();
+        };
+      } else {
+        row.append(user, pin, go);
+        box.append(intro, row, err);
+      }
+      const sw = el('button', 'linkbtn', mode === 'create' ? 'I already have an account' : 'New here? Create an account');
+      sw.onclick = () => { mode = mode === 'create' ? 'login' : 'create'; msg = ''; render(); };
+      const tail = el('p', 'note'); tail.append(sw);
+      if (!auth.config.requireLogin) tail.append(' · or play as a guest (not saved)');
+      box.append(tail);
+      setTimeout(() => (mode === 'login' && remembered ? pin : user).focus(), 0);
       return;
     }
 
     setEnterBlocked(null);
-    const who = document.createElement('p');
-    who.className = 'note';
-    who.textContent = `Logged in as ${auth.email}. `;
-    const out = document.createElement('button');
-    out.className = 'linkbtn'; out.textContent = 'Log out';
-    out.onclick = () => void auth.signOut();
+    const who = el('p', 'note', `Logged in as ${auth.username}. `);
+    const out = el('button', 'linkbtn', 'Log out');
+    out.onclick = () => { auth.signOut(); mode = 'login'; };
     who.append(out);
     box.append(who);
-
-    const saved = await auth.loadCharacter();
+    const saved = auth.character;
     if (saved) {
       settingsStore.set({ name: saved.name, color: saved.color, build: saved.build });
       setCreatorLocked({ name: saved.name });
-      const n = document.createElement('p');
-      n.className = 'note welcome';
-      n.textContent = `Welcome back, ${saved.name}. Your character is saved to your account; changing race, stats or perks (respec) comes in a later update.`;
-      box.append(n);
+      box.append(el('p', 'note welcome', `Welcome back, ${saved.name}. Your progress is saved to your account.`));
     } else {
       setCreatorLocked(null);
-      const n = document.createElement('p');
-      n.className = 'note';
-      n.textContent = 'No character yet — the one you create below is saved to your account when you enter the world.';
-      box.append(n);
+      box.append(el('p', 'note', 'No character yet — the one you create below is saved to your account when you enter the world.'));
     }
   }
 
-  auth.onChange(() => void render());
-  void render();
+  auth.onChange(render);
+  render();
 }

@@ -781,3 +781,31 @@ test('every player who hits a monster gets the kill XP, however little they did'
   assert.equal(q.xp.combat, p.xp.combat);
   assert.ok((q.xp.combat ?? 0) > 0);
 });
+
+import { Accounts } from '../src/accounts.js';
+test('accounts: username + PIN, hashed; wrong PINs lock the name; tokens log into the world', async () => {
+  const store = new MemoryStore();
+  const acc = new Accounts(store, 'test-secret');
+  store.auth = acc;
+  assert.match(((await acc.login('ab', '1234', true, 'ip')) as any).error, /3–16/);
+  assert.match(((await acc.login('Kari', '12', true, 'ip')) as any).error, /4 to 6/);
+  const made = await acc.login('Kari', '4821', true, 'ip');
+  assert.ok('token' in made);
+  assert.match(((await acc.login('kari', '1111', true, 'ip')) as any).error, /taken/);
+  assert.ok(!(await store.findAccount('kari'))!.pinHash.includes('4821'), 'PIN is hashed');
+  // Case-insensitive login with the right PIN.
+  const ok = await acc.login('KARI', '4821', false, 'ip2');
+  assert.ok('token' in ok);
+  // Five wrong PINs lock the name, even for the right PIN.
+  for (let i = 0; i < 5; i++) assert.match(((await acc.login('Kari', '0000', false, `ip-${i}`)) as any).error, /Wrong PIN|Too many/);
+  assert.match(((await acc.login('Kari', '4821', false, 'ip9')) as any).error, /Too many/);
+  // Tokens: valid ones resolve to the account, tampered ones don't.
+  const token = (ok as any).token as string;
+  assert.equal(acc.verify(token), (ok as any).accountId);
+  assert.equal(acc.verify(token.slice(0, -2) + 'xx'), null);
+  // And they log into the world.
+  const world = new World({ build: 'test', store, requireLogin: true });
+  const c = fakeClient(); world.connect(c);
+  await world.handle(c, { t: 'hello', name: 'Kari', color: 0, proto: PROTOCOL_VERSION, build: defaultBuild(), token });
+  assert.ok(c.inbox.some((m) => m.t === 'welcome'));
+});

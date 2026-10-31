@@ -14,7 +14,7 @@ The design doc lives in the claude.ai doc "KontorRPG — Product Design Doc".
 - **Graphics:** physical sky, HDR environment, PBR, ACES, soft shadows, ambient occlusion, bloom
   and grading; three quality levels for office laptops.
 - **Characters:** four races with racial bonuses (human: ranged + fishing; dwarf: armour +
-  mining; gnome: magic + luck; ogre: +15% melee, −15% speed, + woodcutting), five faces,
+  mining; gnome: magic + luck; ogre: +15% melee, −10% speed, + woodcutting), five faces,
   attributes, one major and one minor perk. Worn gear shows on the model.
 - **Gathering:** shared ore veins (stone, iron, coal, silver) in a few hotspots plus loners,
   every tree can be felled (birch and pine) and topples over, leaving a stump until it regrows.
@@ -90,7 +90,7 @@ The design doc lives in the claude.ai doc "KontorRPG — Product Design Doc".
 - **Interface:** hotbar (1–5), health and buffs, item tooltips (type, damage, effects, vendor
   value), right-click to drop, quest tracker, character menu (**C**) with tabs: the sheet (skills, model, stats, title, gear, bag), talents (**T**), achievements (**J**) and the quest log (**L**). Hotbar 1–4 tools and weapon, 5 food, 6 healing potion.
 - **Multiplayer:** authoritative Node server checks every move, swing, cast and craft; rolls every
-  random thing. Accounts via Supabase magic links; everything is saved for logged-in players.
+  random thing. Accounts are a username and a 4–6 digit PIN (no email, no recovery — forget the PIN and the character is gone); the browser remembers your username so you only type the PIN. PINs are hashed and wrong guesses are rate-limited. Everything is saved for logged-in players.
 - **Office features:** chat, roster, ping, boss key (**F9**), auto-reload after deploys.
 
 What changed: three.js r128 → current via npm, one HTML file → TypeScript modules, client-trusted

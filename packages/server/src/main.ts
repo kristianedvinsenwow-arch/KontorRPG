@@ -8,7 +8,9 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { TICK_HZ, decodeClient, encode, type ServerMsg } from '@kontor/shared';
 import { World, type Client } from './world.js';
-import { SupabaseStore, type CharacterStore } from './persistence.js';
+import { MemoryStore, SupabaseStore, type CharacterStore } from './persistence.js';
+import { Accounts } from './accounts.js';
+import { createHash } from 'node:crypto';
 import { serveStatic } from './static.js';
 
 const PORT = Number(process.env.PORT ?? 8787);
@@ -22,10 +24,15 @@ const log = (...a: unknown[]) => console.log(new Date().toISOString(), ...a);
 // Accounts and storage: on when the three Supabase variables are set (see README), otherwise
 // everyone plays as a guest and nothing is saved.
 const SUPABASE_URL = process.env.SUPABASE_URL ?? '';
-const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY ?? '';
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY ?? '';
-const store: CharacterStore | undefined = SUPABASE_URL && SUPABASE_PUBLISHABLE_KEY && SUPABASE_SECRET_KEY
-  ? new SupabaseStore(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, SUPABASE_SECRET_KEY) : undefined;
+const supa = SUPABASE_URL && SUPABASE_SECRET_KEY ? new SupabaseStore(SUPABASE_URL, SUPABASE_SECRET_KEY) : undefined;
+// Local testing: DEV_ACCOUNTS=memory gives working accounts and saves that last until restart.
+const mem = !supa && process.env.DEV_ACCOUNTS === 'memory' ? new MemoryStore() : undefined;
+const store: CharacterStore | undefined = supa ?? mem;
+// Login tokens are signed with a key derived from the server secret (never sent anywhere).
+const accounts = store ? new Accounts(store, createHash('sha256').update(`kontor-session:${process.env.SESSION_SECRET ?? (SUPABASE_SECRET_KEY || 'dev')}`).digest('hex')) : null;
+if (supa) supa.auth = accounts;
+if (mem) mem.auth = accounts;
 /** Guests are allowed unless REQUIRE_LOGIN=true (recommended once everyone has an account). */
 const requireLogin = !!store && process.env.REQUIRE_LOGIN === 'true';
 const world = new World({ build: BUILD, log, store, requireLogin });
@@ -41,9 +48,9 @@ const server = createServer((req, res) => {
     return;
   }
   if (path === '/config') {
-    // Public client configuration. The publishable key is safe to expose; the secret key never leaves the server.
+    // Public client configuration: are accounts on, and is a login required?
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-    res.end(JSON.stringify({ accounts: !!store, requireLogin, supabaseUrl: store ? SUPABASE_URL : null, supabaseKey: store ? SUPABASE_PUBLISHABLE_KEY : null }));
+    res.end(JSON.stringify({ accounts: !!store, requireLogin }));
     return;
   }
   if (path === '/version') {
@@ -51,10 +58,32 @@ const server = createServer((req, res) => {
     res.end(JSON.stringify({ v: BUILD }));
     return;
   }
+  if (path === '/api/login' && req.method === 'POST') { void login(req, res); return; }
   if (statics(req, res)) return;
   res.writeHead(404, { 'content-type': 'text/plain' });
   res.end('Not found');
 });
+
+/** POST /api/login {user, pin, create}: username + PIN → login token and the saved character, if any. */
+async function login(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse): Promise<void> {
+  const reply = (code: number, body: unknown) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
+  if (!accounts || !store) return reply(404, { error: 'Accounts are off on this server.' });
+  let raw = '';
+  for await (const chunk of req) { raw += chunk; if (raw.length > 2000) return reply(413, { error: 'Too long.' }); }
+  let b: { user?: unknown; pin?: unknown; create?: unknown };
+  try { b = JSON.parse(raw); } catch { return reply(400, { error: 'Bad request.' }); }
+  const ip = String(req.headers['x-forwarded-for'] ?? req.socket.remoteAddress ?? '').split(',')[0].trim();
+  try {
+    const r = await accounts.login(String(b.user ?? ''), String(b.pin ?? ''), b.create === true, ip);
+    if ('error' in r) return reply(r.error.startsWith('Too many') ? 429 : 400, r);
+    const c = await store.load(r.accountId);
+    log(`${b.create ? 'new account' : 'login'} ${r.username}`);
+    reply(200, { token: r.token, username: r.username, character: c ? { name: c.name, color: c.color, build: c.build } : null });
+  } catch (e) {
+    log('login failed', e);
+    reply(500, { error: 'Something went wrong. Try again.' });
+  }
+}
 
 const wss = new WebSocketServer({ noServer: true, maxPayload: 4096 });
 
@@ -96,7 +125,7 @@ const tick = setInterval(() => world.step(), 1000 / TICK_HZ);
 const autosave = setInterval(() => void world.saveAll(), 30_000);
 const worldSave = setInterval(() => void world.saveWorld(), 60_000);
 
-server.listen(PORT, () => log(`KontorRPG server ${BUILD} on :${PORT} (client from ${CLIENT_DIST}); accounts: ${store ? 'Supabase' : 'off (guests only)'}`));
+server.listen(PORT, () => log(`KontorRPG server ${BUILD} on :${PORT} (client from ${CLIENT_DIST}); accounts: ${supa ? 'Supabase' : mem ? 'memory (dev)' : 'off (guests only)'}`));
 
 function shutdown(signal: string) {
   log(`${signal}: shutting down`);

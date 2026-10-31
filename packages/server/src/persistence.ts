@@ -1,7 +1,7 @@
 /**
- * Character storage. Two implementations behind one interface:
+ * Character and account storage. Two implementations behind one interface:
  *  - SupabaseStore: Postgres via Supabase's REST API with the server-only secret key.
- *    Browsers can read their own row (RLS) but never write — only this server does.
+ *    Browsers never touch the database; only this server does.
  *  - MemoryStore: for local development and tests; nothing survives a restart.
  * Plain fetch, no SDK, so the server bundle stays small.
  */
@@ -10,6 +10,7 @@ import {
   type Bag, type Stack, type CharacterBuild, type Equipment, type QuestState, type SkillXp, type TalentAlloc,
 } from '@kontor/shared';
 import type { Lease } from './types.js';
+import type { Account, AccountStore, Accounts } from './accounts.js';
 
 /** The chest always holds this many slots; how many you can fill depends on your home. */
 export const STORAGE_SLOTS = STORAGE_MAX;
@@ -35,7 +36,7 @@ export interface StoredCharacter {
 /** Everything that changes while playing. */
 export type Progress = Omit<StoredCharacter, 'userId' | 'name' | 'color' | 'build' | 'pos'> & { pos: NonNullable<StoredCharacter['pos']> };
 
-export interface CharacterStore {
+export interface CharacterStore extends AccountStore {
   readonly kind: 'supabase' | 'memory';
   /** Resolve a browser's login token to a user id, or null if it is invalid or expired. */
   verify(token: string): Promise<string | null>;
@@ -122,18 +123,34 @@ interface Row {
 
 export class SupabaseStore implements CharacterStore {
   readonly kind = 'supabase' as const;
-  constructor(private readonly url: string, private readonly publishableKey: string, private readonly secretKey: string) {}
+  /** Signs and checks login tokens (set by main.ts). */
+  auth: Accounts | null = null;
+  constructor(private readonly url: string, private readonly secretKey: string) {}
 
   private headers(extra: Record<string, string> = {}) {
     return { apikey: this.secretKey, Authorization: `Bearer ${this.secretKey}`, 'Content-Type': 'application/json', ...extra };
   }
 
   async verify(token: string): Promise<string | null> {
-    if (!token || token.length > 4096) return null;
-    const r = await fetch(`${this.url}/auth/v1/user`, { headers: { apikey: this.publishableKey, Authorization: `Bearer ${token}` } });
-    if (!r.ok) return null;
-    const u = (await r.json()) as { id?: string };
-    return typeof u.id === 'string' ? u.id : null;
+    return token && this.auth ? this.auth.verify(token) : null;
+  }
+
+  async findAccount(usernameLower: string): Promise<Account | null> {
+    const r = await fetch(`${this.url}/rest/v1/accounts?username_lower=eq.${encodeURIComponent(usernameLower)}&select=id,username,pin_hash`, { headers: this.headers() });
+    if (!r.ok) throw new Error(`find account: ${r.status} ${await r.text()}`);
+    const row = ((await r.json()) as { id: string; username: string; pin_hash: string }[])[0];
+    return row ? { id: row.id, username: row.username, pinHash: row.pin_hash } : null;
+  }
+
+  async createAccount(username: string, pinHash: string): Promise<Account | null> {
+    const r = await fetch(`${this.url}/rest/v1/accounts`, {
+      method: 'POST', headers: this.headers({ Prefer: 'return=representation' }),
+      body: JSON.stringify({ username, username_lower: username.toLowerCase(), pin_hash: pinHash }),
+    });
+    if (r.status === 409) return null; // taken
+    if (!r.ok) throw new Error(`create account: ${r.status} ${await r.text()}`);
+    const row = ((await r.json()) as { id: string; username: string }[])[0];
+    return { id: row.id, username: row.username, pinHash };
   }
 
   async load(userId: string): Promise<StoredCharacter | null> {
@@ -198,7 +215,17 @@ export class SupabaseStore implements CharacterStore {
 export class MemoryStore implements CharacterStore {
   readonly kind = 'memory' as const;
   readonly rows = new Map<string, StoredCharacter>();
-  async verify(token: string) { return token.startsWith('dev:') ? token.slice(4) : null; }
+  auth: Accounts | null = null;
+  private accounts = new Map<string, Account>();
+  async verify(token: string) { return token.startsWith('dev:') ? token.slice(4) : this.auth?.verify(token) ?? null; }
+  async findAccount(k: string) { return this.accounts.get(k) ?? null; }
+  async createAccount(username: string, pinHash: string) {
+    const k = username.toLowerCase();
+    if (this.accounts.has(k)) return null;
+    const a = { id: `acc-${this.accounts.size + 1}-${k}`, username, pinHash };
+    this.accounts.set(k, a);
+    return a;
+  }
   async load(userId: string) { const r = this.rows.get(userId); return r ? cleanCharacter(structuredClone(r)) : null; }
   async create(c: StoredCharacter) { this.rows.set(c.userId, structuredClone(c)); }
   async save(userId: string, p: Progress) { const r = this.rows.get(userId); if (r) Object.assign(r, structuredClone(p)); }

@@ -430,3 +430,6 @@ select:focus { border-color: var(--amber); outline: none; }
 .titlepick { display: flex; flex-direction: column; gap: 4px; }
 .titlepick select { background: rgba(255, 255, 255, .06); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font: inherit; }
 .titlepick .lbl { margin: 0; }
+.loginrow:has(> :nth-child(3)) { grid-template-columns: 1fr 140px auto; }
+.note.bad { color: #ff9a8a; }
+.note.bad:empty { display: none; }
