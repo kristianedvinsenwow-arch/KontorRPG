@@ -30,7 +30,7 @@ The design doc lives in the claude.ai doc "KontorRPG — Product Design Doc".
   **Jewellery:** silver rings and necklaces, plain or set with quartz, sapphire or garnet.
 - **Gear:** stone and iron swords, longswords (Whirlwind), battleaxes, kite shields and full metal
   armour; birch and pine bows (arrows from shafts + smithed arrowheads) and staffs (imbued with fire
-  or frost by Ragna in Bjørkvik); leather and cloth armour from the trader. Metal: strong vs
+  or frost by Ragna in Bjørkvik); leather from tanning racks, cloth from looms. Metal: strong vs
   physical, a little slower, magic hurts more. Leather: middle, a little faster. Cloth: strong vs
   magic.
 - **Combat:** left click attacks at the weapon's pace, right click is the weapon's special on a
@@ -38,11 +38,15 @@ The design doc lives in the claude.ai doc "KontorRPG — Product Design Doc".
   Nova freezes. Wolves and goblins in the wild; bats, goblins, shamans and the boss **Old Knut** in
   the mine. Loot drops on the ground and is free for all: whoever gets there first takes it. Soft death: wake up
   at camp, weakened for two minutes.
+- **Tailoring:** pick flax in the meadow fields and bog cotton by the lake or in Gruben's bog
+  (by hand, no tool), spin and weave at a loom (Bjørkvik, Gruben camp), and make cloth armour in
+  three tiers: linen, bog cotton, spirit silk (woven with wisp essence). Ingrid no longer sells cloth.
 - **Skinning and leather:** smith a skinning knife and wear it, then press E on a dead wolf or
   goblin (bodies stay 30 s) for pelts or goblin skin. Hides can be ruined (stone knife 35%, iron
   18%); either way the body is gone for everyone. Knives wear out — repair them at an anvil; rarer
   knives last longer and give extra pelts. Tan hides at a tanning rack, then make leather armour.
-- **Progression:** skills (mining, smithing, woodcutting, carpentry, fishing, cooking) and a
+- **Progression:** skills (mining, smithing, woodcutting, carpentry, leatherworking, tailoring,
+  fishing, cooking) and a
   player level from combat. Every level is a talent point; talent trees (**T**) start with a
   three-rank root and branch out to bigger one-point notables. Repeatable daily / twice-weekly /
   weekly quests from NPCs.
@@ -52,9 +56,10 @@ The design doc lives in the claude.ai doc "KontorRPG — Product Design Doc".
   forge, a tanning rack and Johan's quests.
 - **Housing:** one home at a time — a lodge room (25 g/wk, 24-slot chest), a cottage on Bjørkvik's
   green (60 g/wk, 48 slots) or a miners' hut at Gruben camp (40 g/wk, 36 slots). Rent at the door
-  (or from Hilde for rooms); your chest moves with you. Lodge rooms have real insides — a bed,
-  a nightstand and your chest at the foot of the bed — and a door only the tenant can open or
-  close; the server keeps everyone else out of a closed room, and only you can use your chest. Rest at your door for **Rested** (+5–10% XP
+  (or from Hilde for rooms); your chest moves with you. Every home has real insides — a bed and
+  your chest at its foot (plus a hearth and table in cottages and huts) — and a door only the
+  tenant can open or close; the server keeps everyone else out of a closed home, and only you can
+  use your chest. Gruben is open to everyone; the monsters are the danger. Rest at your door for **Rested** (+5–10% XP
   for 30 min).
 - **World state is saved:** depleted veins and trees, boss and monster respawn timers and items on
   the ground survive server restarts and deploys (Supabase `world_state`, server-only).

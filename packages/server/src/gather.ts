@@ -4,14 +4,15 @@
  */
 import {
   FISH_TABLE, ITEMS, MINE_RANGE, RARE_FISH, TREE_BY_ID, TREE_TYPES, VEIN_BY_ID, VEIN_TYPES, CAST_RANGE,
-  isFishable, levelOf, roomFor, swingSeconds, type NodeTypeDef,
+  PICK_SEC, PLANT_BY_ID, PLANT_TYPES, isFishable, levelOf, roomFor, swingSeconds, type NodeTypeDef,
 } from '@kontor/shared';
 import type { ServerPlayer } from './types.js';
 import type { World } from './world.js';
 
-const SLOT_FOR = { mining: 'pickaxe', woodcutting: 'hatchet' } as const;
+const SLOT_FOR = { mining: 'pickaxe', woodcutting: 'hatchet', tailoring: 'pickaxe' } as const;
 
-export function gather(w: World, p: ServerPlayer, kind: 'mine' | 'chop', nodeId: string): void {
+export function gather(w: World, p: ServerPlayer, kind: 'mine' | 'chop' | 'pick', nodeId: string): void {
+  if (kind === 'pick') return pick(w, p, nodeId);
   const node = kind === 'mine' ? VEIN_BY_ID.get(nodeId) : TREE_BY_ID.get(nodeId);
   if (!node) return;
   const type: NodeTypeDef = kind === 'mine' ? VEIN_TYPES[(node as any).type as keyof typeof VEIN_TYPES] : TREE_TYPES[(node as any).kind as keyof typeof TREE_TYPES];
@@ -53,6 +54,41 @@ export function gather(w: World, p: ServerPlayer, kind: 'mine' | 'chop', nodeId:
       w.broadcast({ t: 'notice', kind: 'rare', text: `${p.state.name} found ${ITEMS[type.gem.item].name}!` });
     }
   }
+  if (state.left <= 0) {
+    const [lo, hi] = type.respawnSec;
+    state.until = now + (lo + w.rand() * (hi - lo)) * 1000;
+    w.broadcast({ t: 'nodes', depleted: [[nodeId, 1]] });
+  }
+  w.nodes.set(nodeId, state);
+  w.broadcast({ t: 'node', id: nodeId, left: Math.max(0, state.left), total: state.total });
+  p.dirty = true;
+  w.sendInv(p);
+}
+
+/** Pick flax or bog cotton by hand (Tailoring). Plants share the node wear / regrowth rules. */
+function pick(w: World, p: ServerPlayer, nodeId: string): void {
+  const plant = PLANT_BY_ID.get(nodeId);
+  if (!plant || p.dead) return;
+  const type = PLANT_TYPES[plant.kind];
+  const now = w.now();
+  const err = (text: string) => w.notice(p, text, 'error');
+  if (Math.hypot(p.state.x - plant.x, p.state.z - plant.z) > 3 || Math.abs(p.state.y - plant.y) > 3) return err('Too far away.');
+  const lvl = levelOf(p.xp, 'tailoring');
+  if (lvl < type.level) return err(`${type.name} needs Tailoring ${type.level} (you have ${lvl}).`);
+  if (now - p.lastGatherAt < PICK_SEC * (1 - 0.01 * (lvl - 1)) * 1000 * 0.8) return;
+  const ns = w.nodes.get(nodeId);
+  if (ns && ns.until > now) return err('Nothing left to pick here yet.');
+  if (roomFor(p.bag, type.item) < 1) return err('Your bag is full.');
+  p.lastGatherAt = now;
+  p.act = 'swing'; p.actUntil = now + 500;
+  const st = p.stats.scoped.tailoring;
+  const state = ns ?? { left: 0, total: 0, until: 0 };
+  if (state.left <= 0) { state.total = state.left = type.hits[0] + Math.floor(w.rand() * (type.hits[1] - type.hits[0] + 1)); state.until = 0; }
+  state.left--;
+  const qty = w.rand() < st.doubleYield + st.luck * 0.002 && roomFor(p.bag, type.item) >= 2 ? 2 : 1;
+  w.give(p, { id: type.item, qty });
+  const xp = w.addXp(p, 'tailoring', type.xp);
+  p.client.send({ t: 'gain', skill: 'tailoring', xp, item: type.item, qty });
   if (state.left <= 0) {
     const [lo, hi] = type.respawnSec;
     state.until = now + (lo + w.rand() * (hi - lo)) * 1000;

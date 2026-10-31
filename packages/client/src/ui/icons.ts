@@ -19,6 +19,9 @@ const LOOK: Record<string, [string, string]> = {
   silversteel: ['#dce8f2', '#7a90a8'],
   coal: ['#2a2a2e', '#121214'],
   gold: ['#f2cc5a', '#a8802a'],
+  linen: ['#d8ccb0', '#8a7c60'],
+  cotton: ['#f2efe6', '#a8a498'],
+  silk: ['#bfe4f2', '#5a8aa8'],
 };
 const GEM_COLOR: Record<string, string> = { quartz: '#ece6f2', sapphire: '#3d64d8', garnet: '#c02a38' };
 const cache = new Map<string, string>();
@@ -141,6 +144,13 @@ export function iconFor(id: string): string {
     goblin_leather: () => { poly(g, [[10, 20], [54, 20], [50, 46], [14, 46]], '#6a7a3a'); line(g, '#3a4a1a', 2, [[14, 30], [50, 30]]); },
     goblin_trinket: () => { dot(g, 32, 36, 14, '#c8a040'); dot(g, 32, 36, 6, '#4a8a3a'); line(g, '#6a5434', 2, [[32, 22], [32, 8]]); },
     bat_wing: () => poly(g, [[8, 20], [56, 14], [50, 30], [42, 26], [36, 40], [28, 30], [18, 42]], '#4a3a40'),
+    flax: () => { for (const dx of [-10, 0, 10]) { line(g, '#6f8c42', 3, [[32 + dx, 58], [32 + dx * 0.6, 14]]); dot(g, 32 + dx * 0.6, 12, 5, '#7a9ae8'); } },
+    bog_cotton: () => { for (const dx of [-10, 0, 10]) { line(g, '#6f8c42', 3, [[32 + dx, 58], [32 + dx * 0.7, 22]]); dot(g, 32 + dx * 0.7, 18, 8, '#f6f4ec'); } },
+    linen_thread: () => { dot(g, 32, 34, 18, '#d8ccb0'); for (const y of [24, 30, 36, 42]) line(g, '#a89c80', 2, [[18, y], [46, y + 2]]); },
+    cotton_thread: () => { dot(g, 32, 34, 18, '#f2efe6'); for (const y of [24, 30, 36, 42]) line(g, '#c8c4b8', 2, [[18, y], [46, y + 2]]); },
+    linen: () => { poly(g, [[10, 22], [54, 18], [52, 46], [12, 48]], '#d8ccb0'); line(g, '#a89c80', 2, [[12, 32], [52, 30]]); },
+    cotton_cloth: () => { poly(g, [[10, 22], [54, 18], [52, 46], [12, 48]], '#f2efe6'); line(g, '#c8c4b8', 2, [[12, 32], [52, 30]]); },
+    spirit_silk: () => { poly(g, [[10, 22], [54, 18], [52, 46], [12, 48]], '#bfe4f2'); line(g, '#8fdcff', 2, [[12, 32], [52, 30]]); dot(g, 40, 26, 3, '#ffffff'); },
     coal: () => lump(g, '#2e2e32', '#18181b', '#55555e'),
     steel_arrowheads: () => { for (const [x, y] of [[20, 24], [40, 20], [30, 42]]) poly(g, [[x, y - 10], [x + 7, y + 6], [x - 7, y + 6]], '#c4cad2'); },
     lynx_pelt: () => { poly(g, [[12, 20], [26, 12], [40, 14], [54, 22], [50, 50], [30, 56], [14, 46]], '#b8955e'); for (const [x, y] of [[24, 26], [36, 22], [30, 38], [42, 36], [20, 40]]) dot(g, x, y, 3, '#5a4026'); },

@@ -17,7 +17,7 @@ export type VeinType = 'stone' | 'iron' | 'coal' | 'silver';
 export interface NodeTypeDef {
   name: string;
   item: string;
-  skill: 'mining' | 'woodcutting';
+  skill: 'mining' | 'woodcutting' | 'tailoring';
   level: number;
   power: number;
   xp: number;
@@ -211,6 +211,47 @@ export function swingSeconds(toolSwingSec: number, level: number, speedBonus: nu
   return (toolSwingSec * (1 - 0.01 * (level - 1))) / (1 + Math.max(0, speedBonus));
 }
 
+// ------------------------------------------------------------------ plants (tailoring)
+
+export type PlantKind = 'flax' | 'bog_cotton';
+export const PLANT_TYPES: Record<PlantKind, NodeTypeDef> = {
+  flax: { name: 'Flax', item: 'flax', skill: 'tailoring', level: 1, power: 0, xp: 6, respawnSec: [8 * 60, 15 * 60], hits: [2, 4] },
+  bog_cotton: { name: 'Bog cotton', item: 'bog_cotton', skill: 'tailoring', level: 10, power: 0, xp: 16, respawnSec: [10 * 60, 20 * 60], hits: [2, 4] },
+};
+/** Seconds per pick at level 1 (no tool needed); −1% per level. */
+export const PICK_SEC = 1.5;
+export interface Plant { id: string; kind: PlantKind; x: number; y: number; z: number }
+
+/** Flax fields in the home valley's meadows; bog cotton along the lake shore and in Gruben's bog. */
+export const FLAX_FIELDS = [{ name: 'Flax field', x: 10, z: 42 }, { name: 'Flax field', x: -46, z: 4 }, { name: 'Flax field', x: 44, z: 62 }];
+function generatePlants(): Plant[] {
+  const out: Plant[] = [];
+  const ok = (x: number, z: number) => !keepClear(x, z) && pathDist(x, z) > 2 && slopeY(x, z) > 0.85
+    && out.every((p) => Math.hypot(p.x - x, p.z - z) > 2.2) && VEINS.every((v) => Math.hypot(v.x - x, v.z - z) > 3);
+  FLAX_FIELDS.forEach((f, fi) => {
+    const rng = mulberry32(5100 + fi);
+    for (let i = 0, made = 0; i < 80 && made < 6; i++) {
+      const a = rng() * Math.PI * 2, d = rng() * 7, x = f.x + Math.cos(a) * d, z = f.z + Math.sin(a) * d;
+      if (heightAt(x, z) > 0.8 && ok(x, z)) { out.push({ id: `f${fi}-${made}`, kind: 'flax', x, y: heightAt(x, z), z }); made++; }
+    }
+  });
+  // Lake shore: wet ground just above the water.
+  const rl = mulberry32(5200);
+  for (let i = 0, made = 0; i < 600 && made < 10; i++) {
+    const a = rl() * Math.PI * 2, d = LAKE.r * (0.6 + rl() * 0.6), x = LAKE.x + Math.cos(a) * d, z = LAKE.z + Math.sin(a) * d, h = heightAt(x, z);
+    if (h > 0.35 && h < 1.4 && ok(x, z)) { out.push({ id: `c-l${made}`, kind: 'bog_cotton', x, y: h, z }); made++; }
+  }
+  // Gruben's Lantern bog.
+  const rg = mulberry32(5300);
+  for (let i = 0, made = 0; i < 300 && made < 8; i++) {
+    const a = rg() * Math.PI * 2, d = 2 + rg() * 12, x = G.x - 42 + Math.cos(a) * d, z = G.z - 46 + Math.sin(a) * d;
+    if (ok(x, z)) { out.push({ id: `c-g${made}`, kind: 'bog_cotton', x, y: heightAt(x, z), z }); made++; }
+  }
+  return out;
+}
+export const PLANTS: Plant[] = generatePlants();
+export const PLANT_BY_ID: Map<string, Plant> = new Map(PLANTS.map((p) => [p.id, p]));
+
 // ------------------------------------------------------------------ fishing
 
 /** Fish in the lake by level; weights are relative. Rare fish roll separately. */
@@ -229,7 +270,7 @@ export const isFishable = (x: number, z: number) => heightAt(x, z) < WATER_LEVEL
 
 // ------------------------------------------------------------------ places: stations, NPCs, inn
 
-export type StationKind = 'furnace' | 'anvil' | 'workbench' | 'campfire' | 'stove' | 'tanning';
+export type StationKind = 'furnace' | 'anvil' | 'workbench' | 'campfire' | 'stove' | 'tanning' | 'loom';
 export interface Station { id: string; kind: StationKind; name: string; x: number; z: number; r: number }
 const V = VILLAGE;
 
@@ -239,10 +280,12 @@ export const STATIONS: Station[] = [
   { id: 'camp_bench', kind: 'workbench', name: 'Workbench', x: 9, z: 4, r: 1 },
   { id: 'camp_fire', kind: 'campfire', name: 'Campfire', x: -3, z: 6, r: 0.9 },
   { id: 'village_fire', kind: 'campfire', name: 'Campfire', x: V.x + 1, z: V.z + 7, r: 0.9 },
-  { id: 'inn_stove', kind: 'stove', name: 'Inn stove', x: V.x + 13.5, z: V.z - 3, r: 0.8 },
+  { id: 'inn_stove', kind: 'stove', name: 'Inn stove', x: V.x - 13.5, z: V.z - 2.5, r: 0.8 },
   { id: 'village_bench', kind: 'workbench', name: 'Workbench', x: V.x - 8, z: V.z - 1, r: 1 },
   { id: 'camp_tanning', kind: 'tanning', name: 'Tanning rack', x: -4, z: -12.5, r: 1 },
   { id: 'village_tanning', kind: 'tanning', name: 'Tanning rack', x: V.x + 13, z: V.z + 6, r: 1 },
+  { id: 'village_loom', kind: 'loom', name: 'Loom', x: V.x - 9.5, z: V.z + 6, r: 1 },
+  { id: 'gruben_loom', kind: 'loom', name: 'Loom', x: G.x - 6, z: G.z + 61, r: 1 },
   // Gruben's arrival camp: a fire, a forge and a rack, so you can work what you find up here.
   { id: 'gruben_fire', kind: 'campfire', name: 'Campfire', x: G.x - 4, z: G.z + 51, r: 0.9 },
   { id: 'gruben_furnace', kind: 'furnace', name: 'Furnace', x: G.x + 7, z: G.z + 48, r: 1.2 },
@@ -250,14 +293,14 @@ export const STATIONS: Station[] = [
   { id: 'gruben_tanning', kind: 'tanning', name: 'Tanning rack', x: G.x - 9, z: G.z + 57, r: 1 },
 ];
 export const STATION_BY_ID: Map<string, Station> = new Map(STATIONS.map((s) => [s.id, s]));
-export const STATION_LABEL: Record<StationKind, string> = { furnace: 'Furnace', anvil: 'Anvil', workbench: 'Workbench', campfire: 'Campfire', stove: 'Stove', tanning: 'Tanning rack' };
+export const STATION_LABEL: Record<StationKind, string> = { furnace: 'Furnace', anvil: 'Anvil', workbench: 'Workbench', campfire: 'Campfire', stove: 'Stove', tanning: 'Tanning rack', loom: 'Loom' };
 
 export type NpcRole = 'shop' | 'quests' | 'inn' | 'imbuer';
 export interface Npc { id: string; name: string; title: string; x: number; z: number; face: number; color: number; race: 'human' | 'dwarf' | 'gnome' | 'ogre'; roles: NpcRole[]; sells?: string[] }
 
 export const NPCS: Npc[] = [
   { id: 'ingrid', name: 'Ingrid', title: 'Trader', x: -9, z: -7, face: 2, color: 5, race: 'human', roles: ['shop'],
-    sells: ['stone_pickaxe', 'stone_hatchet', 'basic_rod', 'small_rucksack', 'leather_backpack', ...ARMOUR_PIECES.filter((p) => p.slot !== 'offHand').map((p) => `cloth_${p.piece}`)] },
+    sells: ['stone_pickaxe', 'stone_hatchet', 'basic_rod', 'small_rucksack', 'leather_backpack'] },
   { id: 'mats', name: 'Mats', title: 'Miner', x: 20, z: -15, face: 3, color: 3, race: 'dwarf', roles: ['quests'] },
   { id: 'sigrid', name: 'Sigrid', title: 'Smith', x: 13, z: -6.5, face: 1, color: 0, race: 'human', roles: ['quests'] },
   { id: 'hilde', name: 'Hilde', title: 'Innkeeper', x: V.x, z: V.z - 3.2, face: 0, color: 6, race: 'human', roles: ['inn', 'quests'] },
@@ -408,6 +451,12 @@ const R: Recipe[] = [
       { id: `${base}necklace`, skill: 'smithing', station: 'anvil', level: 21 + i * 3, inputs: [{ item: 'silver_bar', qty: 2 }, ...gem], output: { item: `${base}necklace`, qty: 1 }, xp: 100 + i * 40, seconds: 4 },
     ];
   }),
+  // tailoring: spin and weave
+  { id: 'linen_thread', skill: 'tailoring', station: 'loom', level: 1, inputs: [{ item: 'flax', qty: 2 }], output: { item: 'linen_thread', qty: 1 }, xp: 5, seconds: 1.6 },
+  { id: 'linen', skill: 'tailoring', station: 'loom', level: 2, inputs: [{ item: 'linen_thread', qty: 2 }], output: { item: 'linen', qty: 1 }, xp: 10, seconds: 2.2 },
+  { id: 'cotton_thread', skill: 'tailoring', station: 'loom', level: 10, inputs: [{ item: 'bog_cotton', qty: 2 }], output: { item: 'cotton_thread', qty: 1 }, xp: 14, seconds: 1.8 },
+  { id: 'cotton_cloth', skill: 'tailoring', station: 'loom', level: 11, inputs: [{ item: 'cotton_thread', qty: 2 }], output: { item: 'cotton_cloth', qty: 1 }, xp: 26, seconds: 2.4 },
+  { id: 'spirit_silk', skill: 'tailoring', station: 'loom', level: 18, inputs: [{ item: 'cotton_cloth', qty: 2 }, { item: 'wisp_essence', qty: 1 }], output: { item: 'spirit_silk', qty: 1 }, xp: 60, seconds: 3 },
   // leatherworking
   { id: 'leather', skill: 'leatherworking', station: 'tanning', level: 1, inputs: [{ item: 'wolf_pelt', qty: 1 }], output: { item: 'leather', qty: 1 }, xp: 8, seconds: 2.5 },
   { id: 'lynx_leather', skill: 'leatherworking', station: 'tanning', level: 17, inputs: [{ item: 'lynx_pelt', qty: 1 }], output: { item: 'lynx_leather', qty: 1 }, xp: 34, seconds: 3 },
@@ -439,6 +488,15 @@ for (const p of ARMOUR_PIECES) {
   R.push({ id: `steel_${p.piece}`, skill: 'smithing', station: 'anvil', level: lvl + 17, inputs: [{ item: 'steel_bar', qty: p.bars }, { item: 'leather', qty: Math.ceil(p.bars / 6) }], output: { item: `steel_${p.piece}`, qty: 1 }, xp: p.bars * 45, seconds: 3.5 + p.bars * 0.2 });
   R.push({ id: `silversteel_${p.piece}`, skill: 'smithing', station: 'anvil', level: lvl + 26, inputs: [{ item: 'silversteel_bar', qty: Math.ceil(p.bars / 2) }, { item: 'steel_bar', qty: Math.ceil(p.bars / 2) }, { item: 'goblin_leather', qty: Math.ceil(p.bars / 6) }], output: { item: `silversteel_${p.piece}`, qty: 1 }, xp: p.bars * 80, seconds: 4 + p.bars * 0.2 });
 }
+// Cloth armour (tailoring): linen, bog cotton (needs a little linen), spirit silk (a little bog cotton).
+for (const p of ARMOUR_PIECES) {
+  if (p.slot === 'offHand') continue;
+  const n = { helm: 3, pauldrons: 3, breastplate: 6, greaves: 5, gauntlets: 2, boots: 2 }[p.piece] ?? 3;
+  const lvl = { gauntlets: 1, boots: 1, helm: 2, pauldrons: 3, greaves: 4, breastplate: 5 }[p.piece] ?? 2;
+  R.push({ id: `cloth_${p.piece}`, skill: 'tailoring', station: 'loom', level: lvl, inputs: [{ item: 'linen', qty: n }], output: { item: `cloth_${p.piece}`, qty: 1 }, xp: n * 14, seconds: 2 + n * 0.3 });
+  R.push({ id: `cotton_${p.piece}`, skill: 'tailoring', station: 'loom', level: lvl + 9, inputs: [{ item: 'cotton_cloth', qty: n }, { item: 'linen', qty: 1 }], output: { item: `cotton_${p.piece}`, qty: 1 }, xp: n * 35, seconds: 2.5 + n * 0.3 });
+  R.push({ id: `silk_${p.piece}`, skill: 'tailoring', station: 'loom', level: lvl + 18, inputs: [{ item: 'spirit_silk', qty: n }, { item: 'cotton_cloth', qty: 1 }], output: { item: `silk_${p.piece}`, qty: 1 }, xp: n * 70, seconds: 3 + n * 0.3 });
+}
 // Leather armour: wolf leather (tier 1) and goblinhide (tier 2, needs a little wolf leather too).
 for (const p of ARMOUR_PIECES) {
   if (p.slot === 'offHand') continue;
@@ -458,6 +516,7 @@ export function recipeGroup(r: Recipe): string {
   if (r.skill === 'carpentry' && (out.kind === 'ammo' || r.output.item === 'arrow_shaft')) return 'Arrows';
   if (r.skill === 'leatherworking') return out.look === 'goblin' ? 'Goblinhide' : out.look === 'lynx' ? 'Lynx' : 'Wolf leather';
   if (out.slot === 'ring' || out.slot === 'neck') return 'Jewellery';
+  if (r.skill === 'tailoring') return out.look === 'silk' ? 'Spirit silk' : out.look === 'cotton' ? 'Bog cotton' : 'Linen';
   const look = out.look ?? ins[0]?.look ?? 'stone';
   return look[0].toUpperCase() + look.slice(1);
 }

@@ -50,6 +50,7 @@ export type ClientMsg =
   | { t: 'ping'; at: number }
   | { t: 'mine'; node: string }
   | { t: 'chop'; node: string }
+  | { t: 'pick'; node: string }
   | { t: 'cast'; x: number; z: number }
   | { t: 'reel'; ok: boolean }
   | { t: 'craft'; recipe: string; count: number; station: string }
@@ -144,7 +145,7 @@ export function decodeClient(raw: string): ClientMsg | null {
       return { t: 'input', seq: m.seq, x: m.x, y: m.y, z: m.z, yaw: m.yaw, pitch: m.pitch, act: ACTS.includes(m.act) ? m.act : undefined };
     case 'chat': return typeof m.text === 'string' ? { t: 'chat', text: m.text } : null;
     case 'ping': return num(m.at) ? { t: 'ping', at: m.at } : null;
-    case 'mine': case 'chop': return str(m.node) ? { t: m.t, node: m.node } : null;
+    case 'mine': case 'chop': case 'pick': return str(m.node) ? { t: m.t, node: m.node } : null;
     case 'cast': return num(m.x) && num(m.z) ? { t: 'cast', x: m.x, z: m.z } : null;
     case 'reel': return { t: 'reel', ok: m.ok === true };
     case 'craft':

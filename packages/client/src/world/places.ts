@@ -95,7 +95,7 @@ export class Places {
 
   private station(s: Station): void {
     const centre = s.id.startsWith('camp') ? { x: 0, z: 0 } : s.id.startsWith('gruben') ? GRUBEN_CAMP : VILLAGE;
-    const foot: Record<string, [number, number]> = { furnace: [2.2, 2.2], anvil: [1.2, 1.2], workbench: [2, 1], stove: [1.4, 1], tanning: [2.2, 1] };
+    const foot: Record<string, [number, number]> = { furnace: [2.2, 2.2], anvil: [1.2, 1.2], workbench: [2, 1], stove: [1.4, 1], tanning: [2.2, 1], loom: [1.8, 1.2] };
     const g = this.place(s.x, s.z, centre.x, centre.z, foot[s.kind]);
     let h = 1.6;
     if (s.kind === 'furnace') {
@@ -156,6 +156,17 @@ export class Places {
       }
       const tub = mesh(new THREE.CylinderGeometry(0.4, 0.35, 0.5, 12).translate(0, 0.25, 0), M.darkWood, g); tub.position.set(1.4, 0, 0.5);
       h = 2.3;
+    } else if (s.kind === 'loom') {
+      // A standing loom with a half-woven cloth, and a spinning wheel beside it.
+      for (const sx of [-0.8, 0.8]) for (const sz of [-0.35, 0.35]) bx(g, 0.08, 1.6, 0.08, M.darkWood, sx, 0.8, sz);
+      bx(g, 1.7, 0.08, 0.08, M.darkWood, 0, 1.55, -0.35); bx(g, 1.7, 0.08, 0.08, M.darkWood, 0, 0.55, 0.35);
+      bx(g, 1.7, 0.1, 0.1, M.wood, 0, 0.75, -0.35);
+      const cloth = mesh(new THREE.PlaneGeometry(1.4, 0.75), new THREE.MeshStandardMaterial({ color: 0xd8ccb0, roughness: 1, side: THREE.DoubleSide }), g);
+      cloth.position.set(0, 1.15, -0.35);
+      for (let i = 0; i < 12; i++) bx(g, 0.01, 0.75, 0.01, mat(0xe8e0cc, null), -0.65 + i * 0.12, 0.95, 0);
+      const wheel = mesh(new THREE.TorusGeometry(0.32, 0.03, 6, 16), M.wood, g); wheel.position.set(1.35, 0.6, 0.1); wheel.rotation.y = Math.PI / 2;
+      bx(g, 0.06, 0.6, 0.06, M.darkWood, 1.35, 0.3, 0.1);
+      h = 2;
     } else if (s.kind === 'stove') {
       bx(g, 1.3, 1.0, 0.9, M.stone, 0, 0.5, 0);
       bx(g, 1.4, 0.1, 1.0, M.dark, 0, 1.05, 0);
@@ -378,9 +389,12 @@ export class Places {
     bx(g, 0.06, 0.6, 0.8, mat(0xe8d8a8, null, { r: 0.3 }), w / 2 - 0.05, 1.45, -0.3);
     // Ceiling and roof.
     bx(g, w, 0.06, d, M.darkWood, 0, H + 0.03, 0);
-    for (const sx of [-1, 1]) bx(g, w * 0.62, 0.16, d + 0.6, hut ? M.roof : M.turf, sx * w * 0.24, H + 0.55, 0, 0, 0, -sx * 0.55);
+    // Two roof slabs meeting at the ridge, their low edges resting on the wall tops.
+    const slope = 0.5, half = (w / 2 + 0.35) / Math.cos(slope);
+    for (const sx of [-1, 1]) bx(g, half, 0.16, d + 0.6, hut ? M.roof : M.turf, sx * (w / 2 + 0.35) / 2, H + 0.1 + Math.tan(slope) * (w / 2 + 0.35) / 2, 0, 0, 0, -sx * slope);
     // Gable ends: stacked boards, narrowing to the ridge.
-    for (const sz of [-1, 1]) for (let i = 0; i < 4; i++) bx(g, w * (1 - i * 0.24), 0.22, 0.06, M.wood, 0, H + 0.12 + i * 0.22, sz * (d / 2 + T / 2));
+    const ridge = Math.tan(slope) * (w / 2 + 0.35);
+    for (const sz of [-1, 1]) for (let i = 0, n = Math.ceil(ridge / 0.22); i < n; i++) bx(g, w * (1 - (i + 0.5) / n), 0.22, 0.06, M.wood, 0, H + 0.11 + i * 0.22, sz * (d / 2 + T / 2));
     // Door on a hinge.
     const hinge = new THREE.Group(); hinge.position.set(-doorW / 2, 0, -d / 2); g.add(hinge);
     bx(hinge, doorW, 2.0, 0.07, M.darkWood, doorW / 2, 1.02, 0);

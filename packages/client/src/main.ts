@@ -9,7 +9,7 @@ import {
   CAST_RANGE, HOMES, HOUSES, PORTALS, regionAt, homeAt, homeDoorway, innRoom, toWorld, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS,
   STATIONS, TREE_BY_ID, TREE_TYPES, USE_RANGE, VEIN_BY_ID, VEIN_TYPES, WATER_LEVEL,
   MOBS, groundAt, attackInterval, attackRange, computeStats, faceOf, inCaveRegion, isFishable, levelFromXp, r2, r3, swingSeconds, weaponClass,
-  type CharacterBuild, type HoldSlot, type MobState, type PlayerStats, type Tree, type Vein,
+  PICK_SEC, PLANT_BY_ID, PLANT_TYPES, type Plant, type CharacterBuild, type HoldSlot, type MobState, type PlayerStats, type Tree, type Vein,
 } from '@kontor/shared';
 import { createGfx } from './engine/renderer.js';
 import { Input } from './engine/input.js';
@@ -19,6 +19,7 @@ import { makeViewmodel, SWING_SEC, STRIKE_AT } from './entities/viewmodel.js';
 import { gearFromEquip } from './entities/held.js';
 import { Mobs } from './entities/mobs.js';
 import { Veins } from './world/veins.js';
+import { Plants } from './world/plants.js';
 import { Places } from './world/places.js';
 import { CaveView } from './world/cave.js';
 import { Fx } from './world/fx.js';
@@ -49,6 +50,7 @@ const terrain = new Terrain(scene);
 terrain.dense = settingsStore.get().quality !== 'low';
 terrain.update(0, 0, 99); // build the spawn area up front
 const veins = new Veins(scene);
+const plants = new Plants(scene);
 const places = new Places(scene);
 const caveView = new CaveView(scene);
 const mobs = new Mobs(scene);
@@ -228,12 +230,13 @@ net.on((msg) => {
       break;
     case 'nodes':
       veins.setDepleted(msg.depleted);
+      plants.setDepleted(msg.depleted);
       setTreesDepleted(msg.depleted, !firstNodes);
       firstNodes = false;
       break;
     case 'node': {
-      const v = VEIN_BY_ID.get(msg.id), t = TREE_BY_ID.get(msg.id);
-      const p = v ? new THREE.Vector3(v.x, v.y + 1.5 * v.r, v.z) : t ? new THREE.Vector3(t.x, t.y + 1.6, t.z) : null;
+      const v = VEIN_BY_ID.get(msg.id), t = TREE_BY_ID.get(msg.id), pl = PLANT_BY_ID.get(msg.id);
+      const p = v ? new THREE.Vector3(v.x, v.y + 1.5 * v.r, v.z) : t ? new THREE.Vector3(t.x, t.y + 1.6, t.z) : pl ? new THREE.Vector3(pl.x, pl.y + 1.1, pl.z) : null;
       if (p) fx.nodeWear(msg.id, p, msg.left, msg.total);
       break;
     }
@@ -309,7 +312,7 @@ function setPrompt(html: string | null) {
 
 // ---------------------------------------------------------------- what you're pointing at / standing by
 type Near = { kind: 'npc'; id: string; name: string } | { kind: 'home' | 'door' | 'bed'; id: number; name: string } | { kind: 'station'; id: string; name: string } | { kind: 'loot'; id: number; name: string } | { kind: 'corpse'; id: string; name: string } | null;
-type Aim = { kind: 'mob'; m: MobState } | { kind: 'vein'; v: Vein } | { kind: 'tree'; t: Tree } | { kind: 'water'; p: THREE.Vector3 } | null;
+type Aim = { kind: 'mob'; m: MobState } | { kind: 'vein'; v: Vein } | { kind: 'plant'; p: Plant } | { kind: 'tree'; t: Tree } | { kind: 'water'; p: THREE.Vector3 } | null;
 let near: Near = null;
 let aimed: Aim = null;
 let nextSwingAt = 0, swingUntil = 0, nextAttackAt = 0, spinT = 0, travelAt = 0;
@@ -338,6 +341,12 @@ function use() {
 
 function blocker(a: NonNullable<Aim>): string | null {
   const g = gameStore.get();
+  if (a.kind === 'plant') {
+    const type = PLANT_TYPES[a.p.kind], lvl = levelFromXp(g.xp.tailoring ?? 0);
+    if (plants.isDepleted(a.p.id)) return `${type.name} — picked clean`;
+    if (lvl < type.level) return `${type.name} — needs Tailoring ${type.level} (you have ${lvl})`;
+    return null;
+  }
   if (a.kind !== 'vein' && a.kind !== 'tree') return null;
   const type = a.kind === 'vein' ? VEIN_TYPES[a.v.type] : TREE_TYPES[a.t.kind];
   const slot = type.skill === 'mining' ? 'pickaxe' : 'hatchet';
@@ -430,7 +439,9 @@ function interact(now: number, playing: boolean) {
   if (m) aimed = { kind: 'mob', m };
   else {
     const v = veins.target(cam.position, fwd, MINE_RANGE + 0.6);
+    const pl = v ? null : plants.target(cam.position, fwd, 2.6);
     if (v) aimed = { kind: 'vein', v };
+    else if (pl) aimed = { kind: 'plant', p: pl };
     else {
       const t = targetTree(cam.position, fwd, MINE_RANGE + 0.4);
       if (t) aimed = { kind: 'tree', t };
@@ -444,6 +455,7 @@ function interact(now: number, playing: boolean) {
     }
   }
   veins.setHighlight(aimed?.kind === 'vein' ? aimed.v.id : null);
+  plants.setHighlight(aimed?.kind === 'plant' ? aimed.p.id : null);
   mobs.setTarget(aimed?.kind === 'mob' ? aimed.m.id : null);
   const block = aimed ? blocker(aimed) : null;
 
@@ -467,6 +479,12 @@ function interact(now: number, playing: boolean) {
       if (g.held !== slot) net.send({ t: 'hold', slot });
       viewmodel.swing();
       setTimeout(() => { net.send(skill === 'mining' ? { t: 'mine', node: id } : { t: 'chop', node: id }); if (skill === 'mining') veins.hit(id); }, SWING_SEC * STRIKE_AT * 1000);
+      swingUntil = now + SWING_SEC * 1000;
+    } else if (aimed?.kind === 'plant' && !block && now >= nextSwingAt) {
+      const lvl = levelFromXp(g.xp.tailoring ?? 0);
+      nextSwingAt = now + Math.max(PICK_SEC * (1 - 0.01 * (lvl - 1)) * 1000, SWING_SEC * 1000);
+      const id = aimed.p.id;
+      setTimeout(() => { net.send({ t: 'pick', node: id }); plants.hit(id); }, 250);
       swingUntil = now + SWING_SEC * 1000;
     } else if (aimed?.kind === 'water' && !castAt && now >= nextSwingAt) {
       castAt = aimed.p.clone();
@@ -574,6 +592,7 @@ function frame() {
   fx.update(dt);
   viewmodel.update(dt, me?.speed ?? 0, playing ? look.dx : 0, playing ? look.dy : 0);
   veins.animate(dt);
+  plants.animate(dt, performance.now() / 1000);
   animateTrees(dt);
   places.animate(dt);
   caveView.animate(dt);
@@ -597,5 +616,5 @@ frame();
 // Exposed for automated smoke tests and debugging in the console.
 (window as any).__kontor = {
   get me() { return me; }, get build() { return myBuild; }, get aimed() { return aimed; }, get near() { return near; }, get stats() { return stats; },
-  trees: TREE_BY_ID, remotes, net, terrain, veins, mobs, fx, viewmodel, netStore, uiStore, gameStore, settingsStore, creatorPreview, preview, auth, openPanel, fishing, use, special,
+  trees: TREE_BY_ID, remotes, net, terrain, veins, mobs, places, fx, viewmodel, netStore, uiStore, gameStore, settingsStore, creatorPreview, preview, auth, openPanel, fishing, use, special,
 };

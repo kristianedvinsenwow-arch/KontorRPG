@@ -131,6 +131,7 @@ export class World {
       case 'chat': return this.chat(p, msg.text);
       case 'mine': return gather(this, p, 'mine', msg.node);
       case 'chop': return gather(this, p, 'chop', msg.node);
+      case 'pick': return gather(this, p, 'pick', msg.node);
       case 'cast': return cast(this, p, msg.x, msg.z);
       case 'reel': return reel(this, p, msg.ok);
       case 'craft': return this.craft(p, msg.recipe, msg.count, msg.station);

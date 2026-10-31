@@ -187,7 +187,7 @@ test('bad tokens are rejected and a second login replaces the first', async () =
 
 // ------------------------------------------------------------------ gameplay systems
 import { ITEMS, NPC_BY_ID, STATION_BY_ID, VEIN_BY_ID, VEIN_TYPES, TREE_BY_ID, MOBS, INN, CAVE_ENTRANCE, CAVE_START, QUEST_BY_ID, countItem, xpForLevel, isFishable, LAKE, heightAt as h } from '@kontor/shared';
-import { PORTAL_BY_ID, regionAt, STATIONS, HOMES, innDoor, innRoomAt, homeAt } from '@kontor/shared';
+import { PORTAL_BY_ID, regionAt, STATIONS, HOMES, innDoor, innRoomAt, homeAt, PLANTS } from '@kontor/shared';
 import { damageMob } from '../src/combat.js';
 
 function game(random: () => number = () => 0.5, store?: MemoryStore) {
@@ -662,4 +662,30 @@ test('lodge rooms: only the tenant opens the door; nobody else walks into a clos
   q.bag[0] = { id: 'stone', qty: 1 };
   world.handle(c2, { t: 'storage', op: 'put', index: 0, qty: 1 });
   assert.equal(countItem(p.storage, 'stone'), 0);
+});
+
+test('tailoring: pick flax by hand, spin and weave at a loom, make a linen hood; Ingrid sells no cloth', () => {
+  const { world, c, p, place, advance } = game();
+  assert.ok(!NPC_BY_ID.get('ingrid')!.sells!.some((id) => id.startsWith('cloth_')));
+  const flax = PLANTS.find((x) => x.kind === 'flax')!;
+  place(flax.x + 1, flax.z);
+  for (let i = 0; i < 12; i++) { world.handle(c, { t: 'pick', node: flax.id }); advance(1600); world.step(); }
+  assert.ok(countItem(p.bag, 'flax') >= 2, 'picked some flax');
+  assert.ok(world.nodes.get(flax.id)!.until > 0, 'the patch was picked clean');
+  // Bog cotton needs Tailoring 10.
+  const cot = PLANTS.find((x) => x.kind === 'bog_cotton')!;
+  place(cot.x + 1, cot.z);
+  world.handle(c, { t: 'pick', node: cot.id });
+  assert.equal(countItem(p.bag, 'bog_cotton'), 0);
+  p.bag[0] = { id: 'flax', qty: 12 }; for (let i = 1; i < p.bag.length; i++) p.bag[i] = null;
+  const loom = STATIONS.find((s) => s.kind === 'loom')!;
+  place(loom.x + 1.5, loom.z);
+  const run = (recipe: string, count: number) => { world.handle(c, { t: 'craft', recipe, count, station: loom.id }); for (let i = 0; i < 80; i++) { advance(200); world.step(); } };
+  run('linen_thread', 6);
+  assert.equal(countItem(p.bag, 'linen_thread'), 6);
+  p.xp.tailoring = xpForLevel(3);
+  run('linen', 3);
+  assert.equal(countItem(p.bag, 'linen'), 3);
+  run('cloth_helm', 1);
+  assert.ok(p.bag.some((s) => s?.id === 'cloth_helm'));
 });

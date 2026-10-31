@@ -5,7 +5,7 @@
  */
 import {
   CAVE, CAVE_ENTRANCE, CAVE_ROOMS, CAVE_TUNNELS, MINING_SPOTS, MOB_AREAS, MOBS, NPCS, VILLAGE, WATER_LEVEL, WORLD_HALF,
-  GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, HOMES, VEINS, caveClearance, heightAt, inCaveRegion, regionAt, type Region,
+  FLAX_FIELDS, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, HOMES, VEINS, caveClearance, heightAt, inCaveRegion, regionAt, type Region,
 } from '@kontor/shared';
 
 export const mapInfo: { me: { x: number; z: number; yaw: number } | null; others: { x: number; z: number; name: string; color: string }[] } = { me: null, others: [] };
@@ -91,6 +91,7 @@ export function drawMap(): HTMLElement {
       for (const s of MINING_SPOTS) mark(s.x, s.z, `⛏ ${s.name}`, '#b0b4bc');
       mark(CAVE_ENTRANCE.x, CAVE_ENTRANCE.z, 'The Old Mine (lv 5–12)', '#b77be8', 6);
       mark(GRUBEN_PASS.x, GRUBEN_PASS.z, 'Pass to Gruben (monsters lv 13–22)', '#b77be8', 6);
+      for (const f of FLAX_FIELDS) mark(f.x, f.z, '✿ Flax', '#7a9ae8', 4);
     } else {
       const S = GRUBEN_SPOTS;
       mark(GRUBEN.x + S.arrival.x, GRUBEN.z + S.arrival.z, 'Gruben camp', '#f2a23a', 7);

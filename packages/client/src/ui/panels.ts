@@ -289,7 +289,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     }
     if (groups.length > 1) body.append(tabs);
     body.append(list, goldLine(g));
-    return [header(st.name, { furnace: 'Smelt ore into bars', anvil: 'Shape stone, smith weapons and metal armour', workbench: 'Carpentry: shafts, arrows, bows, staffs, rods', campfire: 'Cook your catch', stove: 'Cook your catch (burns less)', tanning: 'Leatherworking: tan hides, make leather armour' }[st.kind], 'E'), body];
+    return [header(st.name, { furnace: 'Smelt ore into bars', anvil: 'Shape stone, smith weapons and metal armour', workbench: 'Carpentry: shafts, arrows, bows, staffs, rods', campfire: 'Cook your catch', stove: 'Cook your catch (burns less)', tanning: 'Leatherworking: tan hides, make leather armour', loom: 'Tailoring: spin, weave, make cloth armour' }[st.kind] ?? '', 'E'), body];
   }
 
   // ---------------------------------------------------------------- NPC dialogs

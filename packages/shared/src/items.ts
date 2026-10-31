@@ -17,7 +17,7 @@ export type WeaponClass = 'sword' | 'longsword' | 'battleaxe' | 'bow' | 'staff' 
 export type ArmourType = 'cloth' | 'leather' | 'metal';
 export type ToolKind = 'pickaxe' | 'hatchet' | 'rod' | 'knife';
 /** Visual material for models and icons. */
-export type Look = 'stone' | 'iron' | 'steel' | 'silversteel' | 'silver' | 'coal' | 'gold' | 'birch' | 'pine' | 'leather' | 'goblin' | 'lynx' | 'cloth' | 'bone';
+export type Look = 'stone' | 'iron' | 'steel' | 'silversteel' | 'silver' | 'coal' | 'gold' | 'birch' | 'pine' | 'leather' | 'goblin' | 'lynx' | 'cloth' | 'linen' | 'cotton' | 'silk' | 'bone';
 
 export interface ItemDef {
   id: string;
@@ -210,6 +210,13 @@ add({ id: 'lynx_leather', name: 'Lynx leather', kind: 'material', stack: 10, tie
 add({ id: 'grave_dust', name: 'Grave dust', kind: 'material', stack: 20, sellValue: 2, blurb: 'What’s left of a draug. Alchemy will want it.' });
 add({ id: 'wisp_essence', name: 'Wisp essence', kind: 'material', stack: 10, sellValue: 6, blurb: 'A cold, faintly glowing mote. Enchanting will want it.' });
 add({ id: 'kings_crown', name: 'Rusted crown', kind: 'trinket', stack: 5, sellValue: 60, blurb: 'Proof you put the Mine King back to rest.' });
+add({ id: 'flax', name: 'Flax', kind: 'material', stack: 20, tier: 1, look: 'linen', sellValue: 0, blurb: 'Pulled from the flax patches in the meadows. Spin it at a loom.' });
+add({ id: 'bog_cotton', name: 'Bog cotton', kind: 'material', stack: 20, tier: 2, look: 'cotton', sellValue: 1, blurb: 'Myrull: white tufts from the wet ground by the lake and in Gruben’s bog.' });
+add({ id: 'linen_thread', name: 'Linen thread', kind: 'material', stack: 20, tier: 1, look: 'linen', sellValue: 0, blurb: 'Spun flax. Weave it into linen.' });
+add({ id: 'linen', name: 'Linen', kind: 'material', stack: 10, tier: 1, look: 'linen', sellValue: 2, blurb: 'Woven linen cloth. Linen garments are made from it.' });
+add({ id: 'cotton_thread', name: 'Cotton thread', kind: 'material', stack: 20, tier: 2, look: 'cotton', sellValue: 1, blurb: 'Spun bog cotton. Weave it into wool-soft cloth.' });
+add({ id: 'cotton_cloth', name: 'Bog-cotton cloth', kind: 'material', stack: 10, tier: 2, look: 'cotton', sellValue: 4, blurb: 'Soft, light and warm. Tier 2 cloth.' });
+add({ id: 'spirit_silk', name: 'Spirit silk', kind: 'material', stack: 10, tier: 3, look: 'silk', sellValue: 10, blurb: 'Bog-cotton cloth woven through with wisp essence. It hums faintly. Tier 3 cloth.' });
 add({ id: 'goblin_trinket', name: 'Goblin trinket', kind: 'junk', stack: 10, sellValue: 4, blurb: 'Shiny junk goblins hoard.' });
 add({ id: 'bat_wing', name: 'Bat wing', kind: 'material', stack: 10, sellValue: 1, blurb: 'Leathery. Alchemy will want these.' });
 add({ id: 'troll_tooth', name: 'Troll tooth', kind: 'trinket', stack: 5, sellValue: 25, blurb: 'Proof you beat Old Knut.' });
@@ -279,7 +286,10 @@ for (const p of ARMOUR_PIECES) {
   add({ id: `leather_${p.piece}`, name: `Leather ${p.name.leather}`, kind: 'armour', stack: 1, tier: 1, look: 'leather', slot: p.slot, armourType: 'leather', armour: p.leather[0], ward: p.leather[1], sellValue: 2, blurb: 'Supple wolf leather. Fair against blades and spells alike, and light on the feet.' });
   add({ id: `goblinhide_${p.piece}`, name: `Goblinhide ${p.name.leather}`, kind: 'armour', stack: 1, tier: 2, look: 'goblin', slot: p.slot, armourType: 'leather', armour: Math.max(1, Math.round(p.leather[0] * 1.8)), ward: Math.round(p.leather[1] * 1.8), sellValue: 5, blurb: 'Tough goblin hide, tanned and stitched. Sturdier than wolf leather.' });
   add({ id: `lynxhide_${p.piece}`, name: `Lynxhide ${p.name.leather}`, kind: 'armour', stack: 1, tier: 3, look: 'lynx', slot: p.slot, armourType: 'leather', armour: Math.max(1, Math.round(p.leather[0] * 2.6)), ward: Math.round(p.leather[1] * 2.6), sellValue: 10, blurb: 'Soft, spotted lynx hide. The finest leather this side of the mountains.' });
-  add({ id: `cloth_${p.piece}`, name: `Cloth ${p.name.cloth}`, kind: 'armour', stack: 1, tier: 1, look: 'cloth', slot: p.slot, armourType: 'cloth', armour: p.cloth[0], ward: p.cloth[1], sellValue: 2, buyPrice: 6 + p.bars, blurb: 'Light woven cloth. Turns spells well, but won’t stop much of a blade.' });
+  // Cloth (tailoring): linen (ids kept as cloth_* so old saves still work), bog cotton, spirit silk.
+  add({ id: `cloth_${p.piece}`, name: `Linen ${p.name.cloth}`, kind: 'armour', stack: 1, tier: 1, look: 'linen', slot: p.slot, armourType: 'cloth', armour: p.cloth[0], ward: p.cloth[1], sellValue: 2, blurb: 'Light woven linen. Turns spells well, but won’t stop much of a blade. Made at a loom.' });
+  add({ id: `cotton_${p.piece}`, name: `Bog-cotton ${p.name.cloth}`, kind: 'armour', stack: 1, tier: 2, look: 'cotton', slot: p.slot, armourType: 'cloth', armour: p.cloth[0], ward: Math.round(p.cloth[1] * 1.8) || 1, sellValue: 5, blurb: 'Soft bog-cotton cloth, quilted. Better against spells than linen. Made at a loom.' });
+  add({ id: `silk_${p.piece}`, name: `Spirit-silk ${p.name.cloth}`, kind: 'armour', stack: 1, tier: 3, look: 'silk', slot: p.slot, armourType: 'cloth', armour: Math.round(p.cloth[0] * 1.5), ward: Math.round(p.cloth[1] * 2.6) || 2, mods: { magicDmg: 0.02 }, sellValue: 10, blurb: 'Woven with wisp essence; it drinks in spells. Made at a loom.' });
 }
 
 // jewellery: silver with a gem set in it (crafted at the anvil, rolls rarity like other gear)
