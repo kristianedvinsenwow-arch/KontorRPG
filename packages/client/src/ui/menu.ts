@@ -11,6 +11,11 @@ export function initPause(onResume: () => void) {
   settingsStore.subscribe((st) => { quality2.value = st.quality; });
   quality2.onchange = () => settingsStore.set({ quality: quality2.value as 'low' | 'medium' | 'high' });
   sens.oninput = () => settingsStore.set({ sensitivity: Number(sens.value) });
+  const vol = { master: $<HTMLInputElement>('volMaster'), sfx: $<HTMLInputElement>('volSfx'), amb: $<HTMLInputElement>('volAmb') };
+  const v0 = settingsStore.get().volume;
+  vol.master.value = String(v0.master); vol.sfx.value = String(v0.sfx); vol.amb.value = String(v0.amb);
+  const onVol = () => settingsStore.set({ volume: { master: Number(vol.master.value), sfx: Number(vol.sfx.value), amb: Number(vol.amb.value) } });
+  vol.master.oninput = vol.sfx.oninput = vol.amb.oninput = onVol;
   $('resume').onclick = onResume;
   uiStore.subscribe((u) => { pause.hidden = u.panel !== 'pause'; });
 }

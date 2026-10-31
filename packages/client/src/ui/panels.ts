@@ -463,11 +463,79 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     return [header(n.name, n.title, 'E'), body];
   }
 
+  // ---------------------------------------------------------------- the character menu (C)
+
+  const CHAR_TABS: [typeof uiStore extends { get(): infer U } ? U extends { charTab: infer T } ? T : never : never, string, string][] = [
+    ['sheet', 'Character', 'C'], ['talents', 'Talents', 'T'], ['achievements', 'Achievements', 'J'], ['quests', 'Quests', 'L'],
+  ];
+
+  /** Every quest you have going, and what's done this period, with who gives it. */
+  function questLog(g: GameState): HTMLElement[] {
+    const now = Date.now();
+    const body = el('div', 'pbody');
+    const active = QUESTS.filter((q) => g.quests[q.id]?.active);
+    const box = el('div', 'quests');
+    box.append(el('div', 'lbl', `Active (${active.length})`));
+    if (!active.length) box.append(el('p', 'note', 'No quests yet. Talk to villagers with a “!” over their heads.'));
+    for (const q of active) {
+      const st = g.quests[q.id] ?? {};
+      const have = 'item' in q.need ? countItem(g.bag, q.need.item) : st.progress ?? 0;
+      const row = el('div', 'quest active');
+      const info = el('div', 'rinfo');
+      const need = 'item' in q.need ? `${Math.min(have, q.need.qty)} / ${q.need.qty} ${ITEMS[q.need.item].name}` : `${Math.min(have, q.need.qty)} / ${q.need.qty} defeated`;
+      info.append(el('b', '', q.name), el('span', 'note', `${q.text} — ${NPC_BY_ID.get(q.npc)?.name}, ${q.period}. ${need}. Reward ${q.reward.gold} g.`));
+      const act = el('div', 'ract');
+      act.append(btn('Abandon', 'btn ghost', () => send({ t: 'quest', quest: q.id, op: 'abandon' })));
+      row.append(info, act);
+      box.append(row);
+    }
+    body.append(box);
+    const avail = QUESTS.filter((q) => !g.quests[q.id]?.active && questAvailable(q, g.quests, now));
+    const box2 = el('div', 'quests');
+    box2.append(el('div', 'lbl', `Available now (${avail.length})`));
+    for (const q of avail) {
+      const row = el('div', 'quest');
+      const info = el('div', 'rinfo');
+      info.append(el('b', '', q.name), el('span', 'note', `${NPC_BY_ID.get(q.npc)?.name} (${NPC_BY_ID.get(q.npc)?.title}) · ${q.period} · ${q.reward.gold} g`));
+      row.append(info);
+      box2.append(row);
+    }
+    body.append(box2);
+    return [header('Quests', 'Your quest log', 'L'), body];
+  }
+
+  function renderCharacter(tab: (typeof CHAR_TABS)[number][0], g: GameState) {
+    const tabs = $('charTabs');
+    tabs.replaceChildren(...CHAR_TABS.map(([id, name, key]) => btn(`${name} (${key})`, id === tab ? 'tab on' : 'tab', () => uiStore.set({ charTab: id }))));
+    const sheet = tab === 'sheet';
+    $('charWrap').hidden = !sheet;
+    $('charTabBody').hidden = sheet;
+    if (sheet) {
+      $('charInv').replaceChildren(...inventory(g));
+      $('charSkills').replaceChildren(...skillList(g));
+      const t = titleOf(g.ach.title);
+      $('charTitle').textContent = t ? `“${t}”` : 'No title';
+      // Title picker right on the sheet.
+      const earned = ACHIEVEMENTS.filter((x) => x.title && g.ach.done.includes(x.id));
+      const pickEl = $('charTitlePick');
+      if (earned.length) {
+        const sel = document.createElement('select');
+        sel.append(new Option('No title', ''), ...earned.map((x) => new Option(x.title!, x.id, false, x.id === g.ach.title)));
+        sel.value = g.ach.title ?? '';
+        sel.onchange = () => send({ t: 'title', id: sel.value || null });
+        pickEl.replaceChildren(el('span', 'lbl', 'Title'), sel, el('span', 'note', `${g.ach.done.length} of ${ACHIEVEMENTS.length} achievements`));
+      } else pickEl.replaceChildren(el('span', 'note', `Earn achievements (J) to unlock titles · ${g.ach.done.length} of ${ACHIEVEMENTS.length}`));
+    } else {
+      const parts = tab === 'talents' ? talents(g) : tab === 'achievements' ? achievements(g) : questLog(g);
+      $('charTabBody').replaceChildren(...parts);
+    }
+  }
+
   // ---------------------------------------------------------------- render
 
   function render() {
     const u = uiStore.get(), g = gameStore.get();
-    if (u.panel === 'character') { $('charInv').replaceChildren(...inventory(g)); $('charSkills').replaceChildren(...skillList(g)); $('charTitle').textContent = titleOf(g.ach.title) ? `“${titleOf(g.ach.title)}” · J for achievements` : 'No title yet · J for achievements'; }
+    if (u.panel === 'character') renderCharacter(u.charTab, g);
     const open = ['skills', 'craft', 'npc', 'home', 'talents', 'map', 'achievements'].includes(u.panel);
     root.hidden = !open;
     if (!open) return;

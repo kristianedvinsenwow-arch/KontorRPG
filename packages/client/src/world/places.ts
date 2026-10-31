@@ -341,6 +341,11 @@ export class Places {
     for (const w of this.windows) w.emissiveIntensity = n * 1.6;
   }
 
+  openDoors(): number[] { return this.roomDoors.flatMap((d, n) => (d?.open ? [n] : [])); }
+
+  /** Positions of every fire (campfires, furnaces, stoves, hearths, lanterns), for sound. */
+  firePositions(): THREE.Vector3[] { return this.fires.map((f) => f.light.getWorldPosition(new THREE.Vector3())); }
+
   doorOpen(n: number): boolean { return !!this.roomDoors[n]?.open; }
 
   /** Lodge room doors: which stand open (from the server). */
@@ -451,7 +456,8 @@ export class Places {
     const he = new THREE.Group(); he.position.set(f.hearth.x, 0.08, f.hearth.z); g.add(he);
     bx(he, 0.9, 0.9, 0.7, M.stone, 0, 0.45, 0.1);
     const fm = new THREE.MeshStandardMaterial({ color: 0x1a0a04, emissive: 0xff6a1a, emissiveIntensity: 2.2, roughness: 1 });
-    this.fires.push({ light: new THREE.PointLight(0, 0), mats: [fm], base: 1 });
+    const hl = new THREE.PointLight(0xff7a2a, 0, 0.01); hl.position.set(0, 0.4, -0.3); he.add(hl);
+    this.fires.push({ light: hl, mats: [fm], base: 0 });
     const fl = mesh(new THREE.PlaneGeometry(0.45, 0.3), fm, he, false); fl.position.set(0, 0.3, -0.26); fl.rotation.y = Math.PI;
     bx(he, 0.4, H + 1.2, 0.4, M.dark, 0.1, (H + 1.2) / 2 + 0.6, 0.2);
     if (f.table) {

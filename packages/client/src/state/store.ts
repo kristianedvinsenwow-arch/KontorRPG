@@ -39,6 +39,8 @@ export interface NetState {
 
 export interface UiState {
   panel: 'none' | 'menu' | 'character' | 'pause' | 'skills' | 'craft' | 'npc' | 'home' | 'talents' | 'map' | 'achievements';
+  /** Tab in the character menu (C): the sheet itself, talents, achievements, or quests. */
+  charTab: 'sheet' | 'talents' | 'achievements' | 'quests';
   /** Which home the door dialog is for (HOMES id). */
   home: number;
   /** Which station the crafting panel is for (station id). */
@@ -55,6 +57,8 @@ export interface Settings {
   sensitivity: number;
   /** Graphics quality: low = no shadows or post-processing (thin laptops), high = ambient occlusion too. */
   quality: 'low' | 'medium' | 'high';
+  /** Sound volumes 0..1. */
+  volume: { master: number; sfx: number; amb: number };
   /** Character build from the creator. Kept in the browser until M1 stores characters on the server. */
   build: CharacterBuild;
 }
@@ -63,7 +67,7 @@ const SETTINGS_KEY = 'kontorrpg.settings';
 
 /** Settings are a per-browser convenience, so localStorage is the right home (wrapped: it can throw). */
 export function loadSettings(): Settings {
-  const d: Settings = { name: '', color: Math.floor(Math.random() * 8), sensitivity: 1, quality: 'high', build: defaultBuild() };
+  const d: Settings = { name: '', color: Math.floor(Math.random() * 8), sensitivity: 1, quality: 'high', volume: { master: 0.8, sfx: 0.9, amb: 0.6 }, build: defaultBuild() };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) {
@@ -71,6 +75,7 @@ export function loadSettings(): Settings {
       const s = { ...d, ...parsed } as Settings;
       if (parsed.lowGpu === true && !parsed.quality) s.quality = 'low'; // older saved setting
       if (!['low', 'medium', 'high'].includes(s.quality)) s.quality = 'high';
+      if (!s.volume || typeof s.volume.master !== 'number') s.volume = d.volume;
       if (validateBuild(s.build)) s.build = defaultBuild(); // rules changed since it was saved
       return s;
     }
@@ -83,7 +88,7 @@ export function saveSettings(s: Settings): void {
 }
 
 export const netStore = createStore<NetState>({ status: 'offline', myId: null, build: null, pingMs: null, online: [] });
-export const uiStore = createStore<UiState>({ panel: 'menu', station: 'camp_anvil', npc: 'ingrid', home: 0, chatOpen: false, bossKey: false });
+export const uiStore = createStore<UiState>({ panel: 'menu', station: 'camp_anvil', npc: 'ingrid', charTab: 'sheet', home: 0, chatOpen: false, bossKey: false });
 
 /** What the server says you own and know. Only changed by server messages. */
 export interface GameState {

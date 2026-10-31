@@ -420,3 +420,13 @@ select:focus { border-color: var(--amber); outline: none; }
 .titles .ract { flex-wrap: wrap; gap: 6px; }
 .tag .title { display: block; font-size: 10.5px; font-style: italic; color: var(--amber); opacity: .9; }
 .chartitle { font-size: 12px; font-style: italic; color: var(--amber); margin-top: -6px; }
+
+/* Character menu: tabs above the sheet; other tabs replace the sheet with a card. */
+.charcol { display: flex; flex-direction: column; gap: 8px; max-width: calc(100% - 32px); max-height: calc(100vh - 32px); }
+.chartabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.chartabs .tab { background: rgba(20, 24, 26, .85); }
+.charcol .charwrap { max-width: 100%; max-height: calc(100vh - 80px); }
+.chartabbody { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 80px); }
+.titlepick { display: flex; flex-direction: column; gap: 4px; }
+.titlepick select { background: rgba(255, 255, 255, .06); color: var(--fg); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; font: inherit; }
+.titlepick .lbl { margin: 0; }

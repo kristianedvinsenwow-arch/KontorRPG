@@ -6,7 +6,7 @@
 import './styles.css';
 import * as THREE from 'three';
 import {
-  CAST_RANGE, daylight, sunAt, weatherAt, HOMES, HOUSES, PORTALS, regionAt, homeAt, homeDoorway, innRoom, toWorld, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS,
+  CAST_RANGE, EAT_LOCK_MS, pierDeck, heightAt as heightAtWorld, STATION_BY_ID, daylight, sunAt, weatherAt, HOMES, HOUSES, PORTALS, regionAt, homeAt, homeDoorway, innRoom, toWorld, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS,
   STATIONS, TREE_BY_ID, TREE_TYPES, USE_RANGE, VEIN_BY_ID, VEIN_TYPES, WATER_LEVEL,
   MOBS, groundAt, attackInterval, attackRange, computeStats, faceOf, inCaveRegion, isFishable, levelFromXp, r2, r3, swingSeconds, weaponClass,
   PICK_SEC, PLANT_BY_ID, PLANT_TYPES, type Plant, type CharacterBuild, type HoldSlot, type MobState, type PlayerStats, type Tree, type Vein,
@@ -21,6 +21,7 @@ import { Mobs } from './entities/mobs.js';
 import { Veins } from './world/veins.js';
 import { Plants } from './world/plants.js';
 import { Precip } from './world/precip.js';
+import { sound } from './engine/audio.js';
 import { makeHorse, animateHorse, SADDLE_Y, type Horse } from './entities/horse.js';
 import { Places } from './world/places.js';
 import { CaveView } from './world/cave.js';
@@ -57,10 +58,11 @@ const precip = new Precip(scene);
 const places = new Places(scene);
 const caveView = new CaveView(scene);
 const mobs = new Mobs(scene);
+mobs.onVoice = (kind, mood, pos) => sound.voice(kind, mood, { x: pos.x, y: pos.y + 1, z: pos.z });
 const fx = new Fx(scene);
 const input = new Input(renderer.domElement);
 const viewmodel = makeViewmodel(vmScene);
-const preview = new CharacterPreview('preview', () => uiStore.get().panel === 'character');
+const preview = new CharacterPreview('preview', () => uiStore.get().panel === 'character' && uiStore.get().charTab === 'sheet');
 const creatorPreview = new CharacterPreview('createPreview', () => uiStore.get().panel === 'menu');
 preview.setEnvironment(scene.environment);
 creatorPreview.setEnvironment(scene.environment);
@@ -74,7 +76,8 @@ let myBuild: CharacterBuild | null = null;
 let stats: PlayerStats | null = null;
 let eyeHeight = EYE_HEIGHT;
 /** Your horse while riding (drawn under the first-person camera), and how far the camera is lifted. */
-let myHorse: Horse | null = null, mountLift = 0;
+let myHorse: Horse | null = null, mountLift = 0, myName = '', mountedNow = false, wasOnGround = true, nextAmbAt = 0;
+let ambFire: THREE.Vector3 | null = null, ambWater = 0;
 /** Console/debug: shift the sky clock (ms) or force a weather. */
 const debugSky: { offset: number; weather: ReturnType<typeof weatherAt> | null } = { offset: 0, weather: null };
 let seq = 0;
@@ -118,7 +121,7 @@ initBossKey(() => input.unlock());
 const panels = initPanels((m) => net.send(m), () => { if (me) input.lock(); }, () => 1 + (stats?.all.sell ?? 0));
 const hotbar = initHotbar(
   (slot) => net.send({ t: 'hold', slot }),
-  (index) => net.send({ t: 'eat', index }),
+  (index) => { net.send({ t: 'eat', index }); if (ITEMS[gameStore.get().bag[index]?.id ?? '']?.food) sound.play('eat'); },
   () => { net.send({ t: 'respawn' }); input.lock(); },
 );
 const PANELS: UiState['panel'][] = ['character', 'skills', 'craft', 'npc', 'home', 'talents', 'map', 'achievements'];
@@ -132,6 +135,17 @@ renderer.domElement.addEventListener('click', () => {
   if ((p === 'none' || p === 'pause') && me) { uiStore.set({ panel: 'none' }); input.lock(); }
 });
 renderer.domElement.addEventListener('contextmenu', (e) => e.preventDefault());
+// Audio may only start after the player clicks or presses a key.
+for (const ev of ['pointerdown', 'keydown'] as const) addEventListener(ev, () => sound.unlock());
+sound.setVolumes(settingsStore.get().volume);
+settingsStore.subscribe((st) => sound.setVolumes(st.volume));
+// Soft clicks when game panels open and close.
+let lastPanel = uiStore.get().panel;
+uiStore.subscribe((u) => {
+  const big = (p: string) => PANELS.includes(p as UiState['panel']);
+  if (u.panel !== lastPanel) { if (big(u.panel)) sound.play('uiOpen'); else if (big(lastPanel)) sound.play('uiClose'); }
+  lastPanel = u.panel;
+});
 renderer.domElement.addEventListener('mousedown', (e) => {
   if (e.button === 2 && input.locked && uiStore.get().panel === 'none') special();
 });
@@ -154,20 +168,23 @@ document.addEventListener('pointerlockerror', () => {
 input.onKey((code) => {
   const u = uiStore.get();
   if (u.panel === 'menu' || u.bossKey || u.chatOpen) return;
-  const want: UiState['panel'] | null = code === 'KeyC' || code === 'KeyI' || code === 'KeyK' ? 'character' : code === 'KeyT' ? 'talents' : code === 'KeyM' ? 'map' : code === 'KeyJ' ? 'achievements' : null;
+  // The character menu (C) holds the sheet, talents (T), achievements (J) and quests (L) as tabs.
+  const charKey = ['KeyC', 'KeyI', 'KeyK', 'KeyT', 'KeyJ', 'KeyL'].includes(code);
+  const tab: UiState['charTab'] = code === 'KeyT' ? 'talents' : code === 'KeyJ' ? 'achievements' : code === 'KeyL' ? 'quests' : 'sheet';
+  const want: UiState['panel'] | null = charKey ? 'character' : code === 'KeyM' ? 'map' : null;
   if (PANELS.includes(u.panel)) {
-    const close = code === 'Escape' || want === u.panel || (code === 'KeyE' && (u.panel === 'craft' || u.panel === 'npc'));
+    const close = code === 'Escape' || (want === u.panel && (want !== 'character' || u.charTab === tab)) || (code === 'KeyE' && (u.panel === 'craft' || u.panel === 'npc'));
     if (close) { uiStore.set({ panel: 'none' }); input.lock(); return; }
-    if (want) openPanel(want);
+    if (want) openPanel(want, want === 'character' ? { charTab: tab } : {});
     return;
   }
   if (u.panel !== 'none' || !me) return;
-  if (want) return openPanel(want);
+  if (want) return openPanel(want, want === 'character' ? { charTab: tab } : {});
   if (code === 'KeyE') return use();
   if (code === 'Enter') { uiStore.set({ chatOpen: true }); input.unlock(); return; }
   const n = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(code);
   if (n >= 0) return net.send({ t: 'hold', slot: (['mainHand', 'pickaxe', 'hatchet', 'rod'] as HoldSlot[])[n] });
-  if (code === 'Digit5') { const g = gameStore.get(); const i = g.bag.findIndex((s) => s && ITEMS[s.id]?.food); if (i >= 0) net.send({ t: 'eat', index: i }); }
+  if (code === 'Digit5') { const g = gameStore.get(); const i = g.bag.findIndex((s) => s && ITEMS[s.id]?.food); if (i >= 0) { net.send({ t: 'eat', index: i }); if (Date.now() - g.hurtAt > EAT_LOCK_MS) sound.play('eat'); } }
   if (code === 'KeyR') { if (!gameStore.get().equip.mount) hud.toast('No mount — Eirik the stablemaster in Bjørkvik sells horses.', 2200, 'error'); else net.send({ t: 'mount' }); return; }
   if (code === 'Digit6') { const g = gameStore.get(); const i = g.bag.findIndex((s) => s && ITEMS[s.id]?.potion?.heal); if (i >= 0) net.send({ t: 'eat', index: i }); else hud.toast('No healing potion in your bag.', 1500, 'error'); }
 });
@@ -194,6 +211,7 @@ net.on((msg) => {
   switch (msg.t) {
     case 'welcome':
       myId = msg.id;
+      myName = msg.character.name;
       useCharacter(msg.character.name, msg.character.color, msg.character.build);
       if (msg.saved) hud.system(`Welcome back, ${msg.character.name}.`);
       if (!me) me = createLocalPlayer(msg.you.x, msg.you.y, msg.you.z, msg.you.yaw);
@@ -222,7 +240,12 @@ net.on((msg) => {
     case 'achievements': gameStore.set({ ach: { c: msg.c, done: msg.done, title: msg.title } }); break;
     case 'lease': gameStore.set({ lease: { room: msg.room, until: msg.until, storage: msg.storage } }); break;
     case 'rooms': gameStore.set({ rooms: msg.taken }); places.setRooms(msg.taken); break;
-    case 'doors': places.setDoors(msg.open); break;
+    case 'doors': {
+      const before = new Set(places.openDoors());
+      for (const n of HOMES.map((h) => h.id)) if (before.has(n) !== msg.open.includes(n)) { const d = homeDoorway(n); sound.play('door', { x: d.x, y: groundAt(d.x, d.z) + 1, z: d.z }); }
+      places.setDoors(msg.open);
+      break;
+    }
     case 'hp': gameStore.set({ hp: msg.hp, maxHp: msg.max, dead: msg.hp <= 0 && gameStore.get().dead }); break;
     case 'buffs': gameStore.set({ buffs: msg.list }); break;
     case 'dead':
@@ -230,14 +253,16 @@ net.on((msg) => {
       fishing.stop(); fx.setBobber(null); castAt = null;
       input.unlock();
       break;
-    case 'potion': gameStore.set({ potionReady: msg.ready }); break;
+    case 'potion': gameStore.set({ potionReady: msg.ready }); sound.play('drink'); break;
     case 'mounted':
+      if (msg.id) sound.play('neigh');
       gameStore.set({ mounted: msg.id });
       if (myHorse) { scene.remove(myHorse.g); myHorse = null; }
       if (msg.id) { myHorse = makeHorse(msg.id); scene.add(myHorse.g); }
       break;
     case 'cooldown': gameStore.set({ specialReady: msg.until }); break;
     case 'gain':
+      if (msg.item) sound.play(msg.item === 'coins' ? 'coins' : msg.rare ? 'uiRare' : 'pickup');
       if (msg.item) {
         const name = msg.item === 'coins' ? 'gold' : ITEMS[msg.item]?.name ?? msg.item;
         pop(`+${msg.qty ?? 1} ${name}`, msg.rare ? 'rare' : '', msg.item, msg.r ? rarityColor({ id: msg.item, r: msg.r as 0 }) : undefined);
@@ -247,6 +272,7 @@ net.on((msg) => {
     case 'nodes':
       veins.setDepleted(msg.depleted);
       plants.setDepleted(msg.depleted);
+      if (!firstNodes) for (const [id, st] of msg.depleted) { const t = TREE_BY_ID.get(id); if (t && st === 1) sound.play('treeFall', { x: t.x, y: t.y + 1, z: t.z }); }
       setTreesDepleted(msg.depleted, !firstNodes);
       firstNodes = false;
       break;
@@ -258,11 +284,17 @@ net.on((msg) => {
     }
     case 'job': {
       const r = msg.recipe ? RECIPE_BY_ID.get(msg.recipe) : undefined;
+      // A station sound for each item worked on.
+      if (r) { const st = STATION_BY_ID.get(uiStore.get().station); const k = st?.kind; sound.play(k === 'furnace' ? 'furnace' : k === 'anvil' ? 'anvil' : k === 'workbench' ? 'workbench' : k === 'campfire' || k === 'stove' ? 'cook' : k === 'tanning' ? 'tanning' : k === 'loom' ? 'loom' : k === 'alchemy' ? 'alchemy' : 'craftDone', st ? { x: st.x, y: groundAt(st.x, st.z) + 1, z: st.z } : undefined); }
       const speed = r ? 1 + Math.max(0, (stats?.scoped as Record<string, { craftSpeed: number }> | undefined)?.[r.skill]?.craftSpeed ?? 0) : 1;
       gameStore.set({ job: r ? { recipe: r.id, done: msg.done, total: msg.total, seconds: Math.max(0.1, r.seconds / speed), endsAt: performance.now() + msg.seconds * 1000 } : null });
       break;
     }
     case 'notice':
+      if (msg.kind === 'error') sound.play('uiError');
+      else if (/earned “/.test(msg.text) && msg.text.startsWith(`${myName} earned`)) sound.play('uiFanfare');
+      else if (/level up|reached level|Level \d+!/i.test(msg.text)) sound.play('uiLevel');
+      else if (msg.kind === 'rare') sound.play('uiRare');
       hud.toast(msg.text, msg.kind === 'rare' ? 6000 : 3500, msg.kind);
       if (msg.kind !== 'error') hud.system(msg.text);
       break;
@@ -276,12 +308,22 @@ net.on((msg) => {
       if (!p) break;
       const txt = msg.kind === 'dodge' ? 'Dodged' : msg.kind === 'block' ? `Blocked ${msg.dmg}` : msg.kind === 'heal' ? `+${msg.dmg}` : `${msg.dmg}${msg.crit ? '!' : ''}`;
       floatText(txt, `${msg.kind}${msg.crit ? ' crit' : ''}${mine ? ' me' : ''}`, p);
+      if (msg.kind === 'heal') { if (mine) sound.play('heal'); }
+      else if (msg.kind === 'dodge') sound.play('dodge', p);
+      else if (msg.kind === 'block') sound.play('block', p);
+      else if (mine) sound.play('hurt');
+      else {
+        sound.play(msg.crit ? 'crit' : 'hit', p);
+        const mob = mobs.get(msg.to);
+        if (mob && msg.kind !== 'burn' && mob.hp > 0 && Math.random() < 0.7) sound.voice(mob.k, 'hurt', p);
+      }
       if (mine && msg.kind !== 'heal' && msg.kind !== 'dodge') { document.getElementById('hurt')?.animate([{ opacity: 0.55 }, { opacity: 0 }], { duration: 450 }); gameStore.set({ hurtAt: Date.now() }); }
       break;
     }
     case 'fx': {
       const from = posOf(msg.from);
       if (!from) break;
+      sound.play(msg.kind === 'arrow' ? 'bow' : msg.kind === 'firebolt' ? 'fire' : msg.kind === 'frostbolt' ? 'frost' : msg.kind === 'magic' ? 'zap' : msg.kind, from);
       if (msg.kind === 'arrow' || msg.kind === 'firebolt' || msg.kind === 'frostbolt' || msg.kind === 'magic') {
         const start = msg.from === myId && me ? new THREE.Vector3(me.x, me.y + eyeHeight - 0.2, me.z).add(new THREE.Vector3(-Math.sin(me.yaw), 0, -Math.cos(me.yaw)).multiplyScalar(0.6)) : from;
         const to = msg.to;
@@ -293,12 +335,17 @@ net.on((msg) => {
       break;
     }
     case 'fish':
-      if (msg.state === 'cast') { if (castAt) fx.setBobber(castAt); }
+      if (msg.state === 'cast') { if (castAt) { fx.setBobber(castAt); sound.play('plop', { x: castAt.x, y: 0, z: castAt.z }); } }
       else if (msg.state === 'bite') {
         fx.bite();
+        if (castAt) sound.play('splash', { x: castAt.x, y: 0, z: castAt.z });
         hud.toast('A bite! Hold click to reel it in.', 2000, 'rare');
         fishing.start(msg.difficulty, msg.seconds, stats?.scoped.fishing.fishEase ?? 0, (ok) => net.send({ t: 'reel', ok }));
-      } else { fishing.stop(); fx.setBobber(null); castAt = null; if (msg.state === 'lost') hud.toast('It got away.', 2000); }
+      } else {
+        if (castAt) sound.play(msg.state === 'lost' ? 'lost' : 'splash', { x: castAt.x, y: 0, z: castAt.z });
+        if (msg.state !== 'lost') sound.play('reel');
+        fishing.stop(); fx.setBobber(null); castAt = null; if (msg.state === 'lost') hud.toast('It got away.', 2000);
+      }
       break;
   }
 });
@@ -343,7 +390,7 @@ function myRoom(): number | null {
 function use() {
   if (!near || !me) return;
   if (near.kind === 'loot') net.send({ t: 'pickup', id: near.id });
-  else if (near.kind === 'corpse') net.send({ t: 'skin', target: near.id });
+  else if (near.kind === 'corpse') { net.send({ t: 'skin', target: near.id }); sound.play('skin'); }
   else if (near.kind === 'npc') openPanel('npc', { npc: near.id });
   else if (near.kind === 'home') openPanel('home', { home: near.id });
   else if (near.kind === 'bed') net.send({ t: 'rest' });
@@ -481,6 +528,7 @@ function interact(now: number, playing: boolean) {
       if (now >= nextAttackAt) {
         nextAttackAt = now + attackInterval(main) * 1000;
         net.send({ t: 'attack', target: aimed.m.id, special: false });
+        if (attackRange(main) < 6) sound.play('swing');
         viewmodel.swing();
         swingUntil = now + SWING_SEC * 1000;
       }
@@ -494,21 +542,24 @@ function interact(now: number, playing: boolean) {
       const id = aimed.kind === 'vein' ? aimed.v.id : aimed.t.id;
       if (g.held !== slot) net.send({ t: 'hold', slot });
       viewmodel.swing();
-      setTimeout(() => { net.send(skill === 'mining' ? { t: 'mine', node: id } : { t: 'chop', node: id }); if (skill === 'mining') veins.hit(id); }, SWING_SEC * STRIKE_AT * 1000);
+      sound.play('swing');
+      setTimeout(() => { net.send(skill === 'mining' ? { t: 'mine', node: id } : { t: 'chop', node: id }); if (skill === 'mining') veins.hit(id); sound.play(skill === 'mining' ? 'mine' : 'chop'); }, SWING_SEC * STRIKE_AT * 1000);
       swingUntil = now + SWING_SEC * 1000;
     } else if (aimed?.kind === 'plant' && !block && now >= nextSwingAt) {
       const lvl = levelFromXp(g.xp[PLANT_TYPES[aimed.p.kind].skill] ?? 0);
       nextSwingAt = now + Math.max(PICK_SEC * (1 - 0.01 * (lvl - 1)) * 1000, SWING_SEC * 1000);
       const id = aimed.p.id;
-      setTimeout(() => { net.send({ t: 'pick', node: id }); plants.hit(id); }, 250);
+      setTimeout(() => { net.send({ t: 'pick', node: id }); plants.hit(id); sound.play('pick'); }, 250);
       swingUntil = now + SWING_SEC * 1000;
     } else if (aimed?.kind === 'water' && !castAt && now >= nextSwingAt) {
       castAt = aimed.p.clone();
       nextSwingAt = now + 1200;
       net.send({ t: 'cast', x: r2(castAt.x), z: r2(castAt.z) });
+      sound.play('cast');
       viewmodel.swing();
     } else if (!aimed && now >= nextSwingAt && g.equip[g.held]) {
       nextSwingAt = now + SWING_SEC * 1000;
+      sound.play('swing');
       viewmodel.swing();
       swingUntil = now + SWING_SEC * 1000;
     }
@@ -571,6 +622,7 @@ function frame() {
     const colliders = terrain.collidersNear(me.x, me.z).concat(veins.collidersNear(me.x, me.z), places.colliders);
     const moveIn = playing && !fishing.active ? input.axes() : { forward: 0, right: 0, jump: false };
     const mounted = gameStore.get().mounted;
+    mountedNow = !!mounted;
     stepPlayer(me, moveIn, colliders, dt, stats?.all.moveSpeed ?? 0, mounted ? ITEMS[mounted]?.mount?.mult ?? 1 : 1);
     mountLift += ((mounted ? SADDLE_Y - 0.88 : 0) - mountLift) * Math.min(1, dt * 6);
     if (myHorse) {
@@ -595,7 +647,29 @@ function frame() {
     caveView.setVisible(under);
     if (!under) terrain.update(me.x, me.z);
 
+    // Footsteps (hooves when riding): one per half stride, by what's underfoot.
+    const prevPh = walkPh;
     walkPh += dt * me.speed * 1.6;
+    if (me.onGround && me.speed > 0.6 && Math.floor(walkPh / Math.PI) !== Math.floor(prevPh / Math.PI)) {
+      const onWood = homeAt(me.x, me.z) >= 0 || (pierDeck(me.x, me.z) != null && me.y > 0.6);
+      const kind = mountedNow ? 'hoof' : onWood ? 'stepWood' : under ? 'stepStone' : region === 'gruben' && weather.snow > 0.5 ? 'stepSnow' : 'stepGrass';
+      sound.play(kind);
+      if (mountedNow) setTimeout(() => sound.play('hoof'), 110);
+    }
+    if (me.onGround && !wasOnGround) sound.play('land');
+    wasOnGround = me.onGround;
+    // Sound: listener at the camera; ambience follows weather, hour and place.
+    sound.setListener(cam.position.x, cam.position.y, cam.position.z, me.yaw);
+    if (now > nextAmbAt) {
+      nextAmbAt = now + 400;
+      const fires = places.firePositions();
+      let fire: THREE.Vector3 | null = null, fd = 12;
+      for (const f of fires) { const d2 = Math.hypot(f.x - me.x, f.z - me.z); if (d2 < fd) { fd = d2; fire = f; } }
+      let water = 0;
+      if (!under) for (let a = 0; a < 8; a++) { const wx = me.x + Math.cos(a * 0.785) * 10, wz = me.z + Math.sin(a * 0.785) * 10; if (heightAtWorld(wx, wz) < WATER_LEVEL) water += 0.125; }
+      ambFire = fire; ambWater = water;
+    }
+    sound.ambience({ day, rain: weather.rain, snow: weather.snow, region, indoors: homeAt(me.x, me.z) >= 0, height: me.y, nearWater: ambWater, fire: ambFire });
     const bob = me.onGround ? Math.min(1, me.speed / 5) : 0;
     cam.position.set(me.x, me.y + eyeHeight + mountLift + Math.abs(Math.sin(walkPh)) * 0.04 * bob * (eyeHeight / EYE_HEIGHT), me.z);
     cam.rotation.set(me.pitch, me.yaw + (spinT > 0 ? (1 - spinT / 0.45) * Math.PI * 2 : 0), 0, 'YXZ');
@@ -646,5 +720,5 @@ frame();
 // Exposed for automated smoke tests and debugging in the console.
 (window as any).__kontor = {
   get me() { return me; }, get build() { return myBuild; }, get aimed() { return aimed; }, get near() { return near; }, get stats() { return stats; },
-  trees: TREE_BY_ID, remotes, net, terrain, veins, mobs, places, debugSky, fx, viewmodel, netStore, uiStore, gameStore, settingsStore, creatorPreview, preview, auth, openPanel, fishing, use, special,
+  trees: TREE_BY_ID, remotes, net, terrain, veins, mobs, places, debugSky, sound, fx, viewmodel, netStore, uiStore, gameStore, settingsStore, creatorPreview, preview, auth, openPanel, fishing, use, special,
 };

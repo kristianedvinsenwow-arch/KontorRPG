@@ -4,7 +4,7 @@
  * attack and death animations, and picking under the crosshair.
  */
 import * as THREE from 'three';
-import { MOBS, ST_BURN, ST_DEAD, ST_FROZEN, ST_SLOW, groundAt, type MobKind, type MobState } from '@kontor/shared';
+import { MOBS, ST_ANGRY, ST_BURN, ST_DEAD, ST_FROZEN, ST_SLOW, groundAt, type MobKind, type MobState } from '@kontor/shared';
 import { mat, mesh, bx, ball, limb, v3 } from '../engine/procgen.js';
 import { makeCharacter, animateCharacter, type Character } from './character.js';
 import { applyGear } from './held.js';
@@ -150,6 +150,9 @@ function bat(): { g: THREE.Group; wings: THREE.Object3D[] } {
 export class Mobs {
   private views = new Map<string, MobView>();
   private targetId: string | null = null;
+  /** Voice hook: a mob noticed someone, attacked, or died (and idle chatter now and then). */
+  onVoice: ((kind: MobKind, mood: 'aggro' | 'attack' | 'death' | 'idle', pos: THREE.Vector3) => void) | null = null;
+  private nextIdle = new Map<string, number>();
 
   constructor(private readonly scene: THREE.Scene) {}
 
@@ -159,7 +162,12 @@ export class Mobs {
       seen.add(s.id);
       let v = this.views.get(s.id);
       if (!v) v = this.create(s);
-      const wasDead = !!(v.s.st & ST_DEAD);
+      const wasDead = !!(v.s.st & ST_DEAD), wasAngry = !!(v.s.st & ST_ANGRY), wasAct = v.s.act;
+      if (this.onVoice && !(s.st & ST_DEAD)) {
+        if (!wasAngry && s.st & ST_ANGRY) this.onVoice(s.k, 'aggro', v.g.position);
+        else if (s.act === 'atk' && wasAct !== 'atk' && Math.random() < 0.6) this.onVoice(s.k, 'attack', v.g.position);
+      }
+      if (this.onVoice && !wasDead && s.st & ST_DEAD) this.onVoice(s.k, 'death', v.g.position);
       v.s = s;
       v.target = { x: s.x, y: s.y, z: s.z, yaw: s.yaw };
       if (wasDead && !(s.st & ST_DEAD)) { v.g.position.set(s.x, s.y, s.z); v.deadT = 0; v.body.rotation.set(0, 0, 0); v.g.visible = true; }
@@ -218,7 +226,14 @@ export class Mobs {
   }
 
   update(dt: number): void {
+    const now = performance.now();
     for (const v of this.views.values()) {
+      // Idle mutterings: goblins chatter, draugs moan, wolves growl — every few seconds, at random.
+      if (this.onVoice && !(v.s.st & (ST_DEAD | ST_ANGRY))) {
+        const at = this.nextIdle.get(v.id) ?? now + Math.random() * 8000;
+        if (now >= at) { if (at !== now) this.onVoice(v.kind, 'idle', v.g.position); this.nextIdle.set(v.id, now + 5000 + Math.random() * 12000); }
+        else if (!this.nextIdle.has(v.id)) this.nextIdle.set(v.id, at);
+      }
       const s = v.s, g = v.g;
       const dead = !!(s.st & ST_DEAD);
       const k = Math.min(1, dt * 8);

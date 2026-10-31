@@ -78,10 +78,17 @@ The design doc lives in the claude.ai doc "KontorRPG — Product Design Doc".
   Bjørkvik — e.g. 1000 catches (“Master of the Lake”), 2000 pickaxe hits (“Mountain Breaker”),
   2000 axe chops (“Timberwolf”), Trollbane, Kingslayer. Most give a title you can wear under your
   name; unlocks are announced to everyone. Counters are saved with your character.
+- **Sound:** every sound is synthesised in the browser (no audio files): footsteps by surface
+  (grass, wood, stone, snow, hooves), swings, hits, crits, blocks, bows and spells, mining clinks
+  and axe chops, falling trees, fishing plops and splashes, station sounds while crafting, pickups
+  and coins, level-up and achievement fanfares. Monsters have voices — goblins cackle, chatter in
+  squeaky gibberish, go “oof!” and “bleeeh”; wolves growl and howl; trolls grumble; the Mine King
+  laughs. Ambience: wind, rain, birds by day, crickets at night, the lake, crackling fires, cave
+  drips. Volume, effects and ambience sliders in the pause menu (Esc).
 - **World state is saved:** depleted veins and trees, boss and monster respawn timers and items on
   the ground survive server restarts and deploys (Supabase `world_state`, server-only).
 - **Interface:** hotbar (1–5), health and buffs, item tooltips (type, damage, effects, vendor
-  value), right-click to drop, quest tracker, character sheet with skills, gear and bag (**C** / **I** / **K**). Hotbar 1–4 tools and weapon, 5 food, 6 healing potion.
+  value), right-click to drop, quest tracker, character menu (**C**) with tabs: the sheet (skills, model, stats, title, gear, bag), talents (**T**), achievements (**J**) and the quest log (**L**). Hotbar 1–4 tools and weapon, 5 food, 6 healing potion.
 - **Multiplayer:** authoritative Node server checks every move, swing, cast and craft; rolls every
   random thing. Accounts via Supabase magic links; everything is saved for logged-in players.
 - **Office features:** chat, roster, ping, boss key (**F9**), auto-reload after deploys.
