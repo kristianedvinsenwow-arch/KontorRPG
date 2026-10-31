@@ -110,7 +110,7 @@ export function reel(w: World, p: ServerPlayer, ok: boolean): void {
   const now = w.now();
   if (f.phase !== 'bite') return stopFishing(w, p, 'lost'); // reeled before a bite: scares the fish
   // A real minigame takes a moment; an instant "ok" is a bot.
-  if (!ok || now - f.biteAt < 1500 || now - f.biteAt > REEL_WINDOW + 2000) return stopFishing(w, p, 'lost');
+  if (!ok || now - f.biteAt < 2500 || now - f.biteAt > REEL_WINDOW + 2000) return stopFishing(w, p, 'lost');
   const st = p.stats.scoped.fishing;
   const qty = w.rand() < st.doubleYield + st.luck * 0.002 && !f.rare ? 2 : 1;
   const left = w.give(p, { id: f.item, qty });

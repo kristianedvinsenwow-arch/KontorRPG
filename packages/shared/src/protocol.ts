@@ -67,6 +67,8 @@ export type ClientMsg =
   | { t: 'respec'; tree: TreeId }
   | { t: 'rent'; weeks: number; home?: number }
   | { t: 'rest' }
+  /** Open or close your lodge room's door. */
+  | { t: 'door'; home: number }
   | { t: 'storage'; op: 'put' | 'take'; index: number; qty: number }
   | { t: 'quest'; quest: string; op: 'accept' | 'turnin' | 'abandon' }
   | { t: 'imbue'; index: number; element: 'fire' | 'frost' }
@@ -99,6 +101,8 @@ export type ServerMsg =
   | { t: 'quests'; state: QuestState }
   | { t: 'lease'; room: number | null; until: number | null; storage: Bag }
   | { t: 'rooms'; taken: (string | null)[] }
+  /** Which lodge room doors stand open (room ids). */
+  | { t: 'doors'; open: number[] }
   | { t: 'ground'; add?: GroundItem[]; remove?: number[] }
   | { t: 'hp'; hp: number; max: number }
   | { t: 'buffs'; list: Buff[] }
@@ -159,6 +163,7 @@ export function decodeClient(raw: string): ClientMsg | null {
     case 'respec': return str(m.tree, 16) ? { t: 'respec', tree: m.tree } : null;
     case 'rent': return num(m.weeks) ? { t: 'rent', weeks: Math.max(1, Math.min(4, int(m.weeks))), home: num(m.home) ? int(m.home) : undefined } : null;
     case 'rest': return { t: 'rest' };
+    case 'door': return num(m.home) ? { t: 'door', home: int(m.home) } : null;
     case 'storage': return (m.op === 'put' || m.op === 'take') && num(m.index) && num(m.qty) ? { t: 'storage', op: m.op, index: int(m.index), qty: Math.max(1, int(m.qty)) } : null;
     case 'quest': return str(m.quest) && ['accept', 'turnin', 'abandon'].includes(m.op) ? { t: 'quest', quest: m.quest, op: m.op } : null;
     case 'imbue': return num(m.index) && (m.element === 'fire' || m.element === 'frost') ? { t: 'imbue', index: int(m.index), element: m.element } : null;

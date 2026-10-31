@@ -5,7 +5,7 @@
  * checks the same spots.
  */
 import * as THREE from 'three';
-import { CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, HOMES, INN, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, innDoor, type Home, type Npc, type Station } from '@kontor/shared';
+import { CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, HOMES, INN, innRoom, innRoomAt, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
 import { mat, bx, mesh, canvasTex } from '../engine/procgen.js';
 import { makeCharacter, animateCharacter, type Character } from '../entities/character.js';
 import { applyGear } from '../entities/held.js';
@@ -41,6 +41,7 @@ export class Places {
   private npcs: { c: Character; n: Npc; g: THREE.Group }[] = [];
   private t = 0;
   private doorTags: HTMLElement[] = [];
+  private roomDoors: { hinge: THREE.Group; open: boolean; angle: number; col: Collider; home: { x: number; z: number } }[] = [];
 
   constructor(scene: THREE.Scene) {
     scene.add(this.group);
@@ -211,48 +212,116 @@ export class Places {
     for (const k of [-1, 0, 1]) this.colliders.push({ x: n.x + k * c + -0.2 * s, z: n.z - k * s + -0.2 * c, r: 0.95 });
   }
 
-  /** Bjørkvik Lodge: a long timber house with a turf roof and eight numbered room doors. */
+  /**
+   * Bjørkvik Lodge: a long timber house with a turf roof and eight small rooms behind numbered
+   * doors. Each room has a bed against the back wall, a nightstand and a chest at the foot of the
+   * bed. Doors swing open (only the tenant can open them; the server enforces it).
+   */
   private lodge(): void {
-    const W = INN.w, D = INN.d;
+    const W = INN.w, D = INN.d, RW = W / INN.rooms;
     const g = this.place(INN.x, INN.z, INN.x, INN.z - 1, [W, D]);
     g.rotation.y = 0;
-    bx(g, W, 0.4, D, M.stone, 0, 0.2, 0);
-    // Log walls.
+    const gy = g.position.y;
+    // Floor and ceiling.
+    bx(g, W, 0.08, D, M.plank, 0, 0.04, 0);
+    bx(g, W, 0.08, D, M.darkWood, 0, 3.12, 0);
+    const doorX = (n: number) => -W / 2 + (n + 0.5) * RW;
+    // Log walls; the front wall has door openings below the lintel.
+    const DOOR_W = 1.1, DOOR_H = 2.2;
     for (let i = 0; i < 9; i++) {
-      const y = 0.55 + i * 0.32;
-      for (const sz of [-1, 1]) { const l = mesh(new THREE.CylinderGeometry(0.17, 0.17, W + 0.4, 8), M.wood, g); l.rotation.z = Math.PI / 2; l.position.set(0, y, sz * D / 2); }
+      const y = 0.25 + i * 0.32;
+      const log = (x0: number, x1: number, z: number) => { const l = mesh(new THREE.CylinderGeometry(0.17, 0.17, x1 - x0, 8), M.wood, g); l.rotation.z = Math.PI / 2; l.position.set((x0 + x1) / 2, y, z); };
+      log(-W / 2 - 0.2, W / 2 + 0.2, -D / 2);
+      if (y > DOOR_H) log(-W / 2 - 0.2, W / 2 + 0.2, D / 2);
+      else {
+        let x = -W / 2 - 0.2;
+        for (let n = 0; n < INN.rooms; n++) { log(x, doorX(n) - DOOR_W / 2, D / 2); x = doorX(n) + DOOR_W / 2; }
+        log(x, W / 2 + 0.2, D / 2);
+      }
       for (const sx of [-1, 1]) { const l = mesh(new THREE.CylinderGeometry(0.17, 0.17, D + 0.4, 8), M.wood, g); l.rotation.x = Math.PI / 2; l.position.set(sx * W / 2, y + 0.16, 0); }
     }
     // Gable roof with turf.
     for (const sz of [-1, 1]) {
-      const roof = bx(g, W + 1.2, 0.18, D * 0.62, M.roof, 0, 3.75, sz * D * 0.26, sz * 0.62, 0, 0);
-      void roof;
+      bx(g, W + 1.2, 0.18, D * 0.62, M.roof, 0, 3.75, sz * D * 0.26, sz * 0.62, 0, 0);
       const turf = bx(g, W + 1.1, 0.12, D * 0.6, M.turf, 0, 3.9, sz * D * 0.26, sz * 0.62, 0, 0);
       turf.position.y += 0.05;
     }
-    // Room doors on the front wall, each with a number board.
+    const linen = mat(0xe8e2d4, 'cloth', { r: 0.95 });
+    const blanket = [0x7a3a32, 0x3a5a7a, 0x5a6a3a, 0x7a6a3a];
     for (let n = 0; n < INN.rooms; n++) {
-      const d = innDoor(n);
-      const lx = d.x - INN.x, lz = d.z - INN.z - 0.25;
-      bx(g, 0.95, 1.9, 0.12, M.darkWood, lx, 1.35, lz);
-      bx(g, 1.1, 0.12, 0.16, M.wood, lx, 2.35, lz);
-      const knob = mesh(new THREE.SphereGeometry(0.04, 6, 4), M.iron, g); knob.position.set(lx + 0.32, 1.3, lz + 0.08);
-      const sign = canvasTex((c, s) => { c.fillStyle = '#6b4c2e'; c.fillRect(0, 0, s, s); c.fillStyle = '#f0e2c0'; c.font = `700 ${s * 0.7}px "Saira Condensed", sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(n + 1), s / 2, s * 0.55); }, 64);
+      const lx = doorX(n), room = innRoom(n);
+      const rx = (x: number) => x - INN.x, rz = (z: number) => z - INN.z;
+      // Partition to the next room.
+      if (n < INN.rooms - 1) bx(g, 0.1, 3.05, D, M.plank, -W / 2 + (n + 1) * RW, 1.55, 0);
+      // Door frame, number board and the door itself on a hinge.
+      bx(g, 0.12, DOOR_H, 0.3, M.darkWood, lx - DOOR_W / 2 - 0.04, DOOR_H / 2, D / 2);
+      bx(g, 0.12, DOOR_H, 0.3, M.darkWood, lx + DOOR_W / 2 + 0.04, DOOR_H / 2, D / 2);
+      bx(g, DOOR_W + 0.3, 0.14, 0.32, M.darkWood, lx, DOOR_H + 0.05, D / 2);
+      const sign = canvasTex((c, sz) => { c.fillStyle = '#6b4c2e'; c.fillRect(0, 0, sz, sz); c.fillStyle = '#f0e2c0'; c.font = `700 ${sz * 0.7}px "Saira Condensed", sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText(String(n + 1), sz / 2, sz * 0.55); }, 64);
       const plate = mesh(new THREE.PlaneGeometry(0.3, 0.3), new THREE.MeshStandardMaterial({ map: sign, roughness: 0.8 }), g);
-      plate.position.set(lx, 2.6, lz + 0.09);
-      // Storage chest beside the door.
-      bx(g, 0.5, 0.35, 0.35, M.wood, lx + 0.75, 0.6, lz + 0.35);
+      plate.position.set(lx, DOOR_H + 0.4, D / 2 + 0.18);
+      const hinge = new THREE.Group(); hinge.position.set(lx - DOOR_W / 2, 0, D / 2); g.add(hinge);
+      bx(hinge, DOOR_W, DOOR_H - 0.05, 0.08, M.darkWood, DOOR_W / 2, DOOR_H / 2, 0);
+      for (const hy of [0.4, 1.7]) bx(hinge, DOOR_W * 0.9, 0.08, 0.1, M.iron, DOOR_W / 2, hy, 0);
+      const knob = mesh(new THREE.SphereGeometry(0.045, 6, 4), M.iron, hinge); knob.position.set(DOOR_W - 0.15, 1.05, 0.07);
+      const col: Collider = { x: INN.x + lx, z: INN.z + D / 2, r: 0.55 };
+      this.colliders.push(col);
+      this.roomDoors[n] = { hinge, open: false, angle: 0, col, home: { x: col.x, z: col.z } };
+      // Bed against the back wall, nightstand by its head, chest at its foot.
+      const bed = new THREE.Group(); bed.position.set(rx(room.bed.x), 0.08, rz(room.bed.z)); g.add(bed);
+      bx(bed, 1.0, 0.3, 2.0, M.darkWood, 0, 0.25, 0);
+      bx(bed, 0.92, 0.16, 1.9, linen, 0, 0.48, 0);
+      bx(bed, 0.94, 0.06, 1.3, mat(blanket[n % blanket.length], 'cloth', { r: 1 }), 0, 0.58, 0.3);
+      bx(bed, 0.6, 0.12, 0.32, linen, 0, 0.62, -0.75);
+      bx(bed, 1.0, 0.75, 0.08, M.darkWood, 0, 0.45, -1.0);
+      const ns = new THREE.Group(); ns.position.set(rx(room.nightstand.x), 0.08, rz(room.nightstand.z)); g.add(ns);
+      bx(ns, 0.45, 0.55, 0.4, M.wood, 0, 0.28, 0);
+      const candle = mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.14, 8), linen, ns); candle.position.set(0.08, 0.63, 0);
+      const flame = mesh(new THREE.SphereGeometry(0.025, 6, 4), new THREE.MeshStandardMaterial({ color: 0xffd080, emissive: 0xffa040, emissiveIntensity: 3 }), ns, false); flame.position.set(0.08, 0.73, 0);
+      const ch = new THREE.Group(); ch.position.set(rx(room.chest.x), 0.08, rz(room.chest.z)); g.add(ch);
+      bx(ch, 0.8, 0.42, 0.46, M.wood, 0, 0.21, 0);
+      bx(ch, 0.84, 0.08, 0.5, M.iron, 0, 0.44, 0);
+      bx(ch, 0.1, 0.12, 0.04, M.iron, 0, 0.32, 0.25);
+      this.colliders.push({ x: room.bed.x, z: room.bed.z - 0.5, r: 0.5 }, { x: room.bed.x, z: room.bed.z + 0.45, r: 0.5 }, { x: room.chest.x, z: room.chest.z, r: 0.42 }, { x: room.nightstand.x, z: room.nightstand.z, r: 0.28 });
+      // Partition colliders.
+      if (n < INN.rooms - 1) for (let z = -D / 2; z <= D / 2; z += 0.4) this.colliders.push({ x: INN.x - W / 2 + (n + 1) * RW, z: INN.z + z, r: 0.1 });
       this.doorTag(HOMES[n], 2.9);
     }
     // Lodge sign.
     const sign = canvasTex((c, s) => { c.fillStyle = '#5a3d24'; c.fillRect(0, 0, s, s / 3); c.fillStyle = '#f0e2c0'; c.font = `700 ${s * 0.15}px "Saira Condensed", sans-serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('BJØRKVIK LODGE', s / 2, s / 6); }, 256);
     const sp = mesh(new THREE.PlaneGeometry(3.2, 1.07), new THREE.MeshStandardMaterial({ map: sign, roughness: 0.8, transparent: true }), g);
-    sp.position.set(0, 3.25, D / 2 + 0.15);
+    sp.position.set(0, 3.45, D / 2 + 0.2);
     sign.repeat.set(1, 1 / 3); sign.offset.set(0, 2 / 3);
-    // Walls block movement: a row of colliders along each long side.
-    for (let x = -W / 2; x <= W / 2; x += 1.2) for (const sz of [-1, 1]) this.colliders.push({ x: INN.x + x, z: INN.z + sz * D / 2, r: 0.7 });
-    for (let z = -D / 2; z <= D / 2; z += 1.2) for (const sx of [-1, 1]) this.colliders.push({ x: INN.x + sx * W / 2, z: INN.z + z, r: 0.7 });
-    for (let z = -D / 2 + 1; z < D / 2; z += 1.2) for (let x = -W / 2 + 1; x < W / 2; x += 1.6) this.colliders.push({ x: INN.x + x, z: INN.z + z, r: 0.9 });
+    // Outer walls block movement (thin rows of colliders), leaving the doorways open.
+    for (let x = -W / 2; x <= W / 2 + 1e-6; x += 0.4) {
+      this.colliders.push({ x: INN.x + x, z: INN.z - D / 2, r: 0.2 });
+      if (!Array.from({ length: INN.rooms }, (_, n) => Math.abs(x - doorX(n)) < DOOR_W / 2 + 0.15).some(Boolean)) this.colliders.push({ x: INN.x + x, z: INN.z + D / 2, r: 0.2 });
+    }
+    for (let z = -D / 2; z <= D / 2 + 1e-6; z += 0.4) for (const sx of [-1, 1]) this.colliders.push({ x: INN.x + sx * W / 2, z: INN.z + z, r: 0.2 });
+    void gy;
+  }
+
+  doorOpen(n: number): boolean { return !!this.roomDoors[n]?.open; }
+
+  /** Lodge room doors: which stand open (from the server). */
+  setDoors(open: number[]): void {
+    this.roomDoors.forEach((d, n) => (d.open = open.includes(n)));
+  }
+
+  /**
+   * Per frame: swing doors, and move each closed door's collider into its doorway — except for
+   * someone who's inside a room that isn't theirs (they can always get out).
+   */
+  updateDoors(dt: number, meX: number, meZ: number, myRoom: number | null): void {
+    const inside = innRoomAt(meX, meZ);
+    this.roomDoors.forEach((d, n) => {
+      const want = d.open ? -1.45 : 0;
+      d.angle += (want - d.angle) * Math.min(1, dt * 6);
+      d.hinge.rotation.y = d.angle;
+      const blocks = !d.open && !(inside === n && myRoom !== n);
+      d.col.x = blocks ? d.home.x : 1e6;
+      d.col.z = d.home.z;
+    });
   }
 
   /** Names on the room doors (from the server's room list). */
@@ -388,7 +457,7 @@ export class Places {
     this.passGate(back.x, back.z, back.x, back.z - 5, 'Back to the valley', 'Walk through to the pass');
     // Johan's tent.
     const t = this.place(cx - 2, cz - 10, cx, cz, [3, 3]);
-    const canvas = new THREE.MeshStandardMaterial({ color: 0xb8a684, roughness: 1, side: THREE.DoubleSide });
+    const canvas = new THREE.MeshStandardMaterial({ color: 0x8a7a5c, roughness: 1, side: THREE.DoubleSide });
     const tent = mesh(new THREE.ConeGeometry(2, 2.4, 4, 1, true).translate(0, 1.2, 0), canvas, t); tent.rotation.y = Math.PI / 4;
     this.colliders.push({ x: cx - 2, z: cz - 10, r: 1.4 });
     this.signpost(cx + 3, cz - 4, [['Dead miners’ row ⚠', G.x + GRUBEN_SPOTS.village.x, G.z + GRUBEN_SPOTS.village.z], ['The pit ⚠ Boss', G.x + GRUBEN_SPOTS.pit.x, G.z + GRUBEN_SPOTS.pit.z], ['Lantern bog ⚠', G.x - 42, G.z - 46], ['Lynx slopes', G.x - 46, G.z + 30]]);
@@ -406,7 +475,7 @@ export class Places {
     }
     // The pit: a timber headframe over the old shaft, slag heaps around.
     const px = G.x + GRUBEN_SPOTS.pit.x, pz = G.z + GRUBEN_SPOTS.pit.z - 13;
-    const hf = this.place(px, pz, px, pz + 10, [4, 4]);
+    const hf = this.place(px, pz, px, pz + 10);
     for (const [sx, sz] of [[-1.6, -1.6], [1.6, -1.6], [-1.6, 1.6], [1.6, 1.6]]) {
       const leg = bx(hf, 0.3, 7, 0.3, M.darkWood, sx * 0.8, 3.5, sz * 0.8, sz * -0.08, 0, sx * 0.08); void leg;
     }

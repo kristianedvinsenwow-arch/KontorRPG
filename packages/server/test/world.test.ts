@@ -187,7 +187,7 @@ test('bad tokens are rejected and a second login replaces the first', async () =
 
 // ------------------------------------------------------------------ gameplay systems
 import { ITEMS, NPC_BY_ID, STATION_BY_ID, VEIN_BY_ID, VEIN_TYPES, TREE_BY_ID, MOBS, INN, CAVE_ENTRANCE, CAVE_START, QUEST_BY_ID, countItem, xpForLevel, isFishable, LAKE, heightAt as h } from '@kontor/shared';
-import { PORTAL_BY_ID, regionAt, STATIONS, HOMES } from '@kontor/shared';
+import { PORTAL_BY_ID, regionAt, STATIONS, HOMES, innDoor, innRoomAt } from '@kontor/shared';
 import { damageMob } from '../src/combat.js';
 
 function game(random: () => number = () => 0.5, store?: MemoryStore) {
@@ -359,7 +359,7 @@ test('quests: accept, deliver, reward, then locked until the reset', () => {
 });
 
 test('the inn: rent one room, extend it, store items', () => {
-  const { world, c, p, at, last } = game();
+  const { world, c, p, at, last, place } = game();
   p.gold = 200;
   at('hilde');
   world.handle(c, { t: 'rent', weeks: 1 });
@@ -371,6 +371,7 @@ test('the inn: rent one room, extend it, store items', () => {
   world.handle(c, { t: 'rent', weeks: 1 });
   assert.match(last('notice')!.text, /at most 4/);
   p.bag[0] = { id: 'iron_bar', qty: 5 };
+  place(HOMES[0].chest.x, HOMES[0].chest.z);
   world.handle(c, { t: 'storage', op: 'put', index: 0, qty: 5 });
   assert.equal(countItem(p.storage, 'iron_bar'), 5);
   assert.deepEqual(last('rooms')!.taken[0], 'Tester');
@@ -598,6 +599,11 @@ test('housing: rent a cottage at its door, move your chest from the lodge, rest 
   world.handle(c, { t: 'rent', weeks: 1 });
   assert.equal(HOMES[p.lease!.room].kind, 'room');
   p.bag[0] = { id: 'stone', qty: 5 };
+  // The chest is inside the room, at the foot of the bed — not at Hilde's counter.
+  world.handle(c, { t: 'storage', op: 'put', index: 0, qty: 5 });
+  assert.equal(countItem(p.storage, 'stone'), 0);
+  const chest = HOMES[p.lease!.room].chest;
+  place(chest.x, chest.z);
   world.handle(c, { t: 'storage', op: 'put', index: 0, qty: 5 });
   assert.equal(countItem(p.storage, 'stone'), 5);
   const cot = HOMES.find((h) => h.kind === 'cottage')!;
@@ -623,4 +629,37 @@ test('housing: rent a cottage at its door, move your chest from the lodge, rest 
   q.gold = 500; Object.assign(q.state, { x: cot.door.x, z: cot.door.z });
   world.handle(c2, { t: 'rent', weeks: 1, home: cot.id });
   assert.notEqual(q.lease?.room, cot.id);
+});
+
+test('lodge rooms: only the tenant opens the door; nobody else walks into a closed room', () => {
+  const { world, c, p, at, place, advance } = game();
+  p.gold = 100;
+  at('hilde');
+  world.handle(c, { t: 'rent', weeks: 1 });
+  const n = p.lease!.room;
+  const door = innDoor(n);
+  const c2 = fakeClient(); world.connect(c2);
+  world.handle(c2, { t: 'hello', name: 'Nosy', color: 1, proto: PROTOCOL_VERSION, build: defaultBuild() });
+  const q = world.inspect((c2.inbox.find((m) => m.t === 'welcome') as any).id)!;
+  const outside = { x: door.x, z: door.z + 0.8 };
+  Object.assign(q.state, { x: outside.x, z: outside.z, y: h(outside.x, outside.z) });
+  q.lastValid = { x: outside.x, y: h(outside.x, outside.z), z: outside.z, at: world.now() };
+  // The other player can't open it, and can't step in while it's closed.
+  world.handle(c2, { t: 'door', home: n });
+  assert.equal(world.doorsOpen.has(n), false);
+  advance(400);
+  const inside = { x: door.x, z: door.z - 1.2 };
+  world.handle(c2, { t: 'input', seq: 1, x: inside.x, y: h(inside.x, inside.z), z: inside.z, yaw: 0, pitch: 0 });
+  assert.ok(c2.inbox.some((m) => m.t === 'correct' && m.reason === 'locked'));
+  // The tenant opens it; now it's passable.
+  place(door.x, door.z + 0.5);
+  world.handle(c, { t: 'door', home: n });
+  assert.equal(world.doorsOpen.has(n), true);
+  advance(400);
+  world.handle(c2, { t: 'input', seq: 2, x: inside.x, y: h(inside.x, inside.z), z: inside.z, yaw: 0, pitch: 0 });
+  assert.equal(innRoomAt(q.state.x, q.state.z), n);
+  // But only the tenant can use the chest.
+  q.bag[0] = { id: 'stone', qty: 1 };
+  world.handle(c2, { t: 'storage', op: 'put', index: 0, qty: 1 });
+  assert.equal(countItem(p.storage, 'stone'), 0);
 });

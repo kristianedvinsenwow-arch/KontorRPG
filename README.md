@@ -52,7 +52,9 @@ The design doc lives in the claude.ai doc "KontorRPG — Product Design Doc".
   forge, a tanning rack and Johan's quests.
 - **Housing:** one home at a time — a lodge room (25 g/wk, 24-slot chest), a cottage on Bjørkvik's
   green (60 g/wk, 48 slots) or a miners' hut at Gruben camp (40 g/wk, 36 slots). Rent at the door
-  (or from Hilde for rooms); your chest moves with you. Rest at your door for **Rested** (+5–10% XP
+  (or from Hilde for rooms); your chest moves with you. Lodge rooms have real insides — a bed,
+  a nightstand and your chest at the foot of the bed — and a door only the tenant can open or
+  close; the server keeps everyone else out of a closed room, and only you can use your chest. Rest at your door for **Rested** (+5–10% XP
   for 30 min).
 - **World state is saved:** depleted veins and trees, boss and monster respawn timers and items on
   the ground survive server restarts and deploys (Supabase `world_state`, server-only).

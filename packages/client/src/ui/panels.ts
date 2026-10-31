@@ -320,7 +320,8 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
       for (const w of [1, 2, 4]) rent.append(btn(`${here ? 'Extend' : 'Rent'} ${w} wk · ${w * price} g`, 'btn', () => send({ t: 'rent', weeks: w, home: h ? h.id : undefined })));
       box.append(rent);
     }
-    if (here) {
+    if (here && !h) box.append(el('p', 'note', 'Your chest is in your room, at the foot of the bed. Open your door with E — only you can.'));
+    if (here && h) {
       const cap = target?.storage ?? 24;
       const act = el('div', 'ract');
       act.append(btn('Rest (Rested buff)', 'btn ghost', () => send({ t: 'rest' })));

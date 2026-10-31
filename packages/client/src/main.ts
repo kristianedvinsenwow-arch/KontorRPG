@@ -6,7 +6,7 @@
 import './styles.css';
 import * as THREE from 'three';
 import {
-  CAST_RANGE, HOMES, PORTALS, regionAt, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS,
+  CAST_RANGE, HOMES, PORTALS, regionAt, innDoor, innRoom, innRoomAt, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS,
   STATIONS, TREE_BY_ID, TREE_TYPES, USE_RANGE, VEIN_BY_ID, VEIN_TYPES, WATER_LEVEL,
   MOBS, groundAt, attackInterval, attackRange, computeStats, faceOf, inCaveRegion, isFishable, levelFromXp, r2, r3, swingSeconds, weaponClass,
   type CharacterBuild, type HoldSlot, type MobState, type PlayerStats, type Tree, type Vein,
@@ -186,6 +186,7 @@ net.on((msg) => {
     case 'roster': netStore.set({ online: msg.players }); break;
     case 'correct':
       if (me) { me.x = msg.x; me.y = msg.y; me.z = msg.z; me.vx = me.vz = me.vy = 0; }
+      if (msg.reason === 'locked') hud.toast('That room is locked.', 1500, 'error');
       if (msg.reason === 'teleport') { lastSent.at = 0; if (!inCaveRegion(msg.x, msg.z)) terrain.update(msg.x, msg.z, 99); }
       break;
     case 'chat': { const who = netStore.get().online.find((p) => p.id === msg.from); hud.chat(msg.name, who?.color ?? 0, msg.text); break; }
@@ -199,6 +200,7 @@ net.on((msg) => {
     case 'quests': gameStore.set({ quests: msg.state }); break;
     case 'lease': gameStore.set({ lease: { room: msg.room, until: msg.until, storage: msg.storage } }); break;
     case 'rooms': gameStore.set({ rooms: msg.taken }); places.setRooms(msg.taken); break;
+    case 'doors': places.setDoors(msg.open); break;
     case 'hp': gameStore.set({ hp: msg.hp, maxHp: msg.max, dead: msg.hp <= 0 && gameStore.get().dead }); break;
     case 'buffs': gameStore.set({ buffs: msg.list }); break;
     case 'dead':
@@ -296,12 +298,18 @@ function setPrompt(html: string | null) {
 }
 
 // ---------------------------------------------------------------- what you're pointing at / standing by
-type Near = { kind: 'npc'; id: string; name: string } | { kind: 'home'; id: number; name: string } | { kind: 'station'; id: string; name: string } | { kind: 'loot'; id: number; name: string } | { kind: 'corpse'; id: string; name: string } | null;
+type Near = { kind: 'npc'; id: string; name: string } | { kind: 'home' | 'door' | 'bed'; id: number; name: string } | { kind: 'station'; id: string; name: string } | { kind: 'loot'; id: number; name: string } | { kind: 'corpse'; id: string; name: string } | null;
 type Aim = { kind: 'mob'; m: MobState } | { kind: 'vein'; v: Vein } | { kind: 'tree'; t: Tree } | { kind: 'water'; p: THREE.Vector3 } | null;
 let near: Near = null;
 let aimed: Aim = null;
 let nextSwingAt = 0, swingUntil = 0, nextAttackAt = 0, spinT = 0, travelAt = 0;
 const fwd = new THREE.Vector3();
+
+/** The lodge room you rent right now, if any. */
+function myRoom(): number | null {
+  const l = gameStore.get().lease;
+  return l.room != null && l.room < 8 && (l.until ?? 0) > Date.now() ? l.room : null;
+}
 
 function use() {
   if (!near || !me) return;
@@ -309,7 +317,13 @@ function use() {
   else if (near.kind === 'corpse') net.send({ t: 'skin', target: near.id });
   else if (near.kind === 'npc') openPanel('npc', { npc: near.id });
   else if (near.kind === 'home') openPanel('home', { home: near.id });
-  else openPanel('craft', { station: near.id });
+  else if (near.kind === 'bed') net.send({ t: 'rest' });
+  else if (near.kind === 'door') {
+    // Your own room: open/close it. Anyone else's: see who lives there / rent it.
+    if (myRoom() === near.id) net.send({ t: 'door', home: near.id });
+    else openPanel('home', { home: near.id });
+  }
+  else if (near.kind === 'station') openPanel('craft', { station: near.id });
 }
 
 function blocker(a: NonNullable<Aim>): string | null {
@@ -376,10 +390,23 @@ function interact(now: number, playing: boolean) {
       const t = look(s.x, s.z, s.r + 0.15, -0.2, 2.2);
       if (t < best) { best = t; near = { kind: 'station', id: s.id, name: s.name.toLowerCase() }; }
     }
-    // Home doors (lodge rooms, cottages, huts): look at the door.
+    // Homes. Lodge rooms: the door (open/close or rent), and inside your room the chest and bed.
+    // Cottages and huts: the door.
     for (const h of HOMES) {
-      const t = look(h.door.x, h.door.z, 0.6, 0, 2.2);
-      if (t < best) { best = t; near = { kind: 'home', id: h.id, name: h.kind === 'room' ? `room ${h.id + 1}` : h.name.toLowerCase() }; }
+      if (h.kind === 'room') {
+        const d = innDoor(h.id);
+        const td = look(d.x, d.z - 0.2, 0.55, 0, 2.2);
+        if (td < best) { best = td; near = { kind: 'door', id: h.id, name: `room ${h.id + 1}` }; }
+        if (innRoomAt(me.x, me.z) !== h.id) continue;
+        const r = innRoom(h.id);
+        const tc = look(r.chest.x, r.chest.z, 0.45, -0.3, 0.7);
+        if (tc < best) { best = tc; near = { kind: 'home', id: h.id, name: 'chest' }; }
+        const tb = look(r.bed.x, r.bed.z, 0.6, -0.3, 0.8);
+        if (tb < best) { best = tb; near = { kind: 'bed', id: h.id, name: 'bed' }; }
+      } else {
+        const t = look(h.door.x, h.door.z, 0.6, 0, 2.2);
+        if (t < best) { best = t; near = { kind: 'home', id: h.id, name: h.name.toLowerCase() }; }
+      }
     }
   }
   // Portals (the mine, the Gruben pass): walk in.
@@ -455,7 +482,7 @@ function interact(now: number, playing: boolean) {
     const name = aimed.kind === 'vein' ? VEIN_TYPES[aimed.v.type].name.toLowerCase() : TREE_TYPES[aimed.t.kind].name.toLowerCase();
     setPrompt(block ? `<span class="bad">${block}</span>` : `Hold <b>click</b> to ${aimed.kind === 'vein' ? 'mine' : 'chop'} ${name}`);
   } else if (aimed?.kind === 'water') setPrompt('<b>Click</b> to cast');
-  else if (near) setPrompt(`<b>E</b> ${near.kind === 'loot' ? `Pick up ${near.name}` : near.kind === 'corpse' ? `Skin the ${near.name}${g.equip.knife ? '' : ' <span class="bad">(needs a skinning knife)</span>'}` : near.kind === 'npc' ? `Talk to ${near.name}` : near.kind === 'home' ? `Knock on ${near.name.startsWith('room') ? near.name : `the ${near.name}`}` : `Use the ${near.name}`}`);
+  else if (near) setPrompt(`<b>E</b> ${near.kind === 'loot' ? `Pick up ${near.name}` : near.kind === 'corpse' ? `Skin the ${near.name}${g.equip.knife ? '' : ' <span class="bad">(needs a skinning knife)</span>'}` : near.kind === 'npc' ? `Talk to ${near.name}` : near.kind === 'home' ? (near.name === 'chest' ? 'Open your chest' : `Knock on the ${near.name}`) : near.kind === 'bed' ? 'Rest (Rested: more XP for 30 min)' : near.kind === 'door' ? (myRoom() === near.id ? `${places.doorOpen(near.id) ? 'Close' : 'Open'} your door` : `Knock on ${near.name}`) : `Use the ${near.name}`}`);
   else setPrompt(null);
 
   // Purse and crafting bar.
@@ -500,6 +527,7 @@ function frame() {
       me.yaw -= look.dx * k;
       me.pitch = THREE.MathUtils.clamp(me.pitch - look.dy * k, -1.5, 1.5);
     }
+    places.updateDoors(dt, me.x, me.z, myRoom());
     const colliders = terrain.collidersNear(me.x, me.z).concat(veins.collidersNear(me.x, me.z), places.colliders);
     const moveIn = playing && !fishing.active ? input.axes() : { forward: 0, right: 0, jump: false };
     stepPlayer(me, moveIn, colliders, dt, stats?.all.moveSpeed ?? 0);

@@ -238,7 +238,7 @@ export const STATIONS: Station[] = [
   { id: 'camp_bench', kind: 'workbench', name: 'Workbench', x: 9, z: 4, r: 1 },
   { id: 'camp_fire', kind: 'campfire', name: 'Campfire', x: -3, z: 6, r: 0.9 },
   { id: 'village_fire', kind: 'campfire', name: 'Campfire', x: V.x + 1, z: V.z + 7, r: 0.9 },
-  { id: 'inn_stove', kind: 'stove', name: 'Inn stove', x: V.x + 9.5, z: V.z - 4, r: 0.8 },
+  { id: 'inn_stove', kind: 'stove', name: 'Inn stove', x: V.x + 13.5, z: V.z - 3, r: 0.8 },
   { id: 'village_bench', kind: 'workbench', name: 'Workbench', x: V.x - 8, z: V.z - 1, r: 1 },
   { id: 'camp_tanning', kind: 'tanning', name: 'Tanning rack', x: -4, z: -12.5, r: 1 },
   { id: 'village_tanning', kind: 'tanning', name: 'Tanning rack', x: V.x + 13, z: V.z + 6, r: 1 },
@@ -273,8 +273,32 @@ export const INN = {
   name: 'Bjørkvik Lodge', x: V.x, z: V.z - 7.5, w: 22, d: 6,
   rooms: 8, pricePerWeek: 25, maxWeeks: 4,
 };
-/** Door n (0–7) of the lodge, on its front (+z) wall. */
-export const innDoor = (n: number) => ({ x: INN.x - INN.w / 2 + 1.6 + n * ((INN.w - 3.2) / 7), z: INN.z + INN.d / 2 + 0.2 });
+/** Door n (0–7) of the lodge, on its front (+z) wall, in the middle of room n. */
+export const innDoor = (n: number) => ({ x: INN.x - INN.w / 2 + (n + 0.5) * (INN.w / INN.rooms), z: INN.z + INN.d / 2 + 0.2 });
+/**
+ * Room n inside the lodge: a cell between partition walls, the door in its front wall. The bed is
+ * against the back wall, a nightstand by its head, the chest at its foot.
+ */
+export function innRoom(n: number) {
+  const w = INN.w / INN.rooms, x0 = INN.x - INN.w / 2 + n * w, z0 = INN.z - INN.d / 2, z1 = INN.z + INN.d / 2;
+  const bx = x0 + w * 0.3;
+  return {
+    x0, x1: x0 + w, z0, z1,
+    bed: { x: bx, z: z0 + 1.15 },
+    nightstand: { x: x0 + w * 0.78, z: z0 + 0.4 },
+    chest: { x: bx, z: z0 + 2.65 },
+  };
+}
+/** Is (x, z) inside room n (between its walls)? */
+export function inInnRoom(n: number, x: number, z: number, margin = 0): boolean {
+  const r = innRoom(n);
+  return x > r.x0 - margin && x < r.x1 + margin && z > r.z0 - margin && z < r.z1 + margin;
+}
+/** Which lodge room (x, z) is in, or -1. */
+export function innRoomAt(x: number, z: number): number {
+  if (Math.abs(z - INN.z) > INN.d / 2 || Math.abs(x - INN.x) > INN.w / 2) return -1;
+  return Math.min(INN.rooms - 1, Math.floor((x - (INN.x - INN.w / 2)) / (INN.w / INN.rooms)));
+}
 
 /**
  * Homes you can rent: the lodge's eight rooms, three cottages on Bjørkvik's green and two miners'
@@ -289,15 +313,18 @@ export interface Home {
   /** The building (cottages and huts), facing `face`. */
   house?: { x: number; z: number; faceX: number; faceZ: number };
   price: number; storage: number; rest: { xp: number; regen: number };
+  /** Where the storage chest is (inside lodge rooms; by the door for houses). */
+  chest: { x: number; z: number };
 }
 export const STORAGE_MAX = 48;
 const ROOM_REST = { xp: 0.05, regen: 1 }, HOUSE_REST = { xp: 0.1, regen: 2 };
 function house(id: number, kind: HomeKind, name: string, x: number, z: number, faceX: number, faceZ: number, price: number, storage: number): Home {
   const d = Math.hypot(faceX - x, faceZ - z), off = kind === 'hut' ? 1.9 : 2.3;
-  return { id, kind, name, door: { x: x + ((faceX - x) / d) * off, z: z + ((faceZ - z) / d) * off }, house: { x, z, faceX, faceZ }, price, storage, rest: HOUSE_REST };
+  const door = { x: x + ((faceX - x) / d) * off, z: z + ((faceZ - z) / d) * off };
+  return { id, kind, name, door, chest: door, house: { x, z, faceX, faceZ }, price, storage, rest: HOUSE_REST };
 }
 export const HOMES: Home[] = [
-  ...Array.from({ length: INN.rooms }, (_, n): Home => ({ id: n, kind: 'room', name: `Room ${n + 1}`, door: innDoor(n), price: INN.pricePerWeek, storage: 24, rest: ROOM_REST })),
+  ...Array.from({ length: INN.rooms }, (_, n): Home => ({ id: n, kind: 'room', name: `Room ${n + 1}`, door: innDoor(n), chest: innRoom(n).chest, price: INN.pricePerWeek, storage: 24, rest: ROOM_REST })),
   house(8, 'cottage', 'Green cottage', V.x + 17, V.z - 4, V.x, V.z, 60, 48),
   house(9, 'cottage', 'Brook cottage', V.x + 17, V.z + 12, V.x, V.z, 60, 48),
   house(10, 'cottage', 'Lakeview cottage', V.x + 8, V.z + 17, V.x, V.z, 60, 48),

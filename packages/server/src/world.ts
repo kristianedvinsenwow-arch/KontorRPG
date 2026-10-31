@@ -5,7 +5,7 @@
  * It never touches sockets: each player has a `send` function, so tests drive it without a network.
  */
 import {
-  AOI_CHUNKS, PORTAL_BY_ID, HOMES, homeLabel, type Home, CHUNK_SIZE, IMBUE, INN, ITEMS, MAX_CHAT_LEN, MAX_NAME_LEN,
+  AOI_CHUNKS, PORTAL_BY_ID, HOMES, homeLabel, innDoor, innRoomAt, type Home, CHUNK_SIZE, IMBUE, INN, ITEMS, MAX_CHAT_LEN, MAX_NAME_LEN,
   NPC_BY_ID, PLAYER_COLORS, PROTOCOL_VERSION, QUEST_BY_ID, RECIPE_BY_ID, START_GOLD, STATION_BY_ID, TICK_HZ, USE_RANGE,
   EAT_LOCK_MS, addStack, burnChance, knifeRepair, knifeUses, STATIONS, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
   questAvailable, r2, r3, recipeAt, removeItem, resizeBag, respecCost, rollCraftRarity, rollEffects, rollsRarity,
@@ -48,6 +48,8 @@ export class World {
   readonly ground = new Map<number, Ground>();
   /** Homes (lodge rooms, cottages, huts): who holds each (by user id or, for guests, player id) and until when. */
   readonly rooms: ({ key: string; name: string; until: number } | null)[] = HOMES.map(() => null);
+  /** Lodge room doors standing open. Closed doors keep everyone but the tenant out. */
+  readonly doorsOpen = new Set<number>();
   private pending = new Map<Client, true>();
   private timers: { at: number; fn: () => void }[] = [];
   tick = 0;
@@ -146,6 +148,7 @@ export class World {
       case 'respec': return this.respec(p, msg.tree);
       case 'rent': return this.rent(p, msg.weeks, msg.home);
       case 'rest': return this.rest(p);
+      case 'door': return this.toggleDoor(p, msg.home);
       case 'storage': return this.storageMove(p, msg.op, msg.index, msg.qty);
       case 'quest': return this.quest(p, msg.quest, msg.op);
       case 'imbue': return this.imbue(p, msg.index, msg.element);
@@ -225,6 +228,7 @@ export class World {
     client.send({ t: 'quests', state: p.quests });
     this.sendLease(p);
     client.send({ t: 'rooms', taken: this.roomNames() });
+    client.send({ t: 'doors', open: [...this.doorsOpen] });
     this.sendHp(p);
     const dep: [string, 0 | 1][] = [];
     for (const [nid, st] of this.nodes) if (st.until > now) dep.push([nid, 1]);
@@ -371,6 +375,13 @@ export class World {
       const lv = p.lastValid;
       p.client.send({ t: 'correct', seq: msg.seq, x: r2(lv.x), y: r2(lv.y), z: r2(lv.z), reason: check.reason ?? 'invalid' });
       if (p.strikes > 40) p.client.close('too_many_invalid_moves');
+      return;
+    }
+    // Nobody walks into someone else's closed lodge room.
+    const room = innRoomAt(next.x, next.z);
+    if (room >= 0 && !this.doorsOpen.has(room) && !this.ownsRoom(p, room) && innRoomAt(p.lastValid.x, p.lastValid.z) !== room) {
+      const lv = p.lastValid;
+      p.client.send({ t: 'correct', seq: msg.seq, x: r2(lv.x), y: r2(lv.y), z: r2(lv.z), reason: 'locked' });
       return;
     }
     p.strikes = Math.max(0, p.strikes - 1);
@@ -703,11 +714,32 @@ export class World {
     return p.lease && p.lease.until > now && this.rooms[p.lease.room]?.key === this.roomKey(p) ? HOMES[p.lease.room] : undefined;
   }
 
-  /** At your home's door (or, for a lodge room, with Hilde inside). */
+  /** By your chest: inside your lodge room, or at a house's door. */
   private atHome(p: ServerPlayer, h: Home): boolean {
-    if (Math.hypot(p.state.x - h.door.x, p.state.z - h.door.z) <= 3.5) return true;
-    const inn = NPC_BY_ID.get('hilde')!;
-    return h.kind === 'room' && (this.near(p, inn, 1) || this.near(p, { x: INN.x, z: INN.z + INN.d / 2 }, INN.w / 2));
+    if (h.kind === 'room') return innRoomAt(p.state.x, p.state.z) === h.id;
+    return Math.hypot(p.state.x - h.chest.x, p.state.z - h.chest.z) <= 3.5;
+  }
+
+  /** Where you can rent a home: at its door (lodge rooms also from Hilde). */
+  private canRent(p: ServerPlayer, h: Home): boolean {
+    if (Math.hypot(p.state.x - h.door.x, p.state.z - h.door.z) <= 3.5 || innRoomAt(p.state.x, p.state.z) === h.id) return true;
+    return h.kind === 'room' && this.near(p, NPC_BY_ID.get('hilde')!, 1);
+  }
+
+  /** Does this player hold lodge room n right now? */
+  private ownsRoom(p: ServerPlayer, n: number): boolean {
+    const r = this.rooms[n];
+    return !!r && r.until > this.now() && r.key === this.roomKey(p);
+  }
+
+  /** Open or close your own room's door (only the tenant can). */
+  private toggleDoor(p: ServerPlayer, n: number): void {
+    if (HOMES[n]?.kind !== 'room') return;
+    if (!this.ownsRoom(p, n)) return this.notice(p, 'It’s locked. Only the tenant has the key.', 'error');
+    const d = innDoor(n);
+    if (Math.hypot(p.state.x - d.x, p.state.z - d.z) > 3 && innRoomAt(p.state.x, p.state.z) !== n) return this.notice(p, 'Stand by the door.', 'error');
+    if (this.doorsOpen.has(n)) this.doorsOpen.delete(n); else this.doorsOpen.add(n);
+    this.broadcast({ t: 'doors', open: [...this.doorsOpen] });
   }
 
   /**
@@ -728,7 +760,7 @@ export class World {
     } else {
       target = HOMES[homeId];
       if (!target) return;
-      if (!this.atHome(p, target)) return this.notice(p, `Go to the ${homeLabel(target).toLowerCase()} to rent it.`, 'error');
+      if (!this.canRent(p, target)) return this.notice(p, `Go to the ${homeLabel(target).toLowerCase()} to rent it.`, 'error');
       const holder = this.rooms[target.id];
       if (holder && holder.until > now && holder.key !== key) return this.notice(p, `${holder.name} lives there.`, 'error');
     }
@@ -747,6 +779,7 @@ export class World {
     }
     p.gold -= cost;
     p.lease = { room: target.id, until };
+    if (!extending && this.doorsOpen.delete(target.id)) this.broadcast({ t: 'doors', open: [...this.doorsOpen] });
     this.rooms[target.id] = { key, name: p.state.name, until };
     p.dirty = true;
     this.sendInv(p);
@@ -760,7 +793,7 @@ export class World {
   private rest(p: ServerPlayer): void {
     const h = this.home(p);
     if (!h) return this.notice(p, 'You need a home to rest in. Rent a room from Hilde, or a cottage or hut at its door.', 'error');
-    if (!this.atHome(p, h)) return this.notice(p, `Your bed is at the ${homeLabel(h).toLowerCase()}.`, 'error');
+    if (!this.atHome(p, h)) return this.notice(p, h.kind === 'room' ? `Your bed is in room ${h.id + 1} at the lodge.` : `Your bed is at the ${homeLabel(h).toLowerCase()}.`, 'error');
     if (p.lastHurtAt > this.now() - EAT_LOCK_MS) return this.notice(p, 'You can’t rest mid-fight.', 'error');
     p.buffs = p.buffs.filter((b) => b.name !== 'Rested');
     p.buffs.push({ name: 'Rested', stats: { xp: h.rest.xp, regen: h.rest.regen }, until: this.now() + 30 * 60_000 });
@@ -774,7 +807,7 @@ export class World {
   private storageMove(p: ServerPlayer, op: 'put' | 'take', index: number, qty: number): void {
     const h = this.home(p);
     if (!h) return this.notice(p, 'Rent a home to use a storage chest.', 'error');
-    if (!this.atHome(p, h)) return this.notice(p, `Your chest is at the ${homeLabel(h).toLowerCase()}.`, 'error');
+    if (!this.atHome(p, h)) return this.notice(p, h.kind === 'room' ? `Your chest is in room ${h.id + 1} at the lodge, at the foot of the bed.` : `Your chest is at the ${homeLabel(h).toLowerCase()}.`, 'error');
     const s = (op === 'put' ? p.bag : p.storage)[index];
     if (!s) return;
     const k = Math.min(qty, s.qty);

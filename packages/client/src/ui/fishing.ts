@@ -14,8 +14,8 @@ const fishEl = box.querySelector('.fish') as HTMLElement;
 const meterEl = box.querySelector('.meter i') as HTMLElement;
 
 const TRACK = 280;
-/** Seconds at the start where the meter can't drain and the fish holds still: time to see what's going on. */
-const GRACE = 1.8;
+/** A short moment at the start where progress can't drain, so a slow first reaction isn't an instant loss. */
+const GRACE = 0.5;
 const hintEl = box.querySelector('.hint') as HTMLElement;
 
 let state: null | {
@@ -29,10 +29,12 @@ export const fishing = {
   get active() { return !!state; },
   /** Start reeling; `ease` is the catch bar bonus (rods, talents). */
   start(difficulty: number, seconds: number, ease: number, done: (ok: boolean) => void): void {
+    // The bar starts at the bottom and the fish somewhere well above it: you have to go and get it.
+    const fish = TRACK * (0.45 + Math.random() * 0.4);
     state = {
       difficulty, until: performance.now() + seconds * 1000, done,
-      zone: 40, zoneV: 0, zoneH: Math.min(TRACK * 0.55, 78 * (1 + ease) * (1.15 - difficulty * 0.35)),
-      fish: 60, fishV: 0, fishTarget: 60, nextMove: GRACE, progress: 0.4, t: 0,
+      zone: 0, zoneV: 0, zoneH: Math.min(TRACK * 0.4, 50 * (1 + ease) * (1.1 - difficulty * 0.45)),
+      fish, fishV: 0, fishTarget: fish, nextMove: 0.3, progress: 0.3, t: 0,
     };
     box.hidden = false;
   },
@@ -41,31 +43,30 @@ export const fishing = {
     const s = state;
     if (!s) return;
     s.t += dt;
-    // Catch bar: lift while holding, fall otherwise, bounce softly off the ends.
-    const grace = s.t < GRACE;
-    // During the grace period the bar floats gently so you can find the controls.
-    s.zoneV += (holding ? 620 : grace ? -150 : -520) * dt;
-    s.zoneV *= 0.985;
+    const d = s.difficulty;
+    // Catch bar: lift while holding, heavy fall otherwise, a small bounce off the bottom.
+    s.zoneV += (holding ? 900 : -760) * dt;
+    s.zoneV *= 0.98;
     s.zone += s.zoneV * dt;
-    if (s.zone < 0) { s.zone = 0; s.zoneV *= -0.3; }
-    if (s.zone > TRACK - s.zoneH) { s.zone = TRACK - s.zoneH; s.zoneV *= -0.3; }
-    // Fish: picks a new spot every so often; harder fish more often, further and faster.
+    if (s.zone < 0) { s.zone = 0; s.zoneV *= -0.25; }
+    if (s.zone > TRACK - s.zoneH) { s.zone = TRACK - s.zoneH; s.zoneV *= -0.25; }
+    // Fish: darts to a new spot often (harder fish: more often, further, faster) and never sits still.
     if (s.t >= s.nextMove) {
-      const d = s.difficulty;
-      s.fishTarget = Math.max(6, Math.min(TRACK - 30, s.fish + (Math.random() - 0.5) * TRACK * (0.4 + d)));
-      s.nextMove = s.t + (1.4 - d) * (0.4 + Math.random() * 0.9);
+      const dart = Math.random() < 0.15 + d * 0.35;
+      const jump = (Math.random() - 0.5) * TRACK * (dart ? 0.7 + d * 0.5 : 0.25 + d * 0.4);
+      s.fishTarget = Math.max(4, Math.min(TRACK - 28, s.fish + jump));
+      s.nextMove = s.t + (1.05 - d * 0.65) * (0.35 + Math.random() * 0.9);
     }
-    const accel = 40 + s.difficulty * 140;
+    const accel = 80 + d * 300;
     s.fishV += Math.sign(s.fishTarget - s.fish) * accel * dt * 10;
+    s.fishV += Math.sin(s.t * (5 + d * 6)) * (20 + d * 60) * dt * 10;
     s.fishV *= 0.86;
     s.fish += s.fishV * dt;
     s.fish = Math.max(0, Math.min(TRACK - 24, s.fish));
     const inside = s.fish + 12 >= s.zone && s.fish + 12 <= s.zone + s.zoneH;
-    // Draining ramps in after the grace period instead of starting at full strength.
-    const ramp = Math.min(1, Math.max(0, (s.t - GRACE) / 1.5));
-    s.progress += (inside ? 0.34 : (-0.22 - s.difficulty * 0.1) * ramp) * dt;
-    box.classList.toggle('grace', grace);
-    if (hintEl.dataset.g !== String(grace)) hintEl.dataset.g = String(grace), hintEl.innerHTML = grace ? '<b>Get ready…</b> hold <b>click</b> to raise the bar' : 'Hold <b>click</b> to raise the bar · keep the fish inside';
+    const grace = s.t < GRACE;
+    s.progress += (inside ? 0.24 - d * 0.06 : grace ? 0 : -(0.2 + d * 0.16)) * dt;
+    if (hintEl.dataset.g !== '1') hintEl.dataset.g = '1', hintEl.innerHTML = 'Hold <b>click</b> to raise the bar · keep the fish inside';
     zoneEl.style.height = `${s.zoneH}px`;
     zoneEl.style.bottom = `${s.zone}px`;
     zoneEl.classList.toggle('hit', inside);
