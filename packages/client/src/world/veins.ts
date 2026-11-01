@@ -24,8 +24,12 @@ const ROCK_MATS = {
   iron: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.82 }),
   silver: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 }),
   coal: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 }),
+  coral: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.9 }),
+  seaglass: new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 }),
 };
 const ORE_MATS = {
+  coral: new THREE.MeshStandardMaterial({ color: 0xe0584a, emissive: 0x2a0806, roughness: 0.6, flatShading: true }),
+  seaglass: new THREE.MeshStandardMaterial({ color: 0x9fe0c0, emissive: 0x10302a, roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.85, flatShading: true }),
   stone: new THREE.MeshStandardMaterial({ color: 0xf4efe6, emissive: 0x2a2620, roughness: 0.25, metalness: 0.1, flatShading: true }),
   iron: new THREE.MeshStandardMaterial({ color: 0xa4572c, roughness: 0.45, metalness: 0.7, flatShading: true }),
   silver: new THREE.MeshStandardMaterial({ color: 0xe8eef6, emissive: 0x303844, roughness: 0.2, metalness: 1, flatShading: true }),
@@ -35,6 +39,7 @@ const RUBBLE_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, flatShad
 
 function rockFor(v: Vein, seed: number): THREE.BufferGeometry {
   const g = new THREE.IcosahedronGeometry(0.9, 1).scale(1.15, 0.78, 1);
+  if (v.type === 'coral') return faceted(g, seed, 0.3, new THREE.Color(0x8a7a6a), new THREE.Color(0xb0a088), -0.6, 0.6, new THREE.Color(0x6a7a5a));
   if (v.type === 'coal') return faceted(g, seed, 0.42, new THREE.Color(0x3a3734), new THREE.Color(0x5e5a54), -0.6, 0.6, new THREE.Color(0x4a5232));
   return v.type === 'iron'
     ? faceted(g, seed, 0.42, new THREE.Color(0x4a403a), new THREE.Color(0x7a6a5e), -0.6, 0.6, new THREE.Color(0x5d6a3a))
@@ -65,7 +70,8 @@ export class Veins {
       for (let i = 0; i < n; i++) {
         const a = (i / n) * Math.PI * 2 + Math.sin(seed + i) * 0.4;
         const up = 0.15 + ((i * 37) % 10) / 22;
-        const geo = v.type !== 'stone' ? new THREE.DodecahedronGeometry(0.14 + (i % 3) * 0.03, 0) : new THREE.OctahedronGeometry(0.13 + (i % 3) * 0.04, 0).scale(0.7, 1.9, 0.7);
+        // Coral grows as little branching fingers; sea glass and quartz as crystals; the rest as nodules.
+        const geo = v.type === 'coral' ? new THREE.ConeGeometry(0.06, 0.45 + (i % 3) * 0.12, 5) : v.type === 'stone' || v.type === 'seaglass' ? new THREE.OctahedronGeometry(0.13 + (i % 3) * 0.04, 0).scale(0.7, 1.9, 0.7) : new THREE.DodecahedronGeometry(0.14 + (i % 3) * 0.03, 0);
         const m = new THREE.Mesh(geo, ORE_MATS[v.type]);
         const r = 0.82 * Math.cos(up * 1.2);
         m.position.set(Math.cos(a) * r, 0.35 + up * 0.75, Math.sin(a) * r);

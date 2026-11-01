@@ -4,7 +4,7 @@
  * and the server can validate requests by id.
  */
 import { CHUNK_SIZE, SPIKE_CHUNKS, WATER_LEVEL } from './constants.js';
-import { heightAt, mulberry32, VILLAGE, LAKE, PIER, GRUBEN, GRUBEN_SPOTS, inGruben, FJORD, FJORD_SPOTS, inFjord } from './terrain.js';
+import { heightAt, mulberry32, VILLAGE, LAKE, PIER, GRUBEN, GRUBEN_SPOTS, inGruben, FJORD, FJORD_SPOTS, inFjord, SHIPWRECK, FORD_Z, fjordMid } from './terrain.js';
 import { CAVE, CAVE_ENTRANCE, CHUNK_RANGES, GRUBEN_PASS, caveClearance, caveFloor, caveRoomCentre, inBounds } from './cave.js';
 import { ARMOUR_PIECES, CLOTHS, ITEMS, JEWELS } from './items.js';
 import { HOUSES, houseAt, toWorld, type HouseFrame } from './houses.js';
@@ -12,12 +12,12 @@ import type { SkillId } from './skills.js';
 
 // ------------------------------------------------------------------ resource nodes
 
-export type VeinType = 'stone' | 'iron' | 'coal' | 'silver';
+export type VeinType = 'stone' | 'iron' | 'coal' | 'silver' | 'coral' | 'seaglass';
 
 export interface NodeTypeDef {
   name: string;
   item: string;
-  skill: 'mining' | 'woodcutting' | 'tailoring' | 'herbalism';
+  skill: 'mining' | 'woodcutting' | 'tailoring' | 'herbalism' | 'cooking';
   level: number;
   power: number;
   xp: number;
@@ -33,6 +33,8 @@ export const VEIN_TYPES: Record<VeinType, NodeTypeDef> = {
   stone: { name: 'Stone vein', item: 'stone', skill: 'mining', level: 1, power: 1, xp: 8, respawnSec: [10 * 60, 20 * 60], hits: [6, 10], gem: { item: 'quartz', chance: 1 / 150 } },
   iron: { name: 'Iron vein', item: 'iron_ore', skill: 'mining', level: 8, power: 1, xp: 20, respawnSec: [12 * 60, 25 * 60], hits: [5, 8], gem: { item: 'sapphire', chance: 1 / 200 } },
   coal: { name: 'Coal seam', item: 'coal', skill: 'mining', level: 14, power: 2, xp: 30, respawnSec: [15 * 60, 30 * 60], hits: [5, 9] },
+  coral: { name: 'Coral bed', item: 'coral', skill: 'mining', level: 10, power: 1, xp: 26, respawnSec: [15 * 60, 30 * 60], hits: [3, 6], gem: { item: 'pearl', chance: 1 / 120 } },
+  seaglass: { name: 'Sea-glass seam', item: 'sea_glass', skill: 'mining', level: 14, power: 2, xp: 34, respawnSec: [15 * 60, 30 * 60], hits: [3, 5] },
   silver: { name: 'Silver vein', item: 'silver_ore', skill: 'mining', level: 18, power: 2, xp: 45, respawnSec: [20 * 60, 40 * 60], hits: [4, 7], gem: { item: 'garnet', chance: 1 / 150 } },
 };
 
@@ -60,8 +62,11 @@ export const PATHS: [number, number][][] = [
   [[-40, 26], [-44, 8], [-50, -20], [-58, -48]],
   // Into Ulvedalen.
   [[-46, -4], [-58, -9], [-70, -13]],
-  // Saltfjorden: up from the village along the east shore.
-  [[FJ.x + 34, FJ.z + 4], [FJ.x + 37, FJ.z - 16], [FJ.x + 40, FJ.z - 40], [FJ.x + 44, FJ.z - 62]],
+  // Saltfjorden: up from the village along the east shore, over the ford, down the west shore to the wreck;
+  // and south to the crab beach.
+  [[FJ.x + 34, FJ.z + 4], [FJ.x + 37, FJ.z - 16], [FJ.x + 30, FJ.z - 40], [FJ.x + 22, FJ.z + FORD_Z]],
+  [[FJ.x + 22, FJ.z + FORD_Z], [FJ.x + fjordMid(FORD_Z), FJ.z + FORD_Z], [FJ.x - 44, FJ.z + FORD_Z], [FJ.x - 50, FJ.z - 30], [FJ.x - 44, FJ.z], [SHIPWRECK.plankFrom - 4, SHIPWRECK.z]],
+  [[FJ.x + 34, FJ.z + 14], [FJ.x + 34, FJ.z + 34], [FJ.x + 38, FJ.z + 52]],
   // Over the wolf meadows to the Gruben pass.
   [[66, 33], [84, 42], [96, 48]],
   // Gruben: from the arrival camp up the valley to the miners' village and the pit.
@@ -89,7 +94,8 @@ export function keepClear(x: number, z: number): boolean {
   }
   if (inFjord(x, z)) {
     const lx = x - FJ.x, lz = z - FJ.z, sp = FJORD_SPOTS;
-    return Math.hypot(lx - sp.arrival.x, lz - sp.arrival.z) < sp.arrival.r + 5 || Math.hypot(lx - sp.village.x, lz - sp.village.z) < sp.village.r + 5;
+    return Math.hypot(lx - sp.arrival.x, lz - sp.arrival.z) < sp.arrival.r + 5 || Math.hypot(lx - sp.village.x, lz - sp.village.z) < sp.village.r + 5
+      || (Math.abs(x - SHIPWRECK.x) < 12 && Math.abs(z - SHIPWRECK.z) < SHIPWRECK.length / 2 + 4);
   }
   if (Math.hypot(x - GRUBEN_PASS.x, z - GRUBEN_PASS.z) < 7) return true;
   if (Math.hypot(x, z) < 18 || Math.hypot(x - VILLAGE.x, z - VILLAGE.z) < VILLAGE.r + 7 || Math.hypot(x - CAVE_ENTRANCE.x, z - CAVE_ENTRANCE.z) < 8) return true;
@@ -173,6 +179,15 @@ function generateVeins(): Vein[] {
       if (add(type, x, z, `g-${type[0]}${made}`)) made++;
     }
   }
+  // Saltfjorden: coral beds on the southern beaches, sea glass along the west shore.
+  const frng = mulberry32(9933);
+  const fz: [VeinType, number, number, number, number][] = [['coral', 36, 52, 10, 3], ['coral', -34, 52, 10, 2], ['seaglass', -44, -2, 10, 3]];
+  fz.forEach(([type, cx, cz, r, n], k) => {
+    for (let i = 0, made = 0; i < 300 && made < n; i++) {
+      const a = frng() * Math.PI * 2, d = 2 + frng() * r;
+      if (add(type, FJ.x + cx + Math.cos(a) * d, FJ.z + cz + Math.sin(a) * d, `f-${type[0]}${k}${made}`)) made++;
+    }
+  });
   return out;
 }
 
@@ -223,13 +238,14 @@ export function swingSeconds(toolSwingSec: number, level: number, speedBonus: nu
 
 // ------------------------------------------------------------------ plants (tailoring fibres, herbalism herbs)
 
-export type PlantKind = 'flax' | 'jute' | 'ramie' | 'bog_cotton' | 'bamboo' | 'angelica' | 'cloudberry' | 'roseroot' | 'grave_moss';
+export type PlantKind = 'flax' | 'jute' | 'ramie' | 'bog_cotton' | 'bamboo' | 'salt_pan' | 'angelica' | 'cloudberry' | 'roseroot' | 'grave_moss';
 export const PLANT_TYPES: Record<PlantKind, NodeTypeDef> = {
   flax: { name: 'Flax', item: 'flax', skill: 'tailoring', level: 1, power: 0, xp: 6, respawnSec: [8 * 60, 15 * 60], hits: [2, 4] },
   jute: { name: 'Jute', item: 'jute', skill: 'tailoring', level: 6, power: 0, xp: 10, respawnSec: [8 * 60, 16 * 60], hits: [2, 4] },
   ramie: { name: 'Ramie', item: 'ramie', skill: 'tailoring', level: 12, power: 0, xp: 15, respawnSec: [10 * 60, 18 * 60], hits: [2, 4] },
   bog_cotton: { name: 'Cotton', item: 'bog_cotton', skill: 'tailoring', level: 18, power: 0, xp: 21, respawnSec: [10 * 60, 20 * 60], hits: [2, 4] },
   bamboo: { name: 'Bamboo', item: 'bamboo', skill: 'tailoring', level: 24, power: 0, xp: 28, respawnSec: [12 * 60, 22 * 60], hits: [2, 3] },
+  salt_pan: { name: 'Salt pan', item: 'salt', skill: 'cooking', level: 1, power: 0, xp: 5, respawnSec: [6 * 60, 12 * 60], hits: [3, 5] },
   angelica: { name: 'Angelica', item: 'angelica', skill: 'herbalism', level: 1, power: 0, xp: 8, respawnSec: [8 * 60, 15 * 60], hits: [1, 3] },
   cloudberry: { name: 'Cloudberries', item: 'cloudberry', skill: 'herbalism', level: 6, power: 0, xp: 14, respawnSec: [10 * 60, 20 * 60], hits: [2, 3] },
   roseroot: { name: 'Roseroot', item: 'roseroot', skill: 'herbalism', level: 12, power: 0, xp: 24, respawnSec: [12 * 60, 25 * 60], hits: [1, 3] },
@@ -263,6 +279,12 @@ function generatePlants(): Plant[] {
   for (let i = 0, made = 0; i < 300 && made < 8; i++) {
     const a = rg() * Math.PI * 2, d = 2 + rg() * 12, x = G.x - 42 + Math.cos(a) * d, z = G.z - 46 + Math.sin(a) * d;
     if (ok(x, z)) { out.push({ id: `c-g${made}`, kind: 'bamboo', x, y: heightAt(x, z), z }); made++; }
+  }
+  // Saltfjorden's salt pans: shallow pools on the east shore south of the village.
+  const rs = mulberry32(5600);
+  for (let i = 0, made = 0; i < 600 && made < 6; i++) {
+    const x = FJ.x + 24 + rs() * 18, z = FJ.z + 24 + rs() * 22, h = heightAt(x, z);
+    if (h > 0.5 && h < 6 && ok(x, z)) { out.push({ id: `salt-${made}`, kind: 'salt_pan', x, y: h, z }); made++; }
   }
   // Herbs. Angelica: meadows and stream banks across the valley.
   const scatter = (kind: PlantKind, seed: number, n: number, tries: number, at: () => [number, number], when: (x: number, z: number, h: number) => boolean) => {
@@ -357,6 +379,7 @@ export const STATIONS: Station[] = [
   { id: 'village_loom', kind: 'loom', name: 'Loom', x: V.x + 7, z: V.z + 1, r: 1 },
   { id: 'village_alchemy', kind: 'alchemy', name: 'Alchemy table', x: V.x - 1, z: V.z + 13.5, r: 1 },
   { id: 'fjord_fire', kind: 'campfire', name: 'Smokehouse fire', x: FJ.x + FJORD_SPOTS.village.x + 3, z: FJ.z + FJORD_SPOTS.village.z + 4, r: 0.9 },
+  { id: 'fjord_tanning', kind: 'tanning', name: 'Tanning rack', x: FJ.x + FJORD_SPOTS.village.x + 6, z: FJ.z + FJORD_SPOTS.village.z - 6, r: 1 },
   { id: 'gruben_alchemy', kind: 'alchemy', name: 'Alchemy table', x: G.x - 10, z: G.z + 52, r: 1 },
   { id: 'gruben_loom', kind: 'loom', name: 'Loom', x: G.x - 6, z: G.z + 61, r: 1 },
   // Gruben's arrival camp: a fire, a forge and a rack, so you can work what you find up here.
@@ -381,9 +404,10 @@ export const NPCS: Npc[] = [
   { id: 'halvard', name: 'Halvard', title: 'Hunter', x: V.x + 12, z: V.z + 2, face: 3, color: 2, race: 'ogre', roles: ['quests'] },
   { id: 'tor', name: 'Tor', title: 'Woodcutter', x: V.x + 6, z: V.z + 11, face: 0, color: 7, race: 'human', roles: ['quests'] },
   { id: 'eirik', name: 'Eirik', title: 'Stablemaster', x: V.x - 15.5, z: V.z - 6, face: 2, color: 6, race: 'human', roles: ['shop'], sells: ['fjord_horse', 'black_fjord_horse'] },
-  { id: 'solvi', name: 'Sølvi', title: 'Fishwife', x: FJ.x + FJORD_SPOTS.village.x - 3, z: FJ.z + FJORD_SPOTS.village.z - 2, face: 4, color: 5, race: 'human', roles: ['shop', 'quests'], sells: ['saltwater_rod', 'basic_rod'] },
+  { id: 'solvi', name: 'Sølvi', title: 'Fishmonger', x: FJ.x + FJORD_SPOTS.village.x - 3, z: FJ.z + FJORD_SPOTS.village.z - 2, face: 4, color: 5, race: 'human', roles: ['shop', 'quests'], sells: ['saltwater_rod', 'basic_rod'] },
+  { id: 'ulrik', name: 'Ulrik', title: 'Old sailor', x: FJ.x + FJORD_SPOTS.village.x + 1, z: FJ.z + FJORD_SPOTS.village.z + 6, face: 1, color: 2, race: 'dwarf', roles: ['quests'] },
   { id: 'johan', name: 'Johan', title: 'Old miner', x: G.x + 2, z: G.z + 47, face: 1, color: 3, race: 'dwarf', roles: ['quests'] },
-  { id: 'ragna', name: 'Ragna', title: 'Imbuer & herbwife', x: V.x - 4, z: V.z + 11, face: 4, color: 4, race: 'gnome', roles: ['imbuer', 'shop', 'quests'], sells: ['vial'] },
+  { id: 'ragna', name: 'Ragna', title: 'Imbuer & herbalist', x: V.x - 4, z: V.z + 11, face: 4, color: 4, race: 'gnome', roles: ['imbuer', 'shop', 'quests'], sells: ['vial'] },
 ];
 export const NPC_BY_ID: Map<string, Npc> = new Map(NPCS.map((n) => [n.id, n]));
 
@@ -544,8 +568,8 @@ const R: Recipe[] = [
   ...JEWELS.flatMap((j, i): Recipe[] => {
     const base = j.gem ? `${j.gem}_` : 'silver_', gem = j.gem ? [{ item: j.gem, qty: 1 }] : [];
     return [
-      { id: `${base}ring`, skill: 'smithing', station: 'anvil', level: 19 + i * 3, inputs: [{ item: 'silver_bar', qty: 1 }, ...gem], output: { item: `${base}ring`, qty: 1 }, xp: 60 + i * 30, seconds: 3.5 },
-      { id: `${base}necklace`, skill: 'smithing', station: 'anvil', level: 21 + i * 3, inputs: [{ item: 'silver_bar', qty: 2 }, ...gem], output: { item: `${base}necklace`, qty: 1 }, xp: 100 + i * 40, seconds: 4 },
+      { id: `${base}ring`, skill: 'smithing', station: 'anvil', level: j.level ?? 19 + i * 3, inputs: [{ item: 'silver_bar', qty: 1 }, ...gem], output: { item: `${base}ring`, qty: 1 }, xp: 60 + i * 30, seconds: 3.5 },
+      { id: `${base}necklace`, skill: 'smithing', station: 'anvil', level: (j.level ?? 19 + i * 3) + 2, inputs: [{ item: 'silver_bar', qty: 2 }, ...gem], output: { item: `${base}necklace`, qty: 1 }, xp: 100 + i * 40, seconds: 4 },
     ];
   }),
   // tailoring: spin and weave
@@ -563,6 +587,15 @@ const R: Recipe[] = [
   { id: 'grave_draught', skill: 'alchemy', station: 'alchemy', level: 20, inputs: [{ item: 'grave_moss', qty: 2 }, { item: 'grave_dust', qty: 1 }, { item: 'vial', qty: 1 }], output: { item: 'grave_draught', qty: 1 }, xp: 70, seconds: 3.2 },
   // leatherworking
   { id: 'leather', skill: 'leatherworking', station: 'tanning', level: 1, inputs: [{ item: 'wolf_pelt', qty: 1 }], output: { item: 'leather', qty: 1 }, xp: 8, seconds: 2.5 },
+  { id: 'naga_leather', skill: 'leatherworking', station: 'tanning', level: 12, inputs: [{ item: 'naga_hide', qty: 1 }], output: { item: 'naga_leather', qty: 1 }, xp: 26, seconds: 2.9 },
+  { id: 'cooked_crab', skill: 'cooking', station: ['campfire', 'stove'], level: 9, inputs: [{ item: 'raw_crab', qty: 1 }], output: { item: 'cooked_crab', qty: 1 }, xp: 22, seconds: 2.4, burns: true },
+  // Salted and cured food: new kinds of buffs (not just bigger ones). Needs sea salt from Saltfjorden's pans.
+  { id: 'rakfisk', skill: 'cooking', station: ['campfire', 'stove'], level: 8, inputs: [{ item: 'raw_trout', qty: 1 }, { item: 'salt', qty: 2 }], output: { item: 'rakfisk', qty: 1 }, xp: 22, seconds: 2.6 },
+  { id: 'salted_herring', skill: 'cooking', station: ['campfire', 'stove'], level: 10, inputs: [{ item: 'raw_herring', qty: 1 }, { item: 'salt', qty: 2 }], output: { item: 'salted_herring', qty: 1 }, xp: 26, seconds: 2.6 },
+  { id: 'gravlaks', skill: 'cooking', station: ['campfire', 'stove'], level: 13, inputs: [{ item: 'raw_char', qty: 1 }, { item: 'salt', qty: 2 }, { item: 'angelica', qty: 1 }], output: { item: 'gravlaks', qty: 1 }, xp: 34, seconds: 2.8 },
+  { id: 'cured_crab', skill: 'cooking', station: ['campfire', 'stove'], level: 14, inputs: [{ item: 'raw_crab', qty: 1 }, { item: 'salt', qty: 3 }], output: { item: 'cured_crab', qty: 1 }, xp: 36, seconds: 2.8 },
+  { id: 'lutefisk', skill: 'cooking', station: ['campfire', 'stove'], level: 18, inputs: [{ item: 'raw_cod', qty: 1 }, { item: 'salt', qty: 3 }], output: { item: 'lutefisk', qty: 1 }, xp: 46, seconds: 3 },
+  { id: 'salt_halibut', skill: 'cooking', station: ['campfire', 'stove'], level: 24, inputs: [{ item: 'raw_halibut', qty: 1 }, { item: 'salt', qty: 4 }], output: { item: 'salt_halibut', qty: 1 }, xp: 64, seconds: 3.2 },
   { id: 'lynx_leather', skill: 'leatherworking', station: 'tanning', level: 17, inputs: [{ item: 'lynx_pelt', qty: 1 }], output: { item: 'lynx_leather', qty: 1 }, xp: 34, seconds: 3 },
   { id: 'goblin_leather', skill: 'leatherworking', station: 'tanning', level: 8, inputs: [{ item: 'goblin_skin', qty: 1 }], output: { item: 'goblin_leather', qty: 1 }, xp: 18, seconds: 2.8 },
   // carpentry
@@ -614,6 +647,7 @@ for (const p of ARMOUR_PIECES) {
   const n = { helm: 3, pauldrons: 3, breastplate: 6, greaves: 5, gauntlets: 2, boots: 2 }[p.piece] ?? 3;
   const lvl = { gauntlets: 1, boots: 1, helm: 2, pauldrons: 3, greaves: 4, breastplate: 5 }[p.piece] ?? 2;
   R.push({ id: `leather_${p.piece}`, skill: 'leatherworking', station: 'tanning', level: lvl, inputs: [{ item: 'leather', qty: n }], output: { item: `leather_${p.piece}`, qty: 1 }, xp: n * 14, seconds: 2 + n * 0.3 });
+  R.push({ id: `nagahide_${p.piece}`, skill: 'leatherworking', station: 'tanning', level: lvl + 13, inputs: [{ item: 'naga_leather', qty: n }, { item: 'goblin_leather', qty: 1 }], output: { item: `nagahide_${p.piece}`, qty: 1 }, xp: n * 50, seconds: 2.8 + n * 0.3 });
   R.push({ id: `lynxhide_${p.piece}`, skill: 'leatherworking', station: 'tanning', level: lvl + 18, inputs: [{ item: 'lynx_leather', qty: n }, { item: 'goblin_leather', qty: 1 }], output: { item: `lynxhide_${p.piece}`, qty: 1 }, xp: n * 70, seconds: 3 + n * 0.3 });
   R.push({ id: `goblinhide_${p.piece}`, skill: 'leatherworking', station: 'tanning', level: lvl + 9, inputs: [{ item: 'goblin_leather', qty: n }, { item: 'leather', qty: 1 }], output: { item: `goblinhide_${p.piece}`, qty: 1 }, xp: n * 35, seconds: 2.5 + n * 0.3 });
 }
@@ -623,9 +657,9 @@ export const RECIPE_BY_ID: Map<string, Recipe> = new Map(RECIPES.map((r) => [r.i
 export function recipeGroup(r: Recipe): string {
   const out = ITEMS[r.output.item];
   const ins = r.inputs.map((i) => ITEMS[i.item]);
-  if (r.skill === 'cooking') return ins.some((d) => d?.kind === 'meat') ? 'Meat' : 'Fish';
+  if (r.skill === 'cooking') return r.inputs.some((i) => i.item === 'salt') ? 'Salted & cured' : ins.some((d) => d?.kind === 'meat') ? 'Meat' : 'Fish';
   if (r.skill === 'carpentry' && (out.kind === 'ammo' || r.output.item === 'arrow_shaft')) return 'Arrows';
-  if (r.skill === 'leatherworking') return out.look === 'goblin' ? 'Goblinhide' : out.look === 'lynx' ? 'Lynx' : 'Wolf leather';
+  if (r.skill === 'leatherworking') return out.look === 'goblin' ? 'Goblinhide' : out.look === 'naga' ? 'Nagahide' : out.look === 'lynx' ? 'Lynx' : 'Wolf leather';
   if (out.slot === 'ring' || out.slot === 'neck') return 'Jewellery';
   if (r.skill === 'alchemy') return ITEMS[r.output.item].potion?.heal ? 'Healing' : 'Elixirs';
   if (r.skill === 'tailoring') return ({ linen: 'Linen', jute: 'Jute', ramie: 'Ramie', cotton: 'Cotton', bamboo: 'Bamboo', silk: 'Spirit silk' } as Record<string, string>)[out.look ?? 'linen'] ?? 'Linen';

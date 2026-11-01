@@ -10,7 +10,7 @@ import type { ServerPlayer } from './types.js';
 import { rollGear } from './combat.js';
 import type { World } from './world.js';
 
-const SLOT_FOR = { mining: 'pickaxe', woodcutting: 'hatchet', tailoring: 'pickaxe', herbalism: 'pickaxe' } as const;
+const SLOT_FOR = { mining: 'pickaxe', woodcutting: 'hatchet', tailoring: 'pickaxe', herbalism: 'pickaxe', cooking: 'pickaxe' } as const;
 
 export function gather(w: World, p: ServerPlayer, kind: 'mine' | 'chop' | 'pick', nodeId: string): void {
   if (kind === 'pick') return pick(w, p, nodeId);
@@ -30,7 +30,7 @@ export function gather(w: World, p: ServerPlayer, kind: 'mine' | 'chop' | 'pick'
   if ((def.power ?? 0) < type.power) return err(`You need a stronger ${slot}.`);
   const lvl = levelOf(p.xp, skill);
   if (lvl < type.level) return err(`${type.name} needs ${skill === 'mining' ? 'Mining' : 'Woodcutting'} ${type.level} (you have ${lvl}).`);
-  const st = p.stats.scoped[skill];
+  const st = (p.stats.scoped as Record<string, typeof p.stats.all>)[skill] ?? p.stats.all;
   const swing = swingSeconds(def.swingSec ?? 2.6, lvl, skill === 'mining' ? st.miningSpeed : st.woodSpeed) * 1000;
   if (now - p.lastGatherAt < swing * 0.8) return;
   const ns = w.nodes.get(nodeId);
@@ -76,9 +76,10 @@ function pick(w: World, p: ServerPlayer, nodeId: string): void {
   const now = w.now();
   const err = (text: string) => w.notice(p, text, 'error');
   if (Math.hypot(p.state.x - plant.x, p.state.z - plant.z) > 3 || Math.abs(p.state.y - plant.y) > 3) return err('Too far away.');
-  const skill = type.skill as 'tailoring' | 'herbalism';
+  const skill = type.skill as 'tailoring' | 'herbalism' | 'cooking';
+  const skillName = skill[0].toUpperCase() + skill.slice(1);
   const lvl = levelOf(p.xp, skill);
-  if (lvl < type.level) return err(`${type.name} needs ${skill === 'tailoring' ? 'Tailoring' : 'Herbalism'} ${type.level} (you have ${lvl}).`);
+  if (lvl < type.level) return err(`${type.name} needs ${skillName} ${type.level} (you have ${lvl}).`);
   if (now - p.lastGatherAt < PICK_SEC * (1 - 0.01 * (lvl - 1)) * 1000 * 0.8) return;
   const ns = w.nodes.get(nodeId);
   if (ns && ns.until > now) return err('Nothing left to pick here yet.');
@@ -93,7 +94,7 @@ function pick(w: World, p: ServerPlayer, nodeId: string): void {
   w.give(p, { id: type.item, qty });
   const xp = w.addXp(p, skill, type.xp);
   p.client.send({ t: 'gain', skill, xp, item: type.item, qty });
-  w.count(p, skill === 'herbalism' ? 'herbs' : 'fibre');
+  if (skill !== 'cooking') w.count(p, skill === 'herbalism' ? 'herbs' : 'fibre');
   if (state.left <= 0) {
     const [lo, hi] = type.respawnSec;
     state.until = now + (lo + w.rand() * (hi - lo)) * 1000;

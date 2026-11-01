@@ -31,7 +31,7 @@ export interface ZonePlan {
 
 export const ZONES: ZonePlan[] = [
   { id: 'north', tier: 6, name: 'The far north', col: 0, row: 0, w: 3, h: 1, blurb: 'Not yet discovered.' },
-  { id: 'fjord', tier: 2, name: 'Saltfjorden', region: 'fjord', col: 0, row: 1, w: 1, h: 1, blurb: 'Sea fishing · Fishing 8–28' },
+  { id: 'fjord', tier: 2, name: 'Saltfjorden', region: 'fjord', col: 0, row: 1, w: 1, h: 1, blurb: 'Sea fishing · monsters level 8–15' },
   { id: 'valley', tier: 1, name: 'Mofjellet & Bjørkvik', region: 'valley', col: 1, row: 1, w: 1, h: 1, blurb: 'Where you start · monsters level 2–12' },
   { id: 'gruben', tier: 3, name: 'Gruben', region: 'gruben', col: 2, row: 1, w: 1, h: 1, blurb: 'The old mine valley · monsters level 13–22' },
   { id: 'southwest', tier: 4, name: 'The south-west', col: 0, row: 2, w: 1, h: 1, blurb: 'Not yet discovered.' },

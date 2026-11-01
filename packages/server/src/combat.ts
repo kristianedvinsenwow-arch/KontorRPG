@@ -5,7 +5,7 @@
  * flight time so the hit numbers match what players see.
  */
 import {
-  BURN, HEAL_MULT, LIFE_BOLT_MULT, CORPSE_SEC, FREEZE_SEC, ITEMS, knifeBonus, knifeUses, levelOf, MOBS, PROJECTILE_SPEED, SLOW, SPAWNS, ST_ANGRY, ST_BURN, ST_DEAD, ST_FROZEN, ST_SLOW,
+  RECIPES, BURN, HEAL_MULT, LIFE_BOLT_MULT, CORPSE_SEC, FREEZE_SEC, ITEMS, knifeBonus, knifeUses, levelOf, MOBS, PROJECTILE_SPEED, SLOW, SPAWNS, ST_ANGRY, ST_BURN, ST_DEAD, ST_FROZEN, ST_SLOW,
   attackInterval, attackRange, groundAt, incoming, inCaveRegion, regionAt, mitigate, outgoing, r2, r3, rollCraftRarity, rollEffects,
   specialCooldown, specialFor, hasShield, giantslayerMult, GUARD_SEC, SHIELD_THREAT_M, styleOf, weaponClass, type Drop, type MobState, type Rarity, type Stack,
 } from '@kontor/shared';
@@ -75,7 +75,7 @@ export function stepMobs(w: World, dt: number, now: number): void {
         m.burn.nextTick = now + 1000;
         const dmg = m.burn.perSec * m.burn.stacks;
         w.broadcastNear(m, { t: 'hit', to: m.id, dmg: Math.round(dmg * 10) / 10, kind: 'burn', from: m.burn.by });
-        damageMob(w, m, dmg, m.burn.by, now);
+        damageMob(w, m, dmg, m.burn.by, now, true);
         if (m.dead) continue;
       }
     }
@@ -296,7 +296,7 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
     const final = Math.max(0.5, Math.round(mitigate(dmg, magic, t.def.armour, t.def.ward) * 10) / 10);
     w.broadcastNear(t, { t: 'hit', to: t.id, dmg: final, crit, kind: magic ? 'magic' : 'phys', from: p.state.id });
     then?.(t);
-    damageMob(w, t, final, p.state.id, w.now());
+    damageMob(w, t, final, p.state.id, w.now(), cls === 'fireStaff');
   };
   const flight = (t: Mob) => (Math.hypot(t.x - p.state.x, t.z - p.state.z) / PROJECTILE_SPEED) * 1000;
 
@@ -373,7 +373,8 @@ function applyHeal(w: World, healer: ServerPlayer, t: ServerPlayer, amount: numb
   if (done > 0 && now - t.lastHurtAt < 15_000) w.addXp(healer, 'combat', Math.max(1, Math.round(done * 0.5)));
 }
 
-export function damageMob(w: World, m: Mob, dmg: number, by: string, now: number): void {
+/** `fire`: the hit was fire (a firebolt, Ignite or a burn) — a kill by fire cooks the meat it drops. */
+export function damageMob(w: World, m: Mob, dmg: number, by: string, now: number, fire = false): void {
   if (m.dead) return;
   m.hp -= dmg;
   m.dmgBy.set(by, (m.dmgBy.get(by) ?? 0) + dmg);
@@ -382,6 +383,7 @@ export function damageMob(w: World, m: Mob, dmg: number, by: string, now: number
   m.dead = true;
   m.hp = 0;
   m.burn = null;
+  m.firedBy = fire ? by : undefined;
   const [lo, hi] = m.def.respawnSec;
   m.respawnAt = m.spawn.summonedBy ? Infinity : now + (lo + w.rand() * (hi - lo)) * 1000;
   if (m.def.boss) resetBoss(w, m);
@@ -413,6 +415,15 @@ function dropLoot(w: World, m: Mob, owner: ServerPlayer | undefined): void {
     if ('item' in d) {
       const def = ITEMS[d.item];
       const qty = d.qty[0] + Math.floor(w.rand() * (d.qty[1] - d.qty[0] + 1));
+      // Killed by fire: the meat comes out already cooked, and the killer gets the cooking XP.
+      const cook = m.firedBy && def.kind === 'meat' ? RECIPES.find((r) => r.skill === 'cooking' && r.inputs.length === 1 && r.inputs[0].item === d.item) : undefined;
+      const chef = cook ? w.players.get(m.firedBy!) : undefined;
+      if (cook && chef) {
+        items.push({ id: cook.output.item, qty });
+        const xp = w.addXp(chef, 'cooking', cook.xp * qty);
+        chef.client.send({ t: 'gain', skill: 'cooking', xp });
+        continue;
+      }
       items.push(def.fixedRarity ? { id: d.item, qty: 1, r: def.fixedRarity } : { id: d.item, qty });
     } else {
       const pool = GEAR_BY_TIER[d.gear] ?? [];

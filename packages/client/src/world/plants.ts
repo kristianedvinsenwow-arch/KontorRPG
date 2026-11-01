@@ -67,6 +67,16 @@ export class Plants {
       const g = new THREE.Group();
       g.position.set(p.x, p.y - 0.02, p.z);
       const full = new THREE.Group();
+      if (p.kind === 'salt_pan') {
+        // A shallow pool crusted with white salt crystals.
+        const pool = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.75, 0.06, 14), sharedMat(0x8aa0a8, 0x101820)); pool.position.y = 0.04; full.add(pool);
+        for (let i = 0; i < 14; i++) { const a = rnd() * Math.PI * 2, r = Math.sqrt(rnd()) * 0.6; const c = new THREE.Mesh(new THREE.OctahedronGeometry(0.05 + rnd() * 0.04, 0), sharedMat(0xf4f2ee, 0x202020)); c.position.set(Math.cos(a) * r, 0.08, Math.sin(a) * r); full.add(c); }
+        merge(full); g.add(full);
+        const stubble = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.75, 0.05, 14), sharedMat(0x6a7a80)); stubble.position.y = 0.03; stubble.visible = false; g.add(stubble);
+        this.group.add(g);
+        this.views.set(p.id, { p, g, full, stubble, depleted: false, shake: 0 });
+        continue;
+      }
       const herb = HERB[p.kind];
       if (herb) {
         const [sc, tc, ts, hh, n, shape] = herb;

@@ -995,3 +995,34 @@ test('the rowboat brings you back, onto the end of the pier', async () => {
   assert.equal(reg(p.state.x, p.state.z), 'valley');
   assert.ok(Math.hypot(p.state.x - BOAT_HOME.x, p.state.z - BOAT_HOME.z) < 1);
 });
+
+test('Saltfjorden content: nagas, crabs, the wreck (walkable deck), salt pans, coral; fire-killed meat comes out cooked', async () => {
+  const S = await import('@kontor/shared');
+  const { world, c, p, place, advance } = game(() => 0.3);
+  const kinds = new Set([...world.mobs.values()].map((m) => m.def.kind));
+  for (const k of ['naga', 'naga_siren', 'giant_crab', 'drowned', 'drowned_captain']) assert.ok(kinds.has(k as any), k);
+  assert.ok(S.VEINS.some((v) => v.type === 'coral') && S.VEINS.some((v) => v.type === 'seaglass'));
+  assert.ok(S.PLANTS.filter((x) => x.kind === 'salt_pan').length >= 4);
+  // The wreck's deck is raised ground; the gangplank climbs to it.
+  assert.equal(S.groundAt(S.SHIPWRECK.x, S.SHIPWRECK.z), S.SHIPWRECK.deck);
+  const mid = S.groundAt((S.SHIPWRECK.plankFrom + S.SHIPWRECK.x - S.SHIPWRECK.width / 2) / 2, S.SHIPWRECK.z);
+  assert.ok(Math.abs(mid - S.SHIPWRECK.deck) < 1, 'the gangplank bridges bank and deck');
+  const captain = world.mobs.get('drowned-captain')!;
+  assert.equal(captain.y, S.SHIPWRECK.deck, 'the captain stands on the deck');
+  // Salt pans give salt (Cooking).
+  const pan = S.PLANTS.find((x) => x.kind === 'salt_pan')!;
+  place(pan.x + 1, pan.z);
+  world.handle(c, { t: 'pick', node: pan.id });
+  assert.ok(S.countItem(p.bag, 'salt') >= 1);
+  // A wolf killed by a firebolt drops cooked meat; the killer gets cooking XP.
+  const wolf = [...world.mobs.values()].find((m) => m.def.kind === 'wolf')!;
+  p.equip.mainHand = { id: 'birch_fire_staff', qty: 1 }; world.recompute(p);
+  place(wolf.x + 6, wolf.z);
+  wolf.hp = 0.5;
+  world.handle(c, { t: 'attack', target: wolf.id, special: false });
+  advance(800); world.step();
+  assert.ok(wolf.dead);
+  assert.ok((p.xp.cooking ?? 0) > 0, 'cooking XP');
+  const ground = [...(world as any).ground.values()].map((g: any) => g.item.id);
+  assert.ok(ground.includes('cooked_wolf_meat') && !ground.includes('raw_wolf_meat'), JSON.stringify(ground));
+});

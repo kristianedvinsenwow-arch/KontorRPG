@@ -133,7 +133,7 @@ test('XP curve: 10 × L² per level', () => {
 });
 
 test('veins exist, are on land, and include a starter cluster near camp', () => {
-  const over = VEINS.filter((v) => !v.id.startsWith('c-') && !v.id.startsWith('g-'));
+  const over = VEINS.filter((v) => !v.id.startsWith('c-') && !v.id.startsWith('g-') && !v.id.startsWith('f-'));
   assert.ok(over.filter((v) => v.type === 'stone').length >= 10);
   assert.ok(over.filter((v) => v.type === 'iron').length >= 6);
   assert.ok(over.length < 45, `fewer veins than M1 (${over.length})`);

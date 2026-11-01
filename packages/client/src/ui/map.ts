@@ -5,7 +5,7 @@
  */
 import {
   CAVE, CAVE_ENTRANCE, CAVE_ROOMS, CAVE_TUNNELS, MINING_SPOTS, MOB_AREAS, MOBS, NPCS, VILLAGE, WATER_LEVEL, WORLD_HALF,
-  ZONES, ZONE_LINKS, type ZonePlan, FLAX_FIELDS, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, PORTAL_BY_ID, HOMES, VEINS, caveClearance, heightAt, inCaveRegion, regionAt, type Region,
+  ZONES, ZONE_LINKS, type ZonePlan, FLAX_FIELDS, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, PORTAL_BY_ID, SHIPWRECK, FORD_Z, fjordMid, HOMES, VEINS, caveClearance, heightAt, inCaveRegion, regionAt, type Region,
 } from '@kontor/shared';
 
 export const mapInfo: { me: { x: number; z: number; yaw: number } | null; others: { x: number; z: number; name: string; color: string }[] } = { me: null, others: [] };
@@ -175,6 +175,8 @@ function drawZone(region: Region): HTMLElement {
     } else if (r === 'fjord') {
       mark(FJORD.x + FJORD_SPOTS.village.x, FJORD.z + FJORD_SPOTS.village.z, 'Fishing village', '#f2a23a', 7);
       { const b = PORTAL_BY_ID.get('fjord_out')!.at; mark(b.x, b.z, 'Rowboat to Bjørkvik', '#b77be8', 5); }
+      mark(SHIPWRECK.x, SHIPWRECK.z, 'The wreck — the Drowned Captain (lv 15)', '#b77be8', 6);
+      mark(FJORD.x + fjordMid(FORD_Z), FJORD.z + FORD_Z, 'The ford', '#d8c890', 4);
     } else {
       const S = GRUBEN_SPOTS;
       mark(GRUBEN.x + S.arrival.x, GRUBEN.z + S.arrival.z, 'Gruben camp', '#f2a23a', 7);

@@ -99,6 +99,8 @@ export interface Mob {
   /** A slam winding up: lands at this time. */
   slamAt?: number;
   enraged?: boolean;
+  /** Who killed it with fire (its meat drops cooked). */
+  firedBy?: string;
   /** Has called its helpers this fight. */
   called?: boolean;
 }

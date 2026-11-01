@@ -5,7 +5,7 @@
  * checks the same spots.
  */
 import * as THREE from 'three';
-import { STABLE, CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, FJORD_PIER, fjordMid, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
+import { STABLE, CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, FJORD_PIER, SHIPWRECK, fjordMid, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
 import { mat, bx, mesh, canvasTex } from '../engine/procgen.js';
 import { makeCharacter, animateCharacter, type Character } from '../entities/character.js';
 import { applyGear } from '../entities/held.js';
@@ -700,7 +700,46 @@ export class Places {
     for (let d = 0; d < P.length; d += 0.5) bx(jetty, P.width, 0.08, 0.46, M.plank, 0, P.deck - 0.04, d + 0.25);
     for (let d = 0.3; d <= P.length; d += 2.2) for (const sx of [-1, 1]) { const post = mesh(new THREE.CylinderGeometry(0.09, 0.1, 4, 7), M.darkWood, jetty); post.position.set(sx * (P.width / 2 - 0.1), P.deck - 2, d); }
     this.signpost(vx - 2, vz - 10, [['Jetty · boat to Bjørkvik', P.x + P.ux * P.length, P.z], ['Deep water ≈', F.x + fjordMid(0), F.z]]);
+    this.shipwreck();
     tag('Saltfjorden', 'Sea fishing · Fishing 8–28 · rare catches from the deeps', 'place', new THREE.Vector3(vx, heightAt(vx, vz) + 6, vz), 50);
+  }
+
+  /**
+   * The wreck on the west shore: a longship run aground, listing, half in the water. Its deck is
+   * walkable (see pierDeck's walkways); a gangplank climbs to it from the beach.
+   */
+  private shipwreck(): void {
+    const S = SHIPWRECK, hull = mat(0x4a3a2a, 'wood', { r: 0.9 }), deckM = mat(0x6a5236, 'wood', { r: 0.9 }), rot = mat(0x2e2a22, 'wood', { r: 1 });
+    const g = new THREE.Group(); g.position.set(S.x, 0, S.z); this.group.add(g);
+    const L = S.length, W = S.width;
+    // Deck planks (a ragged hole near the bow).
+    for (let d = -L / 2; d < L / 2; d += 0.5) {
+      if (d > -L / 2 + 3 && d < -L / 2 + 5 && true) { bx(g, W * 0.4, 0.1, 0.46, deckM, -W * 0.3, S.deck - 0.05, d + 0.25); continue; }
+      bx(g, W, 0.1, 0.46, deckM, 0, S.deck - 0.05, d + 0.25);
+    }
+    // Hull sides: planks curving in towards bow and stern, down into the water.
+    for (const sx of [-1, 1]) for (let i = 0; i < 9; i++) {
+      const d = -L / 2 + (i + 0.5) * (L / 9), taper = 1 - Math.pow(Math.abs(d) / (L / 2), 2) * 0.55;
+      const side = bx(g, 0.18, S.deck + 1.2, L / 9 + 0.05, i % 3 === 1 ? rot : hull, sx * (W / 2) * taper, S.deck / 2 - 0.4, d, 0, 0, sx * 0.12);
+      void side;
+    }
+    // Gunwale rails (broken in places) and bow/stern posts.
+    for (const sx of [-1, 1]) for (let i = 0; i < 9; i++) if ((i + (sx > 0 ? 1 : 0)) % 4 !== 0) {
+      const d = -L / 2 + (i + 0.5) * (L / 9), taper = 1 - Math.pow(Math.abs(d) / (L / 2), 2) * 0.55;
+      bx(g, 0.15, 0.6, L / 9, hull, sx * (W / 2) * taper, S.deck + 0.3, d);
+    }
+    for (const sz of [-1, 1]) { const post = bx(g, 0.3, 4, 0.3, hull, 0, S.deck + 0.4, sz * (L / 2 + 0.3), sz * -0.35, 0, 0); void post; }
+    // A broken mast with a torn sail.
+    bx(g, 0.35, 5, 0.35, rot, 0, S.deck + 2.5, -1, 0.12, 0, 0.05);
+    const sail = mesh(new THREE.PlaneGeometry(2.6, 2), mat(0xc8b8a0, 'cloth', { r: 1 }), g); sail.position.set(0.4, S.deck + 3.4, -1.2); (sail.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide; sail.rotation.set(0.1, 0.3, 0.15);
+    // Gangplank from the beach up to the deck.
+    const pl = new THREE.Group(); this.group.add(pl);
+    const x0 = S.plankFrom, x1 = S.x - W / 2 + 0.3, y0 = heightAt(x0, S.z), y1 = S.deck;
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    const plank = bx(pl, len, 0.1, 1.6, deckM, (x0 + x1) / 2, (y0 + y1) / 2 - 0.05, S.z, 0, 0, Math.atan2(y1 - y0, x1 - x0)); void plank;
+    // Colliders: the hull sides (you walk on the deck, not through the hull).
+    for (const sx of [-1, 1]) for (let d = -L / 2 + 1; d <= L / 2 - 1; d += 1.5) if (!(sx < 0 && Math.abs(d) < 1.2)) this.colliders.push({ x: S.x + sx * (W / 2 + 0.3), z: S.z + d, r: 0.5 });
+    tag('The wreck', 'Drowned crew · the Drowned Captain (level 15 boss)', 'place', new THREE.Vector3(S.x, S.deck + 6, S.z), 50);
   }
 
   /** A signpost with boards pointing at places. */

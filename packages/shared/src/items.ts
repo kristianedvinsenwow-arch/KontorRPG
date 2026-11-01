@@ -17,7 +17,7 @@ export type WeaponClass = 'sword' | 'mace' | 'longsword' | 'battleaxe' | 'warham
 export type ArmourType = 'cloth' | 'leather' | 'metal';
 export type ToolKind = 'pickaxe' | 'hatchet' | 'rod' | 'knife';
 /** Visual material for models and icons. */
-export type Look = 'stone' | 'iron' | 'steel' | 'silversteel' | 'silver' | 'coal' | 'gold' | 'birch' | 'pine' | 'leather' | 'goblin' | 'lynx' | 'cloth' | 'linen' | 'jute' | 'ramie' | 'cotton' | 'bamboo' | 'silk' | 'bone';
+export type Look = 'stone' | 'iron' | 'steel' | 'silversteel' | 'silver' | 'coal' | 'gold' | 'birch' | 'pine' | 'leather' | 'goblin' | 'lynx' | 'naga' | 'coral' | 'seaglass' | 'cloth' | 'linen' | 'jute' | 'ramie' | 'cotton' | 'bamboo' | 'silk' | 'bone';
 
 export interface ItemDef {
   id: string;
@@ -216,6 +216,16 @@ for (const [id, name, raw, cooked, tier, food] of FISH) {
 }
 add({ id: 'raw_wolf_meat', name: 'Raw wolf meat', kind: 'meat', stack: 10, tier: 1, sellValue: 1, blurb: 'Tough and gamey. Cook it at a campfire or the inn’s stove.' });
 add({ id: 'cooked_wolf_meat', name: 'Wolf steak', kind: 'food', stack: 10, tier: 1, food: { heal: 12, buff: { name: 'Well fed (wolf)', stats: { meleeDmg: 0.05, maxHp: 4 }, sec: 600 } }, sellValue: 2, blurb: 'Eat it (hotbar) to heal 12 HP and get a 10-minute buff. Not mid-fight.' });
+// Salted and cured food (cooking with sea salt): buffs fresh food doesn't give, and they last 20 min.
+const CURED: [string, string, number, NonNullable<ItemDef['food']>['buff'] & object, string][] = [
+  ['rakfisk', 'Rakfisk', 12, { name: 'Well fed (rakfisk)', stats: { regen: 2, moveSpeed: 0.03 }, sec: 1200 }, 'Fermented trout. It smells; you feel quick and you heal on the move.'],
+  ['salted_herring', 'Salted herring', 14, { name: 'Well fed (salted herring)', stats: { luck: 4, rareFish: 0.1 }, sec: 1200 }, 'Luck and better rare catches.'],
+  ['gravlaks', 'Gravlaks', 16, { name: 'Well fed (gravlaks)', stats: { xp: 0.05 }, sec: 1200 }, 'Cured char with dill: 5% more XP in everything.'],
+  ['cured_crab', 'Cured crab', 18, { name: 'Well fed (cured crab)', stats: { thorns: 2, maxHp: 6 }, sec: 1200 }, 'Spiky: anything that hits you takes 2 back.'],
+  ['lutefisk', 'Lutefisk', 20, { name: 'Well fed (lutefisk)', stats: { physRed: 0.05, magicRed: 0.05 }, sec: 1200 }, 'Lye-cured cod. Jelly-like, but you feel armoured against everything.'],
+  ['salt_halibut', 'Salt-baked halibut', 26, { name: 'Well fed (salt-baked halibut)', stats: { crit: 0.04, specialDmg: 0.1 }, sec: 1200 }, 'Crits and right clicks hit harder.'],
+];
+for (const [id, name, heal, buff, blurb] of CURED) add({ id, name, kind: 'food', stack: 10, tier: 2, food: { heal, buff }, sellValue: 4, blurb: `Eat it (hotbar) to heal ${heal} HP. 20-minute buff: ${blurb}` });
 add({ id: 'burnt_fish', name: 'Burnt food', kind: 'junk', stack: 10, sellValue: 0, blurb: 'Charcoal. Drop it.' });
 add({ id: 'old_boot', name: 'Old boot', kind: 'junk', stack: 5, sellValue: 0, blurb: 'Someone lost this in the lake. Smells like it.' });
 add({ id: 'seaweed', name: 'Seaweed', kind: 'junk', stack: 10, sellValue: 0, blurb: 'Slimy. Even the gulls won’t touch it.' });
@@ -228,6 +238,17 @@ add({ id: 'wolf_pelt', name: 'Wolf pelt', kind: 'material', stack: 10, look: 'le
 add({ id: 'goblin_skin', name: 'Goblin skin', kind: 'material', stack: 10, look: 'goblin', sellValue: 3, blurb: 'Tough, greenish hide from goblins. Tan it at a tanning rack.' });
 add({ id: 'leather', name: 'Leather', kind: 'material', stack: 10, tier: 1, look: 'leather', sellValue: 3, blurb: 'Tanned wolf pelt. Leather armour is made from it.' });
 add({ id: 'goblin_leather', name: 'Goblin leather', kind: 'material', stack: 10, tier: 2, look: 'goblin', sellValue: 6, blurb: 'Tanned goblin skin. Tougher than wolf leather.' });
+add({ id: 'naga_hide', name: 'Naga hide', kind: 'material', stack: 10, look: 'naga', sellValue: 4, blurb: 'Scaled, sea-green hide from a naga’s tail. Tan it at a tanning rack.' });
+add({ id: 'naga_leather', name: 'Naga leather', kind: 'material', stack: 10, tier: 2, look: 'naga', sellValue: 8, blurb: 'Tanned naga hide: scaled, light and hard to cut. Between goblin and lynx leather.' });
+add({ id: 'naga_scale', name: 'Naga scale', kind: 'trinket', stack: 20, sellValue: 3, blurb: 'A palm-sized scale that shines green and gold. Ulrik collects them.' });
+add({ id: 'raw_crab', name: 'Raw crab meat', kind: 'meat', stack: 10, tier: 2, sellValue: 1, blurb: 'Sweet white meat from a giant crab. Cook it, or salt it.' });
+add({ id: 'cooked_crab', name: 'Boiled crab', kind: 'food', stack: 10, tier: 2, food: { heal: 18, buff: { name: 'Well fed (crab)', stats: { armour: 2, maxHp: 4 }, sec: 600 } }, sellValue: 3, blurb: 'Eat it (hotbar) to heal 18 HP and get a 10-minute buff.' });
+add({ id: 'crab_shell', name: 'Crab shell', kind: 'junk', stack: 20, sellValue: 2, blurb: 'A plate of hard red shell. The trader takes them for buttons.' });
+add({ id: 'coral', name: 'Red coral', kind: 'gem', stack: 20, tier: 2, look: 'coral', sellValue: 4, blurb: 'Mined from the coral beds on Saltfjorden’s shore. Set it in silver at an anvil.' });
+add({ id: 'sea_glass', name: 'Sea glass', kind: 'gem', stack: 20, tier: 3, look: 'seaglass', sellValue: 6, blurb: 'Pale green glass worn smooth by the sea, dug from the west shore. Set it in silver at an anvil.' });
+add({ id: 'salt', name: 'Sea salt', kind: 'material', stack: 50, sellValue: 0, blurb: 'Scraped from Saltfjorden’s salt pans. Salted and cured food gives buffs fresh food can’t.' });
+add({ id: 'captains_cutlass', name: 'Drowned captain’s cutlass', kind: 'weapon', stack: 1, tier: 2, look: 'iron', slot: 'mainHand', weapon: 'sword', dps: 6.6, interval: 1.4, range: 2.7, twoHanded: false, fixedRarity: 3, mods: { crit: 0.04, meleeDmg: 0.05 }, sellValue: 40, blurb: 'Pitted and green, but the edge never went. Quick; good with a shield (Parry).' });
+add({ id: 'captains_hat', name: 'Captain’s tricorn', kind: 'armour', stack: 1, tier: 2, look: 'leather', slot: 'head', armourType: 'leather', armour: 2, ward: 2, fixedRarity: 3, mods: { luck: 4, rareFish: 0.15 }, sellValue: 40, blurb: 'Salt-stained and smelling of the deep. The fish seem to like it.' });
 add({ id: 'lynx_pelt', name: 'Lynx pelt', kind: 'material', stack: 10, look: 'lynx', sellValue: 6, blurb: 'Soft, spotted and warm. Skinned from Gruben’s lynxes. Tan it at a tanning rack.' });
 add({ id: 'lynx_leather', name: 'Lynx leather', kind: 'material', stack: 10, tier: 3, look: 'lynx', sellValue: 10, blurb: 'Tanned lynx pelt: supple and strong. Tier 3 leather.' });
 add({ id: 'grave_dust', name: 'Grave dust', kind: 'material', stack: 20, sellValue: 2, blurb: 'What’s left of a draug. Alchemy will want it.' });
@@ -321,7 +342,7 @@ add({ id: 'harpoon', name: 'Whaler’s harpoon', kind: 'weapon', stack: 1, tier:
 add({ id: 'swordfish_blade', name: 'Swordfish blade', kind: 'weapon', stack: 1, tier: 3, look: 'bone', slot: 'mainHand', weapon: 'sword', dps: 7.4, interval: 1.4, range: 2.8, twoHanded: false, fixedRarity: 3, mods: { crit: 0.06, dodge: 0.03 }, sellValue: 60, blurb: 'A swordfish’s bill on a whalebone grip. Light and quick; good with a shield (Parry).' });
 add({ id: 'sea_kings_trident', name: 'Sea King’s trident', kind: 'weapon', stack: 1, tier: 4, look: 'silversteel', slot: 'mainHand', weapon: 'halberd', dps: 10.4, interval: 2.3, range: 4.4, twoHanded: true, fixedRarity: 4, mods: { allDmg: 0.05, ward: 3 }, sellValue: 140, blurb: 'Three prongs of sea-green silversteel. Right click: Sweep everything in front of you.' });
 add({ id: 'ships_anchor', name: 'Ship’s anchor', kind: 'weapon', stack: 1, tier: 4, look: 'iron', slot: 'mainHand', weapon: 'warhammer', dps: 11.5, interval: 3.2, range: 3.2, twoHanded: true, fixedRarity: 4, giantslayer: true, mods: { physRed: 0.04 }, heavy: 0, sellValue: 140, blurb: 'Someone’s anchor, on a chain, swung like a hammer. Giantslayer: the bigger the foe, the harder it lands. Right click: Quake.' });
-add({ id: 'saltwater_rod', name: 'Saltwater rod', kind: 'tool', stack: 1, tier: 3, look: 'pine', slot: 'rod', tool: 'rod', power: 3, mods: { fishEase: 0.3, fishSpeed: 0.15, rareFish: 0.2 }, sellValue: 30, buyPrice: 180, blurb: 'Stiff, long and salt-proof. A much bigger catch bar, faster bites, and better odds of something special.' });
+add({ id: 'saltwater_rod', name: 'Saltwater rod', kind: 'tool', stack: 1, tier: 2.5, look: 'pine', slot: 'rod', tool: 'rod', power: 2, mods: { fishEase: 0.25, fishSpeed: 0.12, rareFish: 0.15 }, sellValue: 22, buyPrice: 130, blurb: 'Stiff and salt-proof, a step up from a pine rod: a bigger catch bar, faster bites and better odds of something special.' });
 add({ id: 'jotunbane', name: 'Jotunbane', kind: 'weapon', stack: 1, tier: 4, look: 'silversteel', slot: 'mainHand', weapon: 'battleaxe', dps: 8, interval: 2.6, range: 3.4, twoHanded: true, fixedRarity: 4, giantslayer: true, mods: { crit: 0.03 }, sellValue: 120, blurb: 'Giantslayer: the bigger the foe, the deeper it bites — up to +60% on the largest trolls, but goblins and bats barely notice it. Right click: Executioner (4×, 18 s).' });
 add({ id: 'birch_shortbow', name: 'Birch shortbow', kind: 'weapon', stack: 1, tier: 1, look: 'birch', slot: 'mainHand', weapon: 'bow', dps: 4.5, interval: 2.0, range: 28, twoHanded: true, sellValue: 3, blurb: 'Needs arrows in the ammo slot. Right click: Power Shot (3×, 10 s).' });
 add({ id: 'pine_longbow', name: 'Pine longbow', kind: 'weapon', stack: 1, tier: 2, look: 'pine', slot: 'mainHand', weapon: 'bow', dps: 5.6, interval: 2.2, range: 34, twoHanded: true, sellValue: 7, blurb: 'Needs arrows in the ammo slot. Right click: Power Shot (3×, 10 s).' });
@@ -362,6 +383,7 @@ for (const p of ARMOUR_PIECES) {
   if (p.slot === 'offHand') continue;
   add({ id: `leather_${p.piece}`, name: `Leather ${p.name.leather}`, kind: 'armour', stack: 1, tier: 1, look: 'leather', slot: p.slot, armourType: 'leather', armour: p.leather[0], ward: p.leather[1], sellValue: 2, blurb: 'Supple wolf leather. Fair against blades and spells alike, and light on the feet.' });
   add({ id: `goblinhide_${p.piece}`, name: `Goblinhide ${p.name.leather}`, kind: 'armour', stack: 1, tier: 2, look: 'goblin', slot: p.slot, armourType: 'leather', armour: Math.max(1, Math.round(p.leather[0] * 1.8)), ward: Math.round(p.leather[1] * 1.8), sellValue: 5, blurb: 'Tough goblin hide, tanned and stitched. Sturdier than wolf leather.' });
+  add({ id: `nagahide_${p.piece}`, name: `Nagahide ${p.name.leather}`, kind: 'armour', stack: 1, tier: 2, look: 'naga', slot: p.slot, armourType: 'leather', armour: Math.max(1, Math.round(p.leather[0] * 2.2)), ward: Math.round(p.leather[1] * 2.2), sellValue: 7, blurb: 'Scaled naga hide, stitched in overlapping rows. Better than goblinhide, light on the feet.' });
   add({ id: `lynxhide_${p.piece}`, name: `Lynxhide ${p.name.leather}`, kind: 'armour', stack: 1, tier: 3, look: 'lynx', slot: p.slot, armourType: 'leather', armour: Math.max(1, Math.round(p.leather[0] * 2.6)), ward: Math.round(p.leather[1] * 2.6), sellValue: 10, blurb: 'Soft, spotted lynx hide. The finest leather this side of the mountains.' });
   // Cloth (tailoring), weakest to best: linen (ids kept as cloth_*), jute, ramie, cotton, bamboo, spirit silk.
   for (const c of CLOTHS) add({
@@ -371,11 +393,13 @@ for (const p of ARMOUR_PIECES) {
 }
 
 // jewellery: silver with a gem set in it (crafted at the anvil, rolls rarity like other gear)
-export const JEWELS: { gem: string; name: string; ring: Partial<Stats>; neck: Partial<Stats> }[] = [
+export const JEWELS: { gem: string; name: string; ring: Partial<Stats>; neck: Partial<Stats>; level?: number }[] = [
   { gem: '', name: 'Silver', ring: { maxHp: 4 }, neck: { maxHp: 6 } },
   { gem: 'quartz', name: 'Quartz', ring: { luck: 4, xp: 0.03 }, neck: { luck: 6, xp: 0.05 } },
   { gem: 'sapphire', name: 'Sapphire', ring: { magicDmg: 0.05, ward: 1 }, neck: { magicDmg: 0.08, ward: 2 } },
   { gem: 'garnet', name: 'Garnet', ring: { meleeDmg: 0.04, rangedDmg: 0.04 }, neck: { allDmg: 0.06, maxHp: 4 } },
+  { gem: 'coral', name: 'Coral', ring: { maxHp: 3, regen: 1 }, neck: { maxHp: 5, regen: 2 }, level: 20 },
+  { gem: 'sea_glass', name: 'Sea-glass', ring: { ward: 2, magicRed: 0.03 }, neck: { ward: 3, magicRed: 0.05, rareFish: 0.1 }, level: 24 },
 ];
 for (const j of JEWELS) {
   const base = j.gem ? `${j.gem}_` : 'silver_';
@@ -387,11 +411,11 @@ for (const j of JEWELS) {
 add({ id: 'small_rucksack', name: 'Small rucksack', kind: 'bag', stack: 1, slot: 'back', bagSlots: 4, sellValue: 10, buyPrice: 40, blurb: '+4 bag slots.' });
 add({ id: 'leather_backpack', name: 'Leather backpack', kind: 'bag', stack: 1, slot: 'back', bagSlots: 8, sellValue: 30, buyPrice: 120, blurb: '+8 bag slots.' });
 // mounts (wear one in the mount slot, press R to ride)
-add({ id: 'skateboard', name: 'Skateboard', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.4, coat: 0xd8a040, mane: 0xe8e4da, board: true }, sellValue: 15, buyPrice: 60, blurb: 'Four wheels and a plank. Roll at 140% speed — gravel paths and all. Not in the mine or indoors.' });
-add({ id: 'fjord_alligator', name: 'Fjord alligator', kind: 'mount', stack: 1, slot: 'mount', fixedRarity: 4, mount: { mult: 1.85, coat: 0x4a5a32, mane: 0xd8d0a0, gator: true }, sellValue: 250, blurb: 'Nobody knows how it got into the fjord. It bit through three lines before you landed it. Ride at 185% speed.' });
-add({ id: 'fjord_horse', name: 'Fjord horse', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.6, coat: 0xc8a878, mane: 0x3a2a1c }, sellValue: 60, buyPrice: 250, blurb: 'A sturdy dun Fjord horse with a striped mane. Ride at 160% speed. Not in the mine or indoors.' });
-add({ id: 'black_fjord_horse', name: 'Black Fjord horse', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.75, coat: 0x2a2624, mane: 0xd8d0c0 }, sellValue: 120, buyPrice: 600, blurb: 'Rare, dark and quick. Ride at 175% speed.' });
-add({ id: 'dovre_stallion', name: 'Dovre stallion', kind: 'mount', stack: 1, slot: 'mount', fixedRarity: 4, mount: { mult: 2.0, coat: 0x8a9298, mane: 0xeef2f6 }, sellValue: 300, blurb: 'A grey giant of a horse that walked out of the Mine King’s pit. Ride at 200% speed.' });
+add({ id: 'skateboard', name: 'Skateboard', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.3, coat: 0xd8a040, mane: 0xe8e4da, board: true }, sellValue: 15, buyPrice: 60, blurb: 'Four wheels and a plank. Roll at 130% speed — gravel paths and all. Not in the mine or indoors.' });
+add({ id: 'fjord_alligator', name: 'Fjord alligator', kind: 'mount', stack: 1, slot: 'mount', fixedRarity: 4, mount: { mult: 1.75, coat: 0x4a5a32, mane: 0xd8d0a0, gator: true }, sellValue: 250, blurb: 'Nobody knows how it got into the fjord. It bit through three lines before you landed it. Ride at 175% speed.' });
+add({ id: 'fjord_horse', name: 'Fjord horse', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.5, coat: 0xc8a878, mane: 0x3a2a1c }, sellValue: 60, buyPrice: 250, blurb: 'A sturdy dun Fjord horse with a striped mane. Ride at 150% speed. Not in the mine or indoors.' });
+add({ id: 'black_fjord_horse', name: 'Black Fjord horse', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.65, coat: 0x2a2624, mane: 0xd8d0c0 }, sellValue: 120, buyPrice: 600, blurb: 'Rare, dark and quick. Ride at 165% speed.' });
+add({ id: 'dovre_stallion', name: 'Dovre stallion', kind: 'mount', stack: 1, slot: 'mount', fixedRarity: 4, mount: { mult: 1.9, coat: 0x8a9298, mane: 0xeef2f6 }, sellValue: 300, blurb: 'A grey giant of a horse that walked out of the Mine King’s pit. Ride at 190% speed.' });
 // Heavy plate: rare monster drops. They slow you down, and pay for it with big stats.
 add({ id: 'knuts_bellyplate', name: 'Old Knut’s belly plate', kind: 'armour', stack: 1, tier: 2, look: 'iron', slot: 'chest', armourType: 'metal', armour: 9, fixedRarity: 3, heavy: 0.04, mods: { maxHp: 15, thorns: 4 }, sellValue: 40, blurb: 'A cauldron lid Knut beat into a breastplate. Heavy as sin. Anything that hits you gets hurt back.' });
 add({ id: 'barrow_helm', name: 'Barrow-king’s helm', kind: 'armour', stack: 1, tier: 3, look: 'steel', slot: 'head', armourType: 'metal', armour: 5, ward: 2, fixedRarity: 3, heavy: 0.02, mods: { maxHp: 8, physRed: 0.04 }, sellValue: 45, blurb: 'Dug up with a draug still inside. Cold, heavy, and very hard to dent.' });

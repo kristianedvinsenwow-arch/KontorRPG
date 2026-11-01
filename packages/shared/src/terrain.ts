@@ -90,6 +90,8 @@ export const FJORD_SPOTS = {
   arrival: { x: 44, z: -66, r: 9, h: 5 },
   village: { x: 34, z: 8, r: 12, h: 2.4 },
 };
+/** Local z of the ford across the fjord's head. */
+export const FORD_Z = -60;
 export const inFjord = (x: number, z: number) => Math.abs(x - FJORD.x) < FJORD.half + 60 && Math.abs(z - FJORD.z) < FJORD.half + 60;
 /** Where the fjord's channel runs (local x of its middle) at local z. */
 export const fjordMid = (lz: number) => Math.sin(lz / 40) * 10 - 6;
@@ -101,6 +103,9 @@ function fjordHeight(x: number, z: number): number {
   let h = -9 + smooth(15, 32, d) * 14 + (fbm(x / 30, z / 30) - 0.5) * 4;
   h += Math.max(0, d - 40) * 0.4 + (fbm(x / 14 + 3, z / 14, 3) - 0.5) * 2 * smooth(30, 45, d);
   for (const p of Object.values(FJORD_SPOTS)) h = h + (p.h - h) * (1 - smooth(p.r, p.r + 10, Math.hypot(lx - p.x, lz - p.z)));
+  // The ford: a gravel bar across the fjord's head, so you can walk to the west shore.
+  const ford = (1 - smooth(3, 7, Math.abs(lz - FORD_Z))) * (1 - smooth(30, 40, Math.abs(lx - fjordMid(lz))));
+  if (ford > 0) h = h + (Math.max(h, 0.25) - h) * ford;
   const edge = Math.max(Math.abs(lx), Math.abs(lz));
   h += smooth(FJORD.half - 30, FJORD.half - 4, edge) * 30;
   return h;
@@ -161,6 +166,29 @@ export const FJORD_PIER = (() => {
   while (fjordHeight(x, z) > 0.45 && x > FJORD.x - 40) x -= 0.5;
   return { x: x + 1.5, z, ux: -1, uz: 0, length: 11, width: 2.4, deck: 0.75 };
 })();
+/**
+ * The shipwreck on Saltfjorden's west shore: a longship run aground, half in the water. Its deck
+ * is walkable (with a gangplank up from the beach), and the drowned crew live on it.
+ */
+export const SHIPWRECK = (() => {
+  const lz = 20;
+  let lx = fjordMid(lz);
+  while (fjordHeight(FJORD.x + lx, FJORD.z + lz) < 0.4 && lx > -80) lx -= 0.5;
+  const shore = FJORD.x + lx, z = FJORD.z + lz;
+  // The shore is steep here: the deck sits about level with the bank, and a short gangplank bridges the gap.
+  const deck = 3.2;
+  let from = shore;
+  while (fjordHeight(from, z) < deck - 0.2 && from > shore - 10) from -= 0.25;
+  return { x: shore + 2.5, z, length: 20, width: 5, deck, plankFrom: from - 0.5 };
+})();
+/** Raised walkways: deck height if (x, z) is on one (sloped ones rise from h0 to h1 along their length). */
+interface Walkway { x: number; z: number; ux: number; uz: number; length: number; width: number; h0: number; h1: number }
+const WALKWAYS: Walkway[] = [
+  // The ship's deck runs along z, centred on SHIPWRECK; the gangplank climbs east onto it.
+  { x: SHIPWRECK.x, z: SHIPWRECK.z - SHIPWRECK.length / 2, ux: 0, uz: 1, length: SHIPWRECK.length, width: SHIPWRECK.width, h0: SHIPWRECK.deck, h1: SHIPWRECK.deck },
+  { x: SHIPWRECK.plankFrom, z: SHIPWRECK.z, ux: 1, uz: 0, length: SHIPWRECK.x - SHIPWRECK.width / 2 - SHIPWRECK.plankFrom + 0.3, width: 1.6, h0: -1, h1: SHIPWRECK.deck },
+];
+
 /** Where the rowboats tie up: the far end of each pier, on the deck. */
 const pierEnd = (P: { x: number; z: number; ux: number; uz: number; length: number }) => ({ x: P.x + P.ux * (P.length - 0.8), z: P.z + P.uz * (P.length - 0.8) });
 export const BOAT_HOME = pierEnd(PIER);
@@ -172,6 +200,14 @@ export function pierDeck(x: number, z: number): number | null {
     const px = x - P.x, pz = z - P.z;
     const along = px * P.ux + pz * P.uz, side = -px * P.uz + pz * P.ux;
     if (along >= 0 && along <= P.length && Math.abs(side) <= P.width / 2) return P.deck;
+  }
+  if (x < -600) for (const W of WALKWAYS) {
+    const px = x - W.x, pz = z - W.z;
+    const along = px * W.ux + pz * W.uz, side = -px * W.uz + pz * W.ux;
+    if (along >= 0 && along <= W.length && Math.abs(side) <= W.width / 2) {
+      const h0 = W.h0 < 0 ? fjordHeight(W.x, W.z) : W.h0; // h0 < 0: starts on the ground
+      return h0 + (W.h1 - h0) * (along / W.length);
+    }
   }
   return null;
 }

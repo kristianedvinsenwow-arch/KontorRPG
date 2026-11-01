@@ -3,9 +3,9 @@
  * Small-number scale (design doc §5): a level-1 player hits for ~11 with a stone sword.
  */
 import { caveRoomCentre, CAVE } from './cave.js';
-import { heightAt, GRUBEN, GRUBEN_SPOTS } from './terrain.js';
+import { heightAt, GRUBEN, GRUBEN_SPOTS, FJORD, SHIPWRECK } from './terrain.js';
 
-export type MobKind = 'wolf' | 'goblin' | 'bat' | 'cave_goblin' | 'cave_shaman' | 'troll' | 'lynx' | 'draug' | 'wisp' | 'hill_troll' | 'mine_king';
+export type MobKind = 'wolf' | 'goblin' | 'bat' | 'cave_goblin' | 'cave_shaman' | 'troll' | 'lynx' | 'draug' | 'wisp' | 'hill_troll' | 'mine_king' | 'naga' | 'naga_siren' | 'giant_crab' | 'drowned' | 'drowned_captain';
 
 export type Drop =
   | { item: string; chance: number; qty: [number, number] }
@@ -56,6 +56,18 @@ export const MOBS: Record<MobKind, MobDef> = {
   troll: { kind: 'troll', name: 'Old Knut', level: 12, hp: 500, dmg: 12, interval: 2.6, range: 3.6, speed: 3.2, aggro: 12, armour: 15, ward: 5, xp: 800, gold: [15, 30],
     drops: [{ item: 'troll_tooth', chance: 1, qty: [1, 2] }, { gear: 2, chance: 0.6, legendary: 0.04 }, { item: 'trolltooth_necklace', chance: 0.03, qty: [1, 1] }, { item: 'knuts_bellyplate', chance: 0.04, qty: [1, 1] }, { item: 'warhammer_plans', chance: 0.2, qty: [1, 1] }, { item: 'jotunbane', chance: 0.015, qty: [1, 1] }, { item: 'garnet', chance: 0.25, qty: [1, 1] }],
     respawnSec: [90 * 60, 150 * 60], boss: true, slam: { every: 11, r: 5, mult: 1.8 }, enrage: 0.25, scale: 2.3 },
+  // Saltfjorden (levels 8–14)
+  naga: { kind: 'naga', name: 'Naga warrior', level: 10, hp: 92, dmg: 5.5, interval: 1.9, range: 2.2, speed: 3.8, aggro: 11, armour: 8, ward: 5, xp: 95, gold: [1, 3],
+    drops: [{ item: 'naga_scale', chance: 0.5, qty: [1, 2] }, { gear: 2, chance: 0.05 }, { item: 'sea_glass', chance: 0.05, qty: [1, 1] }], skin: { item: 'naga_hide', qty: [1, 2] }, respawnSec: [100, 170], scale: 0.88 },
+  naga_siren: { kind: 'naga_siren', name: 'Naga siren', level: 12, hp: 70, dmg: 6.5, interval: 2.3, range: 14, speed: 3.4, aggro: 14, armour: 4, ward: 10, magic: true, xp: 120, gold: [2, 4],
+    drops: [{ item: 'naga_scale', chance: 0.6, qty: [1, 3] }, { item: 'pearl', chance: 0.04, qty: [1, 1] }, { gear: 2, chance: 0.05 }], skin: { item: 'naga_hide', qty: [1, 1] }, respawnSec: [140, 220], scale: 0.85 },
+  giant_crab: { kind: 'giant_crab', name: 'Giant crab', level: 9, hp: 105, dmg: 5.5, interval: 2.4, range: 2, speed: 2.6, aggro: 7, armour: 14, ward: 3, xp: 85, gold: [0, 0],
+    drops: [{ item: 'raw_crab', chance: 0.8, qty: [1, 2] }, { item: 'crab_shell', chance: 0.5, qty: [1, 2] }, { item: 'coral', chance: 0.1, qty: [1, 1] }], respawnSec: [90, 150], scale: 1 },
+  drowned: { kind: 'drowned', name: 'Drowned sailor', level: 12, hp: 110, dmg: 6.5, interval: 2, range: 2, speed: 3.3, aggro: 10, armour: 10, ward: 4, xp: 120, gold: [2, 5],
+    drops: [{ item: 'grave_dust', chance: 0.3, qty: [1, 2] }, { item: 'pearl', chance: 0.03, qty: [1, 1] }, { gear: 2, chance: 0.06 }, { item: 'halberd_plans', chance: 0.006, qty: [1, 1] }], respawnSec: [150, 240], scale: 1 },
+  drowned_captain: { kind: 'drowned_captain', name: 'The Drowned Captain', level: 15, hp: 650, dmg: 11, interval: 2.4, range: 2.8, speed: 3.3, aggro: 12, armour: 14, ward: 8, xp: 1000, gold: [20, 40],
+    drops: [{ item: 'pearl', chance: 0.6, qty: [1, 2] }, { gear: 2, chance: 0.5, legendary: 0.03 }, { gear: 3, chance: 0.2 }, { item: 'captains_cutlass', chance: 0.05, qty: [1, 1] }, { item: 'captains_hat', chance: 0.06, qty: [1, 1] }, { item: 'spear_plans', chance: 0.12, qty: [1, 1] }],
+    respawnSec: [60 * 60, 100 * 60], boss: true, slam: { every: 11, r: 4.5, mult: 1.7 }, enrage: 0.25, adds: 0.5, scale: 1.25 },
   // Gruben (levels 13–22)
   lynx: { kind: 'lynx', name: 'Lynx', level: 13, hp: 95, dmg: 6.5, interval: 1.5, range: 1.8, speed: 5, aggro: 9, armour: 8, ward: 6, xp: 130, gold: [0, 0],
     drops: [{ item: 'raw_wolf_meat', chance: 0.4, qty: [1, 2] }], skin: { item: 'lynx_pelt', qty: [1, 2] }, respawnSec: [90, 160], scale: 0.9 },
@@ -77,6 +89,11 @@ export const MOB_AREAS = [
   { name: 'Wolf pack', x: 74, z: 36, kind: 'wolf' as MobKind, n: 4, r: 10 },
   { name: 'Northern wolves', x: -6, z: 96, kind: 'wolf' as MobKind, n: 3, r: 9 },
   { name: 'Goblin camp', x: -62, z: -60, kind: 'goblin' as MobKind, n: 5, r: 10 },
+  // Saltfjorden
+  { name: 'Naga camp', x: FJORD.x - 52, z: FJORD.z - 30, kind: 'naga' as MobKind, n: 5, r: 10 },
+  { name: 'Sirens’ rocks', x: FJORD.x - 50, z: FJORD.z - 44, kind: 'naga_siren' as MobKind, n: 2, r: 6 },
+  { name: 'Crab beach', x: FJORD.x + 38, z: FJORD.z + 60, kind: 'giant_crab' as MobKind, n: 4, r: 8 },
+  { name: 'West crab beach', x: FJORD.x - 34, z: FJORD.z + 60, kind: 'giant_crab' as MobKind, n: 3, r: 7 },
   { name: 'Ulvedalen pack', x: -86, z: -8, kind: 'wolf' as MobKind, n: 4, r: 9 },
   // Gruben
   { name: 'Lynx slopes', x: GRUBEN.x - 46, z: GRUBEN.z + 30, kind: 'lynx' as MobKind, n: 4, r: 12 },
@@ -109,6 +126,13 @@ function spawns(): Spawn[] {
   out.push({ id: 'mine-king', kind: 'mine_king', x: pit.x, z: pit.z - 4, leash: 18 });
   out.push({ id: 'pit-draug-0', kind: 'draug', x: pit.x - 7, z: pit.z + 3, leash: 14 });
   out.push({ id: 'pit-draug-1', kind: 'draug', x: pit.x + 7, z: pit.z + 3, leash: 14 });
+  // The shipwreck: drowned sailors on and around the deck, the captain at the stern.
+  const S = SHIPWRECK;
+  [[0, -7], [1.2, -2], [-1.2, 3], [0, 6]].forEach(([dx, dz], i) => out.push({ id: `drowned-${i}`, kind: 'drowned', x: S.x + dx, z: S.z + dz, leash: 16 }));
+  out.push({ id: 'drowned-beach', kind: 'drowned', x: S.plankFrom - 3, z: S.z + 4, leash: 14 });
+  out.push({ id: 'drowned-captain', kind: 'drowned_captain', x: S.x, z: S.z + S.length / 2 - 2, leash: 16 });
+  out.push({ id: 'captain-crew-0', kind: 'drowned', x: S.x - 1, z: S.z + 4, leash: 18, summonedBy: 'drowned-captain' });
+  out.push({ id: 'captain-crew-1', kind: 'drowned', x: S.x + 1, z: S.z + 4, leash: 18, summonedBy: 'drowned-captain' });
   // The Mine King's honour guard: they rise when he's down to half.
   out.push({ id: 'king-guard-0', kind: 'draug', x: pit.x - 4, z: pit.z - 8, leash: 22, summonedBy: 'mine-king' });
   out.push({ id: 'king-guard-1', kind: 'draug', x: pit.x + 4, z: pit.z - 8, leash: 22, summonedBy: 'mine-king' });

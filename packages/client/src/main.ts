@@ -446,7 +446,7 @@ function blocker(a: NonNullable<Aim>): string | null {
   if (a.kind === 'plant') {
     const type = PLANT_TYPES[a.p.kind], lvl = levelFromXp(g.xp[type.skill] ?? 0);
     if (plants.isDepleted(a.p.id)) return `${type.name} — picked clean`;
-    if (lvl < type.level) return `${type.name} — needs ${type.skill === 'tailoring' ? 'Tailoring' : 'Herbalism'} ${type.level} (you have ${lvl})`;
+    if (lvl < type.level) return `${type.name} — needs ${type.skill[0].toUpperCase() + type.skill.slice(1)} ${type.level} (you have ${lvl})`;
     return null;
   }
   if (a.kind !== 'vein' && a.kind !== 'tree') return null;
@@ -637,7 +637,7 @@ function interact(now: number, playing: boolean) {
     const name = aimed.kind === 'vein' ? VEIN_TYPES[aimed.v.type].name.toLowerCase() : TREE_TYPES[aimed.t.kind].name.toLowerCase();
     setPrompt(block ? `<span class="bad">${block}</span>` : `Hold <b>click</b> to ${aimed.kind === 'vein' ? 'mine' : 'chop'} ${name}`);
   } else if (aimed?.kind === 'plant') {
-    const type = PLANT_TYPES[aimed.p.kind], skill = type.skill === 'tailoring' ? 'Tailoring' : 'Herbalism';
+    const type = PLANT_TYPES[aimed.p.kind], skill = type.skill[0].toUpperCase() + type.skill.slice(1);
     const what = `<b>${type.name}</b> <span class="dim">· ${skill} ${type.level} · gives ${ITEMS[type.item]?.name ?? type.item}</span>`;
     setPrompt(block ? `<span class="bad">${block}</span>` : plantClose(aimed.p) ? `Hold <b>click</b> to pick · ${what}` : `${what} · walk closer to pick`);
   } else if (aimed?.kind === 'water') setPrompt('<b>Click</b> to cast');

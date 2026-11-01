@@ -44,6 +44,10 @@ export const QUESTS: QuestDef[] = [
   { id: 'solvi_herring', npc: 'solvi', name: 'Herring for the barrels', period: 'daily', text: 'The salting barrels are empty. Ten raw herring, love.', need: { item: 'raw_herring', qty: 10 }, reward: { gold: 8, xp: ['fishing', 300] } },
   { id: 'solvi_cod', npc: 'solvi', name: 'Stockfish', period: 'twice-weekly', text: 'Cod for the drying racks — eight of them.', need: { item: 'raw_cod', qty: 8 }, reward: { gold: 16, xp: ['fishing', 700] } },
   { id: 'solvi_supper', npc: 'solvi', name: 'Halibut supper', period: 'weekly', text: 'The fishermen deserve a feast. Five cooked halibut.', need: { item: 'cooked_halibut', qty: 5 }, reward: { gold: 30, xp: ['cooking', 1400] } },
+  { id: 'ulrik_scales', npc: 'ulrik', name: 'Shiny scales', period: 'daily', text: 'Naga scales fetch a good price in the city. Bring me eight.', need: { item: 'naga_scale', qty: 8 }, reward: { gold: 9, xp: ['combat', 400] } },
+  { id: 'ulrik_nagas', npc: 'ulrik', name: 'Snakes on the shore', period: 'twice-weekly', text: 'The nagas have taken the west shore. Drive them back: six of them.', need: { kill: 'naga', qty: 6 }, reward: { gold: 14, xp: ['combat', 700] } },
+  { id: 'ulrik_captain', npc: 'ulrik', name: 'The Drowned Captain', period: 'weekly', text: 'My old captain never left the wreck. Over the ford and down the west shore. Give him rest.', need: { kill: 'drowned_captain', qty: 1 }, reward: { gold: 32, xp: ['combat', 1800] } },
+  { id: 'solvi_crabs', npc: 'solvi', name: 'Crab supper', period: 'daily', text: 'Six crab meat from the beach to the south, mind the claws.', need: { item: 'raw_crab', qty: 6 }, reward: { gold: 7, xp: ['cooking', 300] } },
   { id: 'tor_birch', npc: 'tor', name: 'Firewood', period: 'daily', text: 'Ten birch logs for the lodge’s fires.', need: { item: 'birch_log', qty: 10 }, reward: { gold: 5, xp: ['woodcutting', 120] } },
   { id: 'tor_pine', npc: 'tor', name: 'Roof beams', period: 'weekly', text: 'The lodge roof needs new beams: 10 pine logs.', need: { item: 'pine_log', qty: 10 }, reward: { gold: 20, xp: ['woodcutting', 600] } },
 ];
