@@ -378,13 +378,14 @@ net.on((msg) => {
 // ---------------------------------------------------------------- pop-ups and prompts
 const pops = document.getElementById('pops')!;
 let popRow = 0;
-/** Where pop-ups appear: mid-screen, or — with a menu open (crafting, a shop) — just right of it, or over its top if there's no room. */
+/** Where pop-ups appear: mid-screen, or — with a menu open (crafting, a shop) — just left of it (else right of it, else over its top). */
 function placePops() {
   const card = document.getElementById('gameCard');
   const open = card && uiStore.get().panel !== 'none' && card.offsetParent;
   if (!open) { pops.style.left = '50%'; pops.style.top = '42%'; return; }
   const r = card.getBoundingClientRect();
-  if (window.innerWidth - r.right > 240) { pops.style.left = `${r.right + 120}px`; pops.style.top = `${r.top + 90}px`; }
+  if (r.left > 240) { pops.style.left = `${r.left - 120}px`; pops.style.top = `${r.top + 90}px`; }
+  else if (window.innerWidth - r.right > 240) { pops.style.left = `${r.right + 120}px`; pops.style.top = `${r.top + 90}px`; }
   else { pops.style.left = `${r.left + r.width / 2}px`; pops.style.top = `${r.top + 70}px`; }
 }
 function pop(text: string, cls = '', item?: string, color?: string) {
