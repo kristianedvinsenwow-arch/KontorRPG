@@ -41,7 +41,7 @@ import { initPanels } from './ui/panels.js';
 import { initHotbar } from './ui/hotbar.js';
 import { iconFor, rarityColor } from './ui/icons.js';
 import { fishing } from './ui/fishing.js';
-import { mapInfo } from './ui/map.js';
+import { mapInfo, drawMinimap } from './ui/map.js';
 
 const view = document.getElementById('view')!;
 const gfx = createGfx(view, settingsStore.get().quality);
@@ -76,6 +76,8 @@ let myBuild: CharacterBuild | null = null;
 let stats: PlayerStats | null = null;
 let eyeHeight = EYE_HEIGHT;
 /** Your horse while riding (drawn under the first-person camera), and how far the camera is lifted. */
+const minimap = document.getElementById('minimap') as HTMLCanvasElement;
+let nextMiniAt = 0;
 let myHorse: Horse | null = null, mountLift = 0, myName = '', mountedNow = false, wasOnGround = true, nextAmbAt = 0;
 let ambFire: THREE.Vector3 | null = null, ambWater = 0, nextSlowAt = 0;
 /** Console/debug: shift the sky clock (ms) or force a weather. */
@@ -742,6 +744,7 @@ function frame() {
       return pos ? { x: pos.x, z: pos.z, name: p.name, color: PLAYER_COLORS[p.color % PLAYER_COLORS.length] } : null;
     }).filter((x): x is NonNullable<typeof x> => !!x);
     if (castAt && Math.hypot(me.x - castAt.x, me.z - castAt.z) > CAST_RANGE + 3) { castAt = null; fx.setBobber(null); }
+    if (now >= nextMiniAt) { nextMiniAt = now + 250; drawMinimap(minimap, mobs.all().filter((m) => !(m.st & 8)).map((m) => ({ x: m.x, z: m.z, boss: MOBS[m.k].boss }))); }
   } else {
     flyT += dt * 0.04;
     cam.position.set(Math.cos(flyT) * 46, 20, Math.sin(flyT) * 46);

@@ -119,6 +119,50 @@ export function drawMap(): HTMLElement {
   return wrap;
 }
 
+/** Metres from the centre of the minimap to its edge. */
+const MINI_R = 42;
+/**
+ * The round minimap in the corner: north up, centred on you. Terrain, veins, NPCs, monsters (red),
+ * other players (their colour) and you (the arrow).
+ */
+export function drawMinimap(c: HTMLCanvasElement, mobs: { x: number; z: number; boss?: boolean }[]): void {
+  const g = c.getContext('2d')!;
+  const S = c.width, R = S / 2;
+  g.clearRect(0, 0, S, S);
+  if (!mapInfo.me) return;
+  const me = mapInfo.me, region: Region = regionAt(me.x, me.z);
+  g.save();
+  g.beginPath(); g.arc(R, R, R - 2, 0, Math.PI * 2); g.clip();
+  const k = R / MINI_R; // px per metre
+  const toPx = (x: number, z: number): [number, number] => [R + (x - me.x) * k, R + (z - me.z) * k];
+  if (region === 'cave') {
+    cave ??= paintCave();
+    const sx = cave.width / (X1 - X0), sz = cave.height / (Z1 - Z0);
+    g.fillStyle = '#16140f'; g.fillRect(0, 0, S, S);
+    g.drawImage(cave, (me.x - CAVE.x - X0 - MINI_R) * sx, (me.z - CAVE.z - Z0 - MINI_R) * sz, MINI_R * 2 * sx, MINI_R * 2 * sz, 0, 0, S, S);
+  } else {
+    const r = region as 'valley' | 'gruben', A = AREA[r];
+    if (!painted.has(r)) painted.set(r, paintTerrain(r));
+    const img = painted.get(r)!, px = img.width / (A.half * 2);
+    g.fillStyle = '#2a3a2a'; g.fillRect(0, 0, S, S);
+    g.imageSmoothingEnabled = true;
+    g.drawImage(img, (me.x - MINI_R - A.x + A.half) * px, (me.z - MINI_R - A.z + A.half) * px, MINI_R * 2 * px, MINI_R * 2 * px, 0, 0, S, S);
+  }
+  const near = (x: number, z: number) => Math.abs(x - me.x) < MINI_R + 2 && Math.abs(z - me.z) < MINI_R + 2 && regionAt(x, z) === region;
+  for (const v of VEINS) if (near(v.x, v.z)) { const [x, y] = toPx(v.x, v.z); g.fillStyle = v.type === 'coal' ? '#222' : v.type === 'silver' ? '#e8eef4' : v.type === 'iron' ? '#c08a6a' : '#9a9a9a'; g.fillRect(x - 2.5, y - 2.5, 5, 5); }
+  for (const n of NPCS) if (near(n.x, n.z)) { const [x, y] = toPx(n.x, n.z); g.fillStyle = '#ffe9a8'; g.beginPath(); g.arc(x, y, 3, 0, Math.PI * 2); g.fill(); }
+  for (const m of mobs) if (near(m.x, m.z)) { const [x, y] = toPx(m.x, m.z); g.fillStyle = '#e8554e'; g.beginPath(); g.arc(x, y, m.boss ? 5 : 3, 0, Math.PI * 2); g.fill(); }
+  for (const o of mapInfo.others) if (near(o.x, o.z)) { const [x, y] = toPx(o.x, o.z); g.fillStyle = o.color; g.strokeStyle = '#000'; g.lineWidth = 1; g.beginPath(); g.arc(x, y, 3.5, 0, Math.PI * 2); g.fill(); g.stroke(); }
+  g.restore();
+  // You: an arrow in the middle, pointing where you look.
+  g.save(); g.translate(R, R); g.rotate(-me.yaw);
+  g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 1.5;
+  g.beginPath(); g.moveTo(0, -7); g.lineTo(5, 6); g.lineTo(0, 3); g.lineTo(-5, 6); g.closePath(); g.fill(); g.stroke();
+  g.restore();
+  g.strokeStyle = 'rgba(236,231,218,.5)'; g.lineWidth = 2; g.beginPath(); g.arc(R, R, R - 2, 0, Math.PI * 2); g.stroke();
+  g.fillStyle = '#ece7da'; g.font = '700 11px "IBM Plex Mono", monospace'; g.textAlign = 'center'; g.fillText('N', R, 12);
+}
+
 function label(g: CanvasRenderingContext2D, text: string, x: number, y: number, color: string) {
   g.font = '600 12px "IBM Plex Mono", monospace';
   g.textAlign = 'center';

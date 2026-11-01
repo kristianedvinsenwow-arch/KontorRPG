@@ -63,6 +63,7 @@ kbd { font: 600 11px var(--mono); background: rgba(255, 255, 255, .08); border: 
 .chip { position: absolute; background: rgba(8, 10, 11, .6); border-radius: 9px; padding: 6px 10px; text-shadow: 0 1px 2px #000; }
 #cross { position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; border-radius: 50%; background: rgba(255, 255, 255, .85); box-shadow: 0 0 3px #000; }
 #where { left: 16px; top: 16px; display: flex; flex-direction: column; gap: 2px; }
+#minimap { position: absolute; left: 16px; top: 76px; width: 170px; height: 170px; border-radius: 50%; box-shadow: 0 4px 18px -6px #000; }
 #where b { font: 800 20px/1 var(--display); text-transform: uppercase; letter-spacing: .03em; }
 #where span { color: var(--muted); font-size: 11px; }
 #netbox { right: 16px; top: 16px; display: flex; align-items: center; gap: 8px; font-size: 12px; }
