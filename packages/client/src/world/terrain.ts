@@ -4,7 +4,7 @@
  * full 6 × 6 km map. Each chunk also scatters its own trees, rocks and decorative ore veins.
  */
 import * as THREE from 'three';
-import { CHUNK_SIZE, GRUBEN, GRUBEN_SPOTS, WATER_LEVEL, chunkExists, heightAt, inGruben, mulberry32, pathDist } from '@kontor/shared';
+import { CHUNK_SIZE, GRUBEN, GRUBEN_SPOTS, WATER_LEVEL, chunkExists, heightAt, inGruben, inFjord, mulberry32, pathDist } from '@kontor/shared';
 import { TEX } from '../engine/procgen.js';
 import { buildProps, wind, type Collider } from './props.js';
 import { Water } from './water.js';
@@ -33,6 +33,8 @@ const C = {
   heathHi: new THREE.Color(0x7d6f52),
   slag: new THREE.Color(0x3c3a38),
   bog: new THREE.Color(0x4a5634),
+  shore: new THREE.Color(0x6e6a5e),
+  sea: new THREE.Color(0x56704a),
 };
 
 const groundMat = new THREE.MeshStandardMaterial({ vertexColors: true, map: TEX.ground, bumpMap: TEX.ground, bumpScale: 0.8, roughness: 0.96, envMapIntensity: 0.6 });
@@ -65,6 +67,11 @@ function buildGround(cx: number, cz: number): THREE.Mesh {
       const lx = x - GRUBEN.x, lz = z - GRUBEN.z, P = GRUBEN_SPOTS.pit;
       c.lerp(C.slag, 1 - THREE.MathUtils.smoothstep(Math.hypot(lx - P.x, lz - P.z), P.r * 0.6, P.r + 14));
       c.lerp(C.bog, (1 - THREE.MathUtils.smoothstep(Math.hypot(lx + 42, lz + 46), 6, 16)) * 0.8);
+    }
+    if (inFjord(x, z)) {
+      // Saltfjorden: salt-burnt grass, grey shingle at the waterline.
+      c.lerp(C.sea, 0.6);
+      if (y < 2.2) c.lerp(C.shore, THREE.MathUtils.smoothstep(2.2 - y, 0, 1.4));
     }
     // Trodden dirt paths between the places people go.
     const pd = pathDist(x, z);
@@ -110,6 +117,9 @@ export class Terrain {
     wind.value = t;
     this.water.animate(t);
   }
+
+  /** The water plane follows you between regions. */
+  followWater(x: number, z: number): void { this.water.follow(x, z); }
 
   /** Load chunks around (x, z) and drop ones that are far away. Returns how many were built. */
   update(x: number, z: number, maxBuilds = 2): number {

@@ -124,7 +124,7 @@ export class Remotes {
         r.horse.g.position.copy(g.position);
         r.horse.g.rotation.y = g.rotation.y;
         animateHorse(r.horse, spd, dt);
-        seatRider(r.model, r.horse.board);
+        seatRider(r.model, r.horse.board, r.horse.gator);
       }
     }
   }

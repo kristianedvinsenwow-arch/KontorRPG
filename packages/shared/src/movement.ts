@@ -4,7 +4,7 @@
  */
 import { WALK_SPEED, MAX_SPEED_BONUS, WORLD_HALF, PLAYER_RADIUS } from './constants.js';
 import { groundAt, inCaveRegion, walkable } from './cave.js';
-import { GRUBEN, inGruben } from './terrain.js';
+import { GRUBEN, inGruben, FJORD, inFjord } from './terrain.js';
 
 export interface Vec3 { x: number; y: number; z: number }
 
@@ -15,6 +15,10 @@ export function maxSpeed(mountMult = 1, bonus = 0): number {
 
 export function clampToWorld(p: Vec3): Vec3 {
   if (inCaveRegion(p.x, p.z)) return p; // cave walls are colliders
+  if (inFjord(p.x, p.z)) {
+    const lim = FJORD.half - PLAYER_RADIUS - 1;
+    return { x: Math.max(FJORD.x - lim, Math.min(FJORD.x + lim, p.x)), y: p.y, z: Math.max(FJORD.z - lim, Math.min(FJORD.z + lim, p.z)) };
+  }
   if (inGruben(p.x, p.z)) {
     const lim = GRUBEN.half - PLAYER_RADIUS - 1;
     return { x: Math.max(GRUBEN.x - lim, Math.min(GRUBEN.x + lim, p.x)), y: p.y, z: Math.max(GRUBEN.z - lim, Math.min(GRUBEN.z + lim, p.z)) };

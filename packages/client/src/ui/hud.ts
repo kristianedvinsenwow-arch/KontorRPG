@@ -89,7 +89,7 @@ export function initHud(onSendChat: (text: string) => void) {
     },
     frame(x: number, z: number) {
       coords.textContent = `${x.toFixed(0)}, ${z.toFixed(0)}`;
-      const r = regionAt(x, z), name = r === 'cave' ? 'The Old Mine' : r === 'gruben' ? 'Gruben' : 'Mofjellet';
+      const r = regionAt(x, z), name = r === 'cave' ? 'The Old Mine' : r === 'gruben' ? 'Gruben' : r === 'fjord' ? 'Saltfjorden' : 'Mofjellet';
       if (whereName.textContent !== name) whereName.textContent = name;
       frames++;
       const now = performance.now();

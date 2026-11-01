@@ -6,13 +6,15 @@ import * as THREE from 'three';
 import { ITEMS } from '@kontor/shared';
 import { mat, mesh, ball, limb, v3, bx } from '../engine/procgen.js';
 
-export interface Horse { g: THREE.Group; body: THREE.Group; legs: THREE.Object3D[]; neck: THREE.Group; ph: number; board?: boolean }
+export interface Horse { g: THREE.Group; body: THREE.Group; legs: THREE.Object3D[]; neck: THREE.Group; ph: number; board?: boolean; gator?: boolean; tail?: THREE.Object3D }
 
 /** Saddle height: where a rider's hips sit, relative to the horse's feet. */
 export const SADDLE_Y = 1.55;
 
 /** How far a mount lifts its rider's hips (horse: into the saddle; skateboard: onto the deck). */
-export const rideLift = (itemId: string | null | undefined) => (itemId && ITEMS[itemId]?.mount?.board ? 0.13 : SADDLE_Y - 0.88);
+export const rideLift = (itemId: string | null | undefined) => (itemId && ITEMS[itemId]?.mount?.board ? 0.13 : itemId && ITEMS[itemId]?.mount?.gator ? GATOR_Y - 0.88 : SADDLE_Y - 0.88);
+/** Where you sit on the alligator's back. */
+export const GATOR_Y = 0.95;
 
 /** A skateboard: deck, trucks and four wheels that spin with speed. Uses the Horse shape (no legs). */
 function makeBoard(m: { coat: number; mane: number }): Horse {
@@ -34,8 +36,37 @@ function makeBoard(m: { coat: number; mane: number }): Horse {
   return { g, body, legs: wheels, neck: new THREE.Group(), ph: 0, board: true };
 }
 
+/** The fjord alligator: low, long and armoured, with a swinging tail and a saddle. */
+function makeGator(m: { coat: number; mane: number }): Horse {
+  const g = new THREE.Group();
+  const body = new THREE.Group(); g.add(body);
+  const hide = mat(m.coat, 'cloth', { r: 0.7 }), belly = mat(m.mane, null, { r: 0.8 }), dark = mat(0x1a1a14, null);
+  const torso = ball(body, v3(0, 0.45, 0), 0.38, hide, 14); torso.scale.set(1.1, 0.62, 2.1);
+  ball(body, v3(0, 0.36, 0), 0.34, belly, 12).scale.set(1.05, 0.45, 1.9);
+  for (let i = 0; i < 7; i++) { const sc = bx(body, 0.06, 0.07, 0.1, hide, (i % 2 ? 0.12 : -0.12), 0.68, -0.6 + i * 0.2); void sc; } // back scutes
+  const neck = new THREE.Group(); neck.position.set(0, 0.45, -0.85); body.add(neck);
+  const head = ball(neck, v3(0, 0, -0.15), 0.2, hide, 12); head.scale.set(1, 0.6, 1.3);
+  const snout = bx(neck, 0.22, 0.12, 0.55, hide, 0, -0.03, -0.55); void snout;
+  bx(neck, 0.2, 0.05, 0.5, belly, 0, -0.1, -0.53);
+  for (const sx of [-1, 1]) { ball(neck, v3(sx * 0.1, 0.1, -0.2), 0.04, mat(0xd8c040, null, { r: 0.3 }), 6); ball(neck, v3(sx * 0.1, 0.12, -0.21), 0.018, dark, 5); }
+  for (let i = 0; i < 6; i++) { const t = mesh(new THREE.ConeGeometry(0.012, 0.04, 4), mat(0xf0ead8, null), neck); t.position.set((i % 2 ? 0.1 : -0.1), -0.09, -0.35 - i * 0.07); t.rotation.x = Math.PI; }
+  const tail = new THREE.Group(); tail.position.set(0, 0.42, 0.8); body.add(tail);
+  const tm = mesh(new THREE.ConeGeometry(0.26, 1.6, 8).rotateX(Math.PI / 2).translate(0, 0, 0.75), hide, tail); tm.scale.set(1, 0.6, 1);
+  const legs: THREE.Object3D[] = [];
+  for (const [x, z] of [[-0.38, -0.5], [0.38, -0.5], [-0.38, 0.5], [0.38, 0.5]]) {
+    const leg = new THREE.Group(); leg.position.set(x, 0.3, z); body.add(leg);
+    limb(leg, v3(), v3(x > 0 ? 0.15 : -0.15, -0.25, 0), 0.08, 0.06, hide, 7);
+    ball(leg, v3(x > 0 ? 0.17 : -0.17, -0.27, -0.04), 0.07, hide, 6).scale.set(1.2, 0.5, 1.4);
+    legs.push(leg);
+  }
+  // Saddle on its back.
+  bx(body, 0.5, 0.08, 0.6, mat(0x5a3a22, 'leather', { r: 0.7 }), 0, GATOR_Y - 0.25, 0);
+  return { g, body, legs, neck, ph: 0, gator: true, tail };
+}
+
 export function makeHorse(itemId: string): Horse {
   if (ITEMS[itemId]?.mount?.board) return makeBoard(ITEMS[itemId]!.mount!);
+  if (ITEMS[itemId]?.mount?.gator) return makeGator(ITEMS[itemId]!.mount!);
   const m = ITEMS[itemId]?.mount ?? { coat: 0xc8a878, mane: 0x3a2a1c, mult: 1.6 };
   const coat = mat(m.coat, 'cloth', { r: 0.85 }), mane = mat(m.mane, 'cloth', { r: 1 });
   const hoof = mat(0x2a2420, null, { r: 0.6 }), dark = mat(0x1a1612, null);
@@ -82,6 +113,16 @@ export function animateHorse(h: Horse, speed: number, dt: number): void {
     h.body.rotation.z = Math.sin(performance.now() / 300) * Math.min(0.06, speed * 0.01);
     return;
   }
+  if (h.gator) {
+    // A low waddle: legs paddle, the body and tail swing side to side.
+    h.ph += dt * Math.min(speed, 10) * 2.2;
+    const amp = Math.min(0.7, speed * 0.12);
+    h.legs.forEach((l, i) => (l.rotation.x = Math.sin(h.ph + (i === 0 || i === 3 ? 0 : Math.PI)) * amp));
+    h.body.rotation.y = Math.sin(h.ph) * amp * 0.12;
+    if (h.tail) h.tail.rotation.y = Math.sin(h.ph - 0.8) * (0.15 + amp * 0.4) + Math.sin(performance.now() / 900) * 0.08;
+    h.neck.rotation.y = -Math.sin(h.ph) * amp * 0.1;
+    return;
+  }
   h.ph += dt * Math.min(speed, 9) * 1.5;
   const amp = Math.min(0.6, speed * 0.09);
   h.legs.forEach((l, i) => (l.rotation.x = Math.sin(h.ph + (i === 0 || i === 3 ? 0 : Math.PI)) * amp));
@@ -90,7 +131,12 @@ export function animateHorse(h: Horse, speed: number, dt: number): void {
 }
 
 /** Pose a character astride: hips at the saddle, thighs forward and apart, shins down. */
-export function seatRider(c: import('./character.js').Character, board = false): void {
+export function seatRider(c: import('./character.js').Character, board = false, gator = false): void {
+  if (gator) {
+    c.g.position.y += GATOR_Y - c.hipY + 0.05;
+    for (const [i, l] of c.legs.entries()) { l.hip.rotation.x = 0.9; l.hip.rotation.z = (i === 0 ? 1 : -1) * 0.6; l.knee.rotation.x = -1.1; }
+    return;
+  }
   if (board) {
     // Standing on a skateboard: sideways stance, knees soft.
     c.g.position.y += 0.13;

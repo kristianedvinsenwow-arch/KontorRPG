@@ -43,7 +43,7 @@ export interface Gfx {
   /** Cave lighting: no sky, dark fog, dim fill light. */
   setUnderground(on: boolean): void;
   /** Outdoor mood per region: Gruben is greyer, colder and mistier. */
-  setRegion(r: 'valley' | 'cave' | 'gruben'): void;
+  setRegion(r: 'valley' | 'cave' | 'gruben' | 'fjord'): void;
   /** Time of day and weather (outdoors). */
   setAtmosphere(sunDir: { x: number; y: number; z: number }, day: number, w: { cloud: number; fog: number; rain: number; snow: number }): void;
 }
@@ -203,7 +203,7 @@ export function createGfx(container: HTMLElement, quality: Quality): Gfx {
      */
     setAtmosphere(sunDir, day, w) {
       if ((gfx as any)._under) return;
-      const grim = (gfx as any)._region === 'gruben';
+      const grim = (gfx as any)._region === 'gruben', sea = (gfx as any)._region === 'fjord';
       const clear = 1 - w.cloud * 0.75;
       // Sky dome follows the real sun.
       sky.material.uniforms.sunPosition.value.set(sunDir.x, sunDir.y, sunDir.z).multiplyScalar(4000);
@@ -222,9 +222,9 @@ export function createGfx(container: HTMLElement, quality: Quality): Gfx {
       scene.environmentIntensity = 0.1 + 0.65 * day * (1 - w.cloud * 0.3);
       // Fog: colour from the sky at this hour, pulled in by fog and rain.
       const fog = scene.fog as THREE.Fog;
-      const dayFog = new THREE.Color(grim ? 0x9aa3a8 : FOG).lerp(new THREE.Color(0x9aa0a4), w.cloud * 0.6);
+      const dayFog = new THREE.Color(grim ? 0x9aa3a8 : sea ? 0xa8bcc8 : FOG).lerp(new THREE.Color(0x9aa0a4), w.cloud * 0.6);
       fog.color.copy(new THREE.Color(0x0e1420).lerp(dayFog, Math.max(0.08, day)));
-      const near = (grim ? 40 : 80) * (1 - w.fog * 0.85), far = (grim ? 170 : 260) * (1 - w.fog * 0.7) * (1 - w.rain * 0.25);
+      const near = (grim ? 40 : sea ? 60 : 80) * (1 - w.fog * 0.85), far = (grim ? 170 : sea ? 220 : 260) * (1 - w.fog * 0.7) * (1 - w.rain * 0.25);
       fog.near = near; fog.far = far;
       // Starry night sky shows through when it's dark and clear.
       if (stars) { stars.visible = night > 0.3 && w.cloud < 0.7; (stars.material as THREE.PointsMaterial).opacity = Math.max(0, night - 0.3) * (1 - w.cloud) * 1.2; }

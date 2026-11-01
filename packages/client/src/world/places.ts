@@ -5,7 +5,7 @@
  * checks the same spots.
  */
 import * as THREE from 'three';
-import { STABLE, CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
+import { STABLE, CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, FJORD_ROAD, fjordMid, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
 import { mat, bx, mesh, canvasTex } from '../engine/procgen.js';
 import { makeCharacter, animateCharacter, type Character } from '../entities/character.js';
 import { applyGear } from '../entities/held.js';
@@ -15,6 +15,7 @@ import { rockGeo } from './props.js';
 import type { Collider } from './props.js';
 
 const GRUBEN_CAMP = { x: GRUBEN.x + GRUBEN_SPOTS.arrival.x, z: GRUBEN.z + GRUBEN_SPOTS.arrival.z };
+const FJORD_VILLAGE = { x: FJORD.x + FJORD_SPOTS.village.x, z: FJORD.z + FJORD_SPOTS.village.z };
 
 const M = {
   stone: mat(0x7d7a73, 'rock'),
@@ -75,6 +76,9 @@ export class Places {
     this.passGate(GRUBEN_PASS.x, GRUBEN_PASS.z, 70, 34, 'Pass to Gruben', 'Walk through · monsters level 13–22 · the Mine King');
     this.gruben();
     this.stable();
+    this.signpost(-80, 27, [['Saltfjorden (coast road)', FJORD_ROAD.x, FJORD_ROAD.z], ['Bjørkvik', VILLAGE.x, VILLAGE.z]]);
+    this.passGate(FJORD_ROAD.x, FJORD_ROAD.z, -80, 30, 'Coast road to Saltfjorden', 'Walk through · sea fishing (Fishing 8+)');
+    this.fjord();
   }
 
   /**
@@ -109,7 +113,7 @@ export class Places {
   }
 
   private station(s: Station): void {
-    const centre = s.id.startsWith('camp') ? { x: 0, z: 0 } : s.id.startsWith('gruben') ? GRUBEN_CAMP : VILLAGE;
+    const centre = s.id.startsWith('camp') ? { x: 0, z: 0 } : s.id.startsWith('gruben') ? GRUBEN_CAMP : s.id.startsWith('fjord') ? FJORD_VILLAGE : VILLAGE;
     const foot: Record<string, [number, number]> = { furnace: [2.2, 2.2], anvil: [1.2, 1.2], workbench: [2, 1], stove: [1.4, 1], tanning: [2.2, 1], loom: [1.8, 1.2], alchemy: [1.6, 0.9] };
     const g = this.place(s.x, s.z, centre.x, centre.z, foot[s.kind]);
     let h = 1.6;
@@ -636,6 +640,41 @@ export class Places {
     }
     tag('The pit', 'The Mine King · level 22 boss', 'place', new THREE.Vector3(px, heightAt(px, pz) + 8.4, pz), 60);
     tag('Gruben', 'Old mine valley · monsters level 13–22', 'place', new THREE.Vector3(cx, heightAt(cx, cz) + 5, cz - 14), 50);
+  }
+
+  /** Saltfjorden: the gate back, and a fishing village — red boathouses, drying racks, a jetty. */
+  private fjord(): void {
+    const F = FJORD, vx = FJORD_VILLAGE.x, vz = FJORD_VILLAGE.z;
+    const back = PORTAL_BY_ID.get('fjord_out')!.at;
+    this.passGate(back.x, back.z, back.x - 3, back.z + 5, 'Back to the valley', 'Walk through to the coast road');
+    const red = mat(0x8a2e24, 'wood', { r: 0.9 });
+    const white = mat(0xe8e2d4, 'wood', { r: 0.9 });
+    const shoreX = (lz: number) => F.x + fjordMid(lz) + 20; // roughly where the east shore meets the water
+    // Three boathouses (naust) at the waterline, gable to the water.
+    for (let i = 0; i < 3; i++) {
+      const lz = FJORD_SPOTS.village.z - 12 + i * 8, x = shoreX(lz) + 6, z = F.z + lz;
+      const g = this.place(x, z, x - 10, z, [4, 5.5]);
+      bx(g, 4, 2.4, 5.5, red, 0, 1.2, 0);
+      for (const sx of [-1, 1]) bx(g, 2.6, 0.12, 5.9, M.roof, sx * 1.05, 2.9, 0, 0, 0, sx * -0.68);
+      bx(g, 2, 1.8, 0.06, white, 0, 0.95, -2.78); // doors to the water
+      this.colliders.push({ x, z, r: 2.6 });
+    }
+    // Drying racks with cod (stockfish).
+    for (let i = 0; i < 2; i++) {
+      const x = vx + 5 + i * 3, z = vz + 7;
+      const g = this.place(x, z, vx, vz);
+      for (const sx of [-1.2, 1.2]) bx(g, 0.12, 2, 0.12, M.darkWood, sx, 1, 0);
+      bx(g, 2.6, 0.1, 0.1, M.darkWood, 0, 1.95, 0);
+      for (let k = 0; k < 6; k++) { const f = mesh(new THREE.ConeGeometry(0.08, 0.6, 5), mat(0xc8b890, null, { r: 0.8 }), g); f.position.set(-1 + k * 0.4, 1.6, 0); f.rotation.x = Math.PI; }
+    }
+    // A small jetty out into the fjord.
+    const jz = vz - 4, jx0 = shoreX(FJORD_SPOTS.village.z - 4) + 2;
+    const jetty = this.place(jx0 - 4, jz, jx0, jz);
+    jetty.position.y = 0.6;
+    bx(jetty, 1.8, 0.15, 9, M.plank, 0, 0, 0);
+    for (const sz of [-4, 0, 4]) for (const sx of [-0.8, 0.8]) bx(jetty, 0.18, 2.4, 0.18, M.darkWood, sx, -1.1, sz);
+    this.signpost(vx - 2, vz - 10, [['Coast road (back)', F.x + FJORD_SPOTS.arrival.x, F.z + FJORD_SPOTS.arrival.z], ['Deep water ≈', F.x + fjordMid(0), F.z]]);
+    tag('Saltfjorden', 'Sea fishing · Fishing 8–28 · rare catches from the deeps', 'place', new THREE.Vector3(vx, heightAt(vx, vz) + 6, vz), 50);
   }
 
   /** A signpost with boards pointing at places. */

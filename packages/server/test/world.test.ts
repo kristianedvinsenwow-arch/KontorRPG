@@ -963,3 +963,24 @@ test('life staff: heal another player (and yourself); Mending Circle heals every
   world.handle(c, { t: 'attack', target: 'none', special: true });
   assert.ok(p.hp > 3 && tank.hp > 3, 'Mending Circle');
 });
+
+test('Saltfjorden: the coast road takes you there; sea fish need Fishing 8; the deeps hold the alligator', async () => {
+  const { FJORD, FJORD_ROAD, regionAt: reg, isFishable: fishable, heightAt: hh, fjordMid } = await import('@kontor/shared');
+  const { world, c, p, place, last, advance } = game(() => 0.00001);
+  place(FJORD_ROAD.x + 0.5, FJORD_ROAD.z);
+  world.handle(c, { t: 'travel', portal: 'fjord' });
+  assert.equal(reg(p.state.x, p.state.z), 'fjord');
+  assert.equal(p.achievements.c.fjord, 1);
+  // Find a shore spot and deep water.
+  const wz = FJORD.z; const midX = FJORD.x + fjordMid(0);
+  let sx = midX; while (hh(sx, wz) < 0.5) sx += 0.5;
+  place(sx + 1, wz);
+  let cx = sx - 6; while (!fishable(cx, wz)) cx -= 1;
+  p.equip.rod = { id: 'basic_rod', qty: 1 }; world.recompute(p);
+  world.handle(c, { t: 'cast', x: cx, z: wz });
+  assert.match(last('notice')!.text, /Fishing 8/);
+  p.xp.fishing = xpForLevel(30); world.recompute(p);
+  world.handle(c, { t: 'cast', x: cx, z: wz });
+  assert.equal(p.fishing?.item, 'swordfish_blade', 'the deeps roll first (rigged dice)');
+  void advance;
+});

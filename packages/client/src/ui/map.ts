@@ -5,7 +5,7 @@
  */
 import {
   CAVE, CAVE_ENTRANCE, CAVE_ROOMS, CAVE_TUNNELS, MINING_SPOTS, MOB_AREAS, MOBS, NPCS, VILLAGE, WATER_LEVEL, WORLD_HALF,
-  FLAX_FIELDS, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, HOMES, VEINS, caveClearance, heightAt, inCaveRegion, regionAt, type Region,
+  FLAX_FIELDS, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, FJORD_ROAD, HOMES, VEINS, caveClearance, heightAt, inCaveRegion, regionAt, type Region,
 } from '@kontor/shared';
 
 export const mapInfo: { me: { x: number; z: number; yaw: number } | null; others: { x: number; z: number; name: string; color: string }[] } = { me: null, others: [] };
@@ -13,13 +13,15 @@ export const mapInfo: { me: { x: number; z: number; yaw: number } | null; others
 const SIZE = 560;
 const painted = new Map<string, HTMLCanvasElement>();
 /** Square map area per outdoor region: centre and half-size. */
-const AREA: Record<'valley' | 'gruben', { x: number; z: number; half: number }> = {
+const AREA: Record<'valley' | 'gruben' | 'fjord', { x: number; z: number; half: number }> = {
   valley: { x: 0, z: 0, half: WORLD_HALF },
   gruben: { x: GRUBEN.x, z: GRUBEN.z, half: GRUBEN.half },
+  fjord: { x: FJORD.x, z: FJORD.z, half: FJORD.half },
 };
+type Outdoor = keyof typeof AREA;
 let cave: HTMLCanvasElement | null = null;
 
-function paintTerrain(r: 'valley' | 'gruben'): HTMLCanvasElement {
+function paintTerrain(r: Outdoor): HTMLCanvasElement {
   const A = AREA[r];
   const c = document.createElement('canvas');
   const N = 280;
@@ -79,7 +81,7 @@ export function drawMap(): HTMLElement {
     toPx = (x, z) => [((x - CAVE.x - X0) / (X1 - X0)) * SIZE, ((z - CAVE.z - Z0) / (Z1 - Z0)) * SIZE];
     for (const r of CAVE_ROOMS) { const [px, py] = toPx(CAVE.x + r.c[0], CAVE.z + r.c[1]); label(g, r.name, px, py, '#e8dcc0'); }
   } else {
-    const r = region as 'valley' | 'gruben', A = AREA[r];
+    const r = region as Outdoor, A = AREA[r];
     if (!painted.has(r)) painted.set(r, paintTerrain(r));
     g.drawImage(painted.get(r)!, 0, 0, SIZE, SIZE);
     toPx = (x, z) => [((x - A.x + A.half) / (A.half * 2)) * SIZE, ((z - A.z + A.half) / (A.half * 2)) * SIZE];
@@ -92,6 +94,10 @@ export function drawMap(): HTMLElement {
       mark(CAVE_ENTRANCE.x, CAVE_ENTRANCE.z, 'The Old Mine (lv 5–12)', '#b77be8', 6);
       mark(GRUBEN_PASS.x, GRUBEN_PASS.z, 'Pass to Gruben (monsters lv 13–22)', '#b77be8', 6);
       for (const f of FLAX_FIELDS) mark(f.x, f.z, '✿ Flax', '#7a9ae8', 4);
+      mark(FJORD_ROAD.x, FJORD_ROAD.z, 'Coast road to Saltfjorden (sea fishing)', '#b77be8', 6);
+    } else if (r === 'fjord') {
+      mark(FJORD.x + FJORD_SPOTS.village.x, FJORD.z + FJORD_SPOTS.village.z, 'Fishing village', '#f2a23a', 7);
+      mark(FJORD.x + FJORD_SPOTS.arrival.x, FJORD.z + FJORD_SPOTS.arrival.z, 'Road back to the valley', '#b77be8', 6);
     } else {
       const S = GRUBEN_SPOTS;
       mark(GRUBEN.x + S.arrival.x, GRUBEN.z + S.arrival.z, 'Gruben camp', '#f2a23a', 7);
@@ -141,7 +147,7 @@ export function drawMinimap(c: HTMLCanvasElement, mobs: { x: number; z: number; 
     g.fillStyle = '#16140f'; g.fillRect(0, 0, S, S);
     g.drawImage(cave, (me.x - CAVE.x - X0 - MINI_R) * sx, (me.z - CAVE.z - Z0 - MINI_R) * sz, MINI_R * 2 * sx, MINI_R * 2 * sz, 0, 0, S, S);
   } else {
-    const r = region as 'valley' | 'gruben', A = AREA[r];
+    const r = region as Outdoor, A = AREA[r];
     if (!painted.has(r)) painted.set(r, paintTerrain(r));
     const img = painted.get(r)!, px = img.width / (A.half * 2);
     g.fillStyle = '#2a3a2a'; g.fillRect(0, 0, S, S);
@@ -172,5 +178,5 @@ function label(g: CanvasRenderingContext2D, text: string, x: number, y: number, 
 
 export function mapTitle(): string {
   const r = mapInfo.me ? regionAt(mapInfo.me.x, mapInfo.me.z) : 'valley';
-  return r === 'cave' ? 'The Old Mine' : r === 'gruben' ? 'Gruben — the old mine valley' : 'Mofjellet and Bjørkvik';
+  return r === 'cave' ? 'The Old Mine' : r === 'gruben' ? 'Gruben — the old mine valley' : r === 'fjord' ? 'Saltfjorden — the fishing fjord' : 'Mofjellet and Bjørkvik';
 }

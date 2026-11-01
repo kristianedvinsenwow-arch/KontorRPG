@@ -177,6 +177,12 @@ export function iconFor(id: string): string {
   else if (d?.kind === 'log') log(g, a, b);
   else if (d?.kind === 'fish') fish(g, '#8aa0a8', '#5a7078');
   else if (d?.kind === 'food') fish(g, '#c8884a', '#8a5428', true);
+  else if (d?.mount?.gator) {
+    poly(g, [[4, 36], [20, 28], [44, 28], [60, 34], [44, 40], [20, 42]], '#4a5a32');
+    for (const x of [18, 28, 38]) poly(g, [[x, 28], [x + 4, 22], [x + 8, 28]], '#3a4a28');
+    for (const x of [16, 40]) line(g, '#3a4a28', 4, [[x, 40], [x - 2, 48]]);
+    dot(g, 50, 32, 2, '#d8c040');
+  }
   else if (d?.mount?.board) {
     poly(g, [[6, 30], [58, 30], [56, 38], [8, 38]], '#d8a040');
     for (const x of [16, 48]) dot(g, x, 44, 5, '#e8e4da');

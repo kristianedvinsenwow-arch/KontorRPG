@@ -55,6 +55,8 @@ add({ id: 'kills_1000', name: 'Veteran', text: 'Defeat 1000 monsters.', key: 'ki
 add({ id: 'quests_50', name: 'Helping Hand', text: 'Finish 50 quests.', key: 'quests', goal: 50, title: 'Helping Hand', group: 'Life' });
 add({ id: 'quests_250', name: 'Pillar of Bjørkvik', text: 'Finish 250 quests.', key: 'quests', goal: 250, title: 'Pillar of Bjørkvik', group: 'Life' });
 add({ id: 'potions_100', name: 'Iron Stomach', text: 'Drink 100 potions.', key: 'drunk', goal: 100, group: 'Life' });
+add({ id: 'fjord', name: 'Salt Air', text: 'Take the coast road to Saltfjorden.', key: 'fjord', goal: 1, group: 'Life' });
+add({ id: 'deeps', name: 'Deep Water', text: 'Fish up a weapon or a beast from Saltfjorden’s deeps.', key: 'deeps', goal: 1, title: 'of the Deep', group: 'Gathering' });
 add({ id: 'gruben', name: 'Over the Pass', text: 'Walk through the pass to Gruben.', key: 'gruben', goal: 1, group: 'Life' });
 add({ id: 'ride', name: 'Rider', text: 'Mount up for the first time.', key: 'rides', goal: 1, group: 'Life' });
 add({ id: 'home', name: 'Homebody', text: 'Rent a cottage or a miners’ hut.', key: 'house', goal: 1, title: 'Homebody', group: 'Life' });

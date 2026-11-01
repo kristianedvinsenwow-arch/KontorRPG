@@ -705,7 +705,7 @@ function frame() {
     }
     precip.update(dt, cam.position, weather.rain, weather.snow, under || homeAt(me.x, me.z) >= 0);
     caveView.setVisible(under);
-    if (!under) terrain.update(me.x, me.z);
+    if (!under) { terrain.update(me.x, me.z); terrain.followWater(me.x, me.z); }
 
     // Footsteps (hooves when riding): one per half stride, by what's underfoot.
     const prevPh = walkPh;

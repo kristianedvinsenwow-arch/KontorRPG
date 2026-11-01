@@ -57,7 +57,7 @@ export interface ItemDef {
   /** Skinning knives: chance a skinning attempt ruins the hide, and uses before it breaks. */
   knife?: { fail: number; uses: number };
   /** Mounts: speed multiplier while riding, and coat colours for the model. */
-  mount?: { mult: number; coat: number; mane: number; board?: boolean };
+  mount?: { mult: number; coat: number; mane: number; board?: boolean; gator?: boolean };
   /** Only ever exists at this rarity (boss uniques). */
   fixedRarity?: Rarity;
   /** Extra move-speed penalty on heavy plate (monster-dropped uniques that hit harder in return). */
@@ -203,6 +203,12 @@ const FISH: [string, string, number, number, number, ItemDef['food']][] = [
   ['trout', 'Trout', 1, 2, 1, { heal: 10, buff: { name: 'Well fed (trout)', stats: { miningSpeed: 0.05, woodSpeed: 0.05 }, sec: 600 } }],
   ['char', 'Arctic char', 1, 3, 2, { heal: 14, buff: { name: 'Well fed (char)', stats: { allDmg: 0.05 }, sec: 600 } }],
   ['pike', 'Pike', 2, 4, 2, { heal: 18, buff: { name: 'Well fed (pike)', stats: { maxHp: 6, regen: 1 }, sec: 600 } }],
+  // Sea fish from Saltfjorden.
+  ['herring', 'Herring', 1, 2, 2, { heal: 12 }],
+  ['mackerel', 'Mackerel', 1, 3, 2, { heal: 16, buff: { name: 'Well fed (mackerel)', stats: { rangedDmg: 0.05, fishSpeed: 0.05 }, sec: 600 } }],
+  ['cod', 'Cod', 2, 4, 3, { heal: 20, buff: { name: 'Well fed (cod)', stats: { maxHp: 8 }, sec: 600 } }],
+  ['halibut', 'Halibut', 3, 6, 3, { heal: 26, buff: { name: 'Well fed (halibut)', stats: { allDmg: 0.06 }, sec: 600 } }],
+  ['wolffish', 'Wolffish', 4, 8, 4, { heal: 32, buff: { name: 'Well fed (wolffish)', stats: { physRed: 0.05, maxHp: 6 }, sec: 600 } }],
 ];
 for (const [id, name, raw, cooked, tier, food] of FISH) {
   add({ id: `raw_${id}`, name: `Raw ${name.toLowerCase()}`, kind: 'fish', stack: 10, tier, sellValue: raw, blurb: 'Cook it at a campfire or the inn’s stove.' });
@@ -212,6 +218,8 @@ add({ id: 'raw_wolf_meat', name: 'Raw wolf meat', kind: 'meat', stack: 10, tier:
 add({ id: 'cooked_wolf_meat', name: 'Wolf steak', kind: 'food', stack: 10, tier: 1, food: { heal: 12, buff: { name: 'Well fed (wolf)', stats: { meleeDmg: 0.05, maxHp: 4 }, sec: 600 } }, sellValue: 2, blurb: 'Eat it (hotbar) to heal 12 HP and get a 10-minute buff. Not mid-fight.' });
 add({ id: 'burnt_fish', name: 'Burnt food', kind: 'junk', stack: 10, sellValue: 0, blurb: 'Charcoal. Drop it.' });
 add({ id: 'old_boot', name: 'Old boot', kind: 'junk', stack: 5, sellValue: 0, blurb: 'Someone lost this in the lake. Smells like it.' });
+add({ id: 'seaweed', name: 'Seaweed', kind: 'junk', stack: 10, sellValue: 0, blurb: 'Slimy. Even the gulls won’t touch it.' });
+add({ id: 'pearl', name: 'Pearl', kind: 'gem', stack: 10, tier: 3, sellValue: 30, blurb: 'A pearl from a fjord oyster. Smooth, cool and worth a fair bit.' });
 add({ id: 'golden_perch', name: 'Golden perch', kind: 'fish', stack: 5, tier: 2, sellValue: 20, blurb: 'A rare, shimmering perch. Traders love it.' });
 
 // mob drops
@@ -308,6 +316,12 @@ for (const [cls, w] of Object.entries(W) as [keyof typeof W, typeof W.sword][]) 
   }));
 }
 for (const wpn of PLANS_WEAPONS) add({ id: `${wpn}_plans`, name: `${wpn[0].toUpperCase()}${wpn.slice(1)} plans`, kind: 'plans', stack: 1, sellValue: 6, teaches: wpn, blurb: `A smith’s drawings for a ${wpn}. Use it (E in the bag, or right click → Use) to learn to smith ${wpn}s at the anvil, in every metal.` });
+// Weapons only fished up from Saltfjorden's deeps (very hard catches).
+add({ id: 'harpoon', name: 'Whaler’s harpoon', kind: 'weapon', stack: 1, tier: 3, look: 'iron', slot: 'mainHand', weapon: 'spear', dps: 8.8, interval: 1.8, range: 5, twoHanded: true, fixedRarity: 3, mods: { crit: 0.04, rangedDmg: 0.05 }, sellValue: 60, blurb: 'Barbed iron on a long ash shaft, still crusted with salt. Long reach, quick jabs. Right click: Lunge.' });
+add({ id: 'swordfish_blade', name: 'Swordfish blade', kind: 'weapon', stack: 1, tier: 3, look: 'bone', slot: 'mainHand', weapon: 'sword', dps: 7.4, interval: 1.4, range: 2.8, twoHanded: false, fixedRarity: 3, mods: { crit: 0.06, dodge: 0.03 }, sellValue: 60, blurb: 'A swordfish’s bill on a whalebone grip. Light and quick; good with a shield (Parry).' });
+add({ id: 'sea_kings_trident', name: 'Sea King’s trident', kind: 'weapon', stack: 1, tier: 4, look: 'silversteel', slot: 'mainHand', weapon: 'halberd', dps: 10.4, interval: 2.3, range: 4.4, twoHanded: true, fixedRarity: 4, mods: { allDmg: 0.05, ward: 3 }, sellValue: 140, blurb: 'Three prongs of sea-green silversteel. Right click: Sweep everything in front of you.' });
+add({ id: 'ships_anchor', name: 'Ship’s anchor', kind: 'weapon', stack: 1, tier: 4, look: 'iron', slot: 'mainHand', weapon: 'warhammer', dps: 11.5, interval: 3.2, range: 3.2, twoHanded: true, fixedRarity: 4, giantslayer: true, mods: { physRed: 0.04 }, heavy: 0, sellValue: 140, blurb: 'Someone’s anchor, on a chain, swung like a hammer. Giantslayer: the bigger the foe, the harder it lands. Right click: Quake.' });
+add({ id: 'saltwater_rod', name: 'Saltwater rod', kind: 'tool', stack: 1, tier: 3, look: 'pine', slot: 'rod', tool: 'rod', power: 3, mods: { fishEase: 0.3, fishSpeed: 0.15, rareFish: 0.2 }, sellValue: 30, buyPrice: 180, blurb: 'Stiff, long and salt-proof. A much bigger catch bar, faster bites, and better odds of something special.' });
 add({ id: 'jotunbane', name: 'Jotunbane', kind: 'weapon', stack: 1, tier: 4, look: 'silversteel', slot: 'mainHand', weapon: 'battleaxe', dps: 8, interval: 2.6, range: 3.4, twoHanded: true, fixedRarity: 4, giantslayer: true, mods: { crit: 0.03 }, sellValue: 120, blurb: 'Giantslayer: the bigger the foe, the deeper it bites — up to +60% on the largest trolls, but goblins and bats barely notice it. Right click: Executioner (4×, 18 s).' });
 add({ id: 'birch_shortbow', name: 'Birch shortbow', kind: 'weapon', stack: 1, tier: 1, look: 'birch', slot: 'mainHand', weapon: 'bow', dps: 4.5, interval: 2.0, range: 28, twoHanded: true, sellValue: 3, blurb: 'Needs arrows in the ammo slot. Right click: Power Shot (3×, 10 s).' });
 add({ id: 'pine_longbow', name: 'Pine longbow', kind: 'weapon', stack: 1, tier: 2, look: 'pine', slot: 'mainHand', weapon: 'bow', dps: 5.6, interval: 2.2, range: 34, twoHanded: true, sellValue: 7, blurb: 'Needs arrows in the ammo slot. Right click: Power Shot (3×, 10 s).' });
@@ -374,6 +388,7 @@ add({ id: 'small_rucksack', name: 'Small rucksack', kind: 'bag', stack: 1, slot:
 add({ id: 'leather_backpack', name: 'Leather backpack', kind: 'bag', stack: 1, slot: 'back', bagSlots: 8, sellValue: 30, buyPrice: 120, blurb: '+8 bag slots.' });
 // mounts (wear one in the mount slot, press R to ride)
 add({ id: 'skateboard', name: 'Skateboard', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.4, coat: 0xd8a040, mane: 0xe8e4da, board: true }, sellValue: 15, buyPrice: 60, blurb: 'Four wheels and a plank. Roll at 140% speed — gravel paths and all. Not in the mine or indoors.' });
+add({ id: 'fjord_alligator', name: 'Fjord alligator', kind: 'mount', stack: 1, slot: 'mount', fixedRarity: 4, mount: { mult: 1.85, coat: 0x4a5a32, mane: 0xd8d0a0, gator: true }, sellValue: 250, blurb: 'Nobody knows how it got into the fjord. It bit through three lines before you landed it. Ride at 185% speed.' });
 add({ id: 'fjord_horse', name: 'Fjord horse', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.6, coat: 0xc8a878, mane: 0x3a2a1c }, sellValue: 60, buyPrice: 250, blurb: 'A sturdy dun Fjord horse with a striped mane. Ride at 160% speed. Not in the mine or indoors.' });
 add({ id: 'black_fjord_horse', name: 'Black Fjord horse', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.75, coat: 0x2a2624, mane: 0xd8d0c0 }, sellValue: 120, buyPrice: 600, blurb: 'Rare, dark and quick. Ride at 175% speed.' });
 add({ id: 'dovre_stallion', name: 'Dovre stallion', kind: 'mount', stack: 1, slot: 'mount', fixedRarity: 4, mount: { mult: 2.0, coat: 0x8a9298, mane: 0xeef2f6 }, sellValue: 300, blurb: 'A grey giant of a horse that walked out of the Mine King’s pit. Ride at 200% speed.' });

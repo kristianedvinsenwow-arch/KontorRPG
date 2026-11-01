@@ -3,7 +3,7 @@
  * (cast → bite → the client's reel minigame → catch). All rolls happen here.
  */
 import {
-  FISH_TABLE, LAKE_TREASURE, ITEMS, MINE_RANGE, RARE_FISH, TREE_BY_ID, TREE_TYPES, VEIN_BY_ID, VEIN_TYPES, CAST_RANGE,
+  FISH_TABLE, SEA_FISH_TABLE, SEA_RARE, SEA_TREASURE, LAKE_TREASURE, ITEMS, MINE_RANGE, RARE_FISH, TREE_BY_ID, TREE_TYPES, VEIN_BY_ID, VEIN_TYPES, CAST_RANGE,
   PICK_SEC, PLANT_BY_ID, regionAt, weatherAt, PLANT_TYPES, isFishable, levelOf, roomFor, swingSeconds, type NodeTypeDef, type Stack,
 } from '@kontor/shared';
 import type { ServerPlayer } from './types.js';
@@ -112,7 +112,7 @@ export function cast(w: World, p: ServerPlayer, x: number, z: number): void {
   const rod = p.equip.rod;
   if (!rod) return w.notice(p, 'You need a fishing rod. Ingrid sells a basic one.', 'error');
   if (Math.hypot(x - p.state.x, z - p.state.z) > CAST_RANGE + 1) return w.notice(p, 'Too far to cast — get closer to the water.', 'error');
-  if (!isFishable(x, z)) return w.notice(p, 'Cast into the lake, where it’s deep enough.', 'error');
+  if (!isFishable(x, z)) return w.notice(p, 'Cast into deeper water.', 'error');
   if (roomFor(p.bag, 'raw_perch') < 1 && p.bag.every((s) => s)) return w.notice(p, 'Your bag is full.', 'error');
   const st = p.stats.scoped.fishing;
   // Fish bite better in the rain.
@@ -122,8 +122,15 @@ export function cast(w: World, p: ServerPlayer, x: number, z: number): void {
   const lvl = levelOf(p.xp, 'fishing');
   let pick: { item: string; xp: number; difficulty: number; rare: boolean; stack?: Stack } = { item: FISH_TABLE[0].item, xp: FISH_TABLE[0].xp, difficulty: FISH_TABLE[0].difficulty, rare: false };
   const luckK = (1 + st.rareFish) * (1 + st.luck * 0.01);
-  const treasure = LAKE_TREASURE.find((t) => lvl >= t.level && w.rand() < t.chance * luckK);
-  if (treasure) {
+  const sea = regionAt(x, z) === 'fjord';
+  if (sea && lvl < SEA_FISH_TABLE[0].level) return w.notice(p, `Sea fish won’t bite for a beginner — you need Fishing ${SEA_FISH_TABLE[0].level}.`, 'error');
+  const deep = sea ? SEA_TREASURE.find((t) => lvl >= t.level && w.rand() < t.chance * luckK) : undefined;
+  const treasure = deep ? undefined : LAKE_TREASURE.find((t) => lvl >= t.level && w.rand() < t.chance * luckK);
+  const rare = sea ? SEA_RARE : RARE_FISH;
+  if (deep) {
+    const def = ITEMS[deep.item];
+    pick = { item: deep.item, xp: deep.xp, difficulty: deep.difficulty, rare: true, stack: { id: deep.item, qty: 1, ...(def.fixedRarity ? { r: def.fixedRarity } : {}) } };
+  } else if (treasure) {
     let stack: Stack;
     let diff = treasure.difficulty;
     if (treasure.what === 'gem') { const gems = ['quartz', 'quartz', 'sapphire', 'garnet']; stack = { id: gems[Math.floor(w.rand() * gems.length)], qty: 1 }; if (stack.id !== 'quartz') diff += 0.07; }
@@ -135,9 +142,9 @@ export function cast(w: World, p: ServerPlayer, x: number, z: number): void {
     else if (treasure.what === 'plans') stack = { id: ['spear_plans', 'halberd_plans', 'warhammer_plans'][Math.floor(w.rand() * 3)], qty: 1 };
     else stack = { id: 'fjord_horse', qty: 1 };
     pick = { item: stack.id, xp: treasure.xp, difficulty: Math.min(1.25, diff), rare: true, stack };
-  } else if (w.rand() < RARE_FISH.chance * (1 + st.rareFish) * (1 + st.luck * 0.01)) pick = { item: RARE_FISH.item, xp: RARE_FISH.xp, difficulty: RARE_FISH.difficulty, rare: true };
+  } else if (w.rand() < rare.chance * (1 + st.rareFish) * (1 + st.luck * 0.01)) pick = { item: rare.item, xp: rare.xp, difficulty: rare.difficulty, rare: true };
   else {
-    const table = FISH_TABLE.filter((f) => f.level <= lvl);
+    const table = (sea ? SEA_FISH_TABLE : FISH_TABLE).filter((f) => f.level <= lvl);
     let roll = w.rand() * table.reduce((s, f) => s + f.weight, 0);
     for (const f of table) { roll -= f.weight; if (roll <= 0) { pick = { item: f.item, xp: f.xp, difficulty: f.difficulty, rare: false }; break; } }
   }
@@ -176,6 +183,7 @@ export function reel(w: World, p: ServerPlayer, ok: boolean): void {
   p.client.send({ t: 'gain', skill: 'fishing', xp, item: f.item, qty: qty - left, rare: f.rare });
   w.count(p, 'fish');
   if (f.item === 'golden_perch') w.count(p, 'golden');
+  if (SEA_TREASURE.some((t) => t.item === f.item)) w.count(p, 'deeps');
   if (f.rare) w.broadcast({ t: 'notice', kind: 'rare', text: `${p.state.name} fished up ${f.stack?.r ? ['', 'an uncommon ', 'a rare ', 'an epic ', 'a legendary '][f.stack.r] : 'a '}${ITEMS[f.item].name}${f.item === 'fjord_horse' ? ' — dripping wet!' : '!'}` });
   p.dirty = true;
   w.sendInv(p);

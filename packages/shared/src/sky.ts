@@ -50,11 +50,12 @@ const SLOT_MS = 20 * 60_000;
 const BLEND_MS = 3 * 60_000;
 
 function roll(region: Region, slot: number): WeatherKind {
-  let h = (slot * 2654435761 + (region === 'gruben' ? 97 : 13)) >>> 0;
+  let h = (slot * 2654435761 + (region === 'gruben' ? 97 : region === 'fjord' ? 211 : 13)) >>> 0;
   h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0;
   h = Math.imul(h ^ (h >>> 13), 3266489909) >>> 0;
   const r = ((h ^ (h >>> 16)) >>> 0) / 4294967296;
   if (region === 'gruben') return r < 0.25 ? 'clear' : r < 0.5 ? 'cloudy' : r < 0.72 ? 'snow' : 'fog';
+  if (region === 'fjord') return r < 0.3 ? 'clear' : r < 0.55 ? 'cloudy' : r < 0.78 ? 'rain' : 'fog'; // sea weather
   return r < 0.45 ? 'clear' : r < 0.7 ? 'cloudy' : r < 0.87 ? 'rain' : 'fog';
 }
 

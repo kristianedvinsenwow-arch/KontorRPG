@@ -4,8 +4,8 @@
  * and the server can validate requests by id.
  */
 import { CHUNK_SIZE, SPIKE_CHUNKS, WATER_LEVEL } from './constants.js';
-import { heightAt, mulberry32, VILLAGE, LAKE, PIER, GRUBEN, GRUBEN_SPOTS, inGruben } from './terrain.js';
-import { CAVE, CAVE_ENTRANCE, CHUNK_RANGES, GRUBEN_PASS, caveClearance, caveFloor, caveRoomCentre, inBounds } from './cave.js';
+import { heightAt, mulberry32, VILLAGE, LAKE, PIER, GRUBEN, GRUBEN_SPOTS, inGruben, FJORD, FJORD_SPOTS, inFjord } from './terrain.js';
+import { CAVE, CAVE_ENTRANCE, CHUNK_RANGES, GRUBEN_PASS, FJORD_ROAD, caveClearance, caveFloor, caveRoomCentre, inBounds } from './cave.js';
 import { ARMOUR_PIECES, CLOTHS, ITEMS, JEWELS } from './items.js';
 import { HOUSES, houseAt, toWorld, type HouseFrame } from './houses.js';
 import type { SkillId } from './skills.js';
@@ -49,7 +49,7 @@ function slopeY(x: number, z: number): number {
   return (2 * e) / Math.hypot(dx, 2 * e, dz);
 }
 
-const G = GRUBEN;
+const G = GRUBEN, FJ = FJORD;
 /** Dirt paths between camp, Bjørkvik, the quarries, the mine and the goblin camp (polylines). */
 export const PATHS: [number, number][][] = [
   [[0, 0], [-6, 10], [-12, 24], [-15, 35]],
@@ -60,6 +60,10 @@ export const PATHS: [number, number][][] = [
   [[-40, 26], [-44, 8], [-50, -20], [-58, -48]],
   // Into Ulvedalen.
   [[-46, -4], [-58, -9], [-70, -13]],
+  // Along the lake's north shore to the coast road.
+  [[-40, 26], [-56, 29], [-76, 31], [-92, 34]],
+  // Saltfjorden: from the road down the east shore to the village.
+  [[FJ.x + 44, FJ.z - 62], [FJ.x + 40, FJ.z - 40], [FJ.x + 37, FJ.z - 16], [FJ.x + 34, FJ.z + 4]],
   // Over the wolf meadows to the Gruben pass.
   [[66, 33], [84, 42], [96, 48]],
   // Gruben: from the arrival camp up the valley to the miners' village and the pit.
@@ -85,7 +89,11 @@ export function keepClear(x: number, z: number): boolean {
     return Math.hypot(lx - sp.arrival.x, lz - sp.arrival.z) < sp.arrival.r + 7 || Math.hypot(lx - sp.pit.x, lz - sp.pit.z) < sp.pit.r + 3
       || Math.hypot(lx - sp.village.x, lz - sp.village.z) < sp.village.r + 4;
   }
-  if (Math.hypot(x - GRUBEN_PASS.x, z - GRUBEN_PASS.z) < 7) return true;
+  if (inFjord(x, z)) {
+    const lx = x - FJ.x, lz = z - FJ.z, sp = FJORD_SPOTS;
+    return Math.hypot(lx - sp.arrival.x, lz - sp.arrival.z) < sp.arrival.r + 5 || Math.hypot(lx - sp.village.x, lz - sp.village.z) < sp.village.r + 5;
+  }
+  if (Math.hypot(x - GRUBEN_PASS.x, z - GRUBEN_PASS.z) < 7 || Math.hypot(x - FJORD_ROAD.x, z - FJORD_ROAD.z) < 7) return true;
   if (Math.hypot(x, z) < 18 || Math.hypot(x - VILLAGE.x, z - VILLAGE.z) < VILLAGE.r + 7 || Math.hypot(x - CAVE_ENTRANCE.x, z - CAVE_ENTRANCE.z) < 8) return true;
   // The pier and a strip of shore around it.
   const px = x - PIER.x, pz = z - PIER.z, along = px * PIER.ux + pz * PIER.uz, side = -px * PIER.uz + pz * PIER.ux;
@@ -295,6 +303,27 @@ export const FISH_TABLE: { item: string; level: number; xp: number; weight: numb
   { item: 'old_boot', level: 1, xp: 2, weight: 4, difficulty: 0.05 },
 ];
 export const RARE_FISH = { item: 'golden_perch', chance: 1 / 120, xp: 80, difficulty: 0.85 };
+/** Saltfjorden's sea fish (instead of the lake's), and its rare catch. */
+export const SEA_FISH_TABLE: typeof FISH_TABLE = [
+  { item: 'raw_herring', level: 8, xp: 22, weight: 45, difficulty: 0.25 },
+  { item: 'raw_mackerel', level: 12, xp: 30, weight: 30, difficulty: 0.35 },
+  { item: 'raw_cod', level: 16, xp: 42, weight: 22, difficulty: 0.5 },
+  { item: 'raw_halibut', level: 22, xp: 60, weight: 12, difficulty: 0.65 },
+  { item: 'raw_wolffish', level: 28, xp: 80, weight: 8, difficulty: 0.75 },
+  { item: 'seaweed', level: 1, xp: 2, weight: 6, difficulty: 0.05 },
+];
+export const SEA_RARE = { item: 'pearl', chance: 1 / 90, xp: 120, difficulty: 0.85 };
+/**
+ * Saltfjorden's deeps (rolled before the lake-bed treasure, only there): the fished weapons and the
+ * alligator. Very hard catches.
+ */
+export const SEA_TREASURE: { item: string; chance: number; level: number; xp: number; difficulty: number }[] = [
+  { item: 'swordfish_blade', chance: 1 / 500, level: 14, xp: 200, difficulty: 1.0 },
+  { item: 'harpoon', chance: 1 / 500, level: 16, xp: 200, difficulty: 1.0 },
+  { item: 'sea_kings_trident', chance: 1 / 1400, level: 22, xp: 350, difficulty: 1.12 },
+  { item: 'ships_anchor', chance: 1 / 1400, level: 22, xp: 350, difficulty: 1.12 },
+  { item: 'fjord_alligator', chance: 1 / 2500, level: 25, xp: 500, difficulty: 1.25 },
+];
 /**
  * Things at the bottom of the lake, rolled before the fish (chances per cast, before luck). The
  * catch is decided when you cast, and the better it is the harder it fights: gems are tricky,
@@ -309,7 +338,7 @@ export const LAKE_TREASURE: { what: 'gem' | 'gear' | 'plans' | 'mount'; chance: 
 /** You must stand within this of the water's edge, and cast at most this far. */
 export const CAST_RANGE = 14;
 /** A point is fishable if it's lake water deep enough. */
-export const isFishable = (x: number, z: number) => heightAt(x, z) < WATER_LEVEL - 0.4 && Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r;
+export const isFishable = (x: number, z: number) => heightAt(x, z) < WATER_LEVEL - 0.4 && (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r || inFjord(x, z));
 
 // ------------------------------------------------------------------ places: stations, NPCs, inn
 
@@ -329,6 +358,7 @@ export const STATIONS: Station[] = [
   { id: 'village_tanning', kind: 'tanning', name: 'Tanning rack', x: V.x + 13, z: V.z + 6, r: 1 },
   { id: 'village_loom', kind: 'loom', name: 'Loom', x: V.x + 7, z: V.z + 1, r: 1 },
   { id: 'village_alchemy', kind: 'alchemy', name: 'Alchemy table', x: V.x - 1, z: V.z + 13.5, r: 1 },
+  { id: 'fjord_fire', kind: 'campfire', name: 'Smokehouse fire', x: FJ.x + FJORD_SPOTS.village.x + 3, z: FJ.z + FJORD_SPOTS.village.z + 4, r: 0.9 },
   { id: 'gruben_alchemy', kind: 'alchemy', name: 'Alchemy table', x: G.x - 10, z: G.z + 52, r: 1 },
   { id: 'gruben_loom', kind: 'loom', name: 'Loom', x: G.x - 6, z: G.z + 61, r: 1 },
   // Gruben's arrival camp: a fire, a forge and a rack, so you can work what you find up here.
@@ -353,6 +383,7 @@ export const NPCS: Npc[] = [
   { id: 'halvard', name: 'Halvard', title: 'Hunter', x: V.x + 12, z: V.z + 2, face: 3, color: 2, race: 'ogre', roles: ['quests'] },
   { id: 'tor', name: 'Tor', title: 'Woodcutter', x: V.x + 6, z: V.z + 11, face: 0, color: 7, race: 'human', roles: ['quests'] },
   { id: 'eirik', name: 'Eirik', title: 'Stablemaster', x: V.x - 15.5, z: V.z - 6, face: 2, color: 6, race: 'human', roles: ['shop'], sells: ['fjord_horse', 'black_fjord_horse'] },
+  { id: 'solvi', name: 'Sølvi', title: 'Fishwife', x: FJ.x + FJORD_SPOTS.village.x - 3, z: FJ.z + FJORD_SPOTS.village.z - 2, face: 4, color: 5, race: 'human', roles: ['shop', 'quests'], sells: ['saltwater_rod', 'basic_rod'] },
   { id: 'johan', name: 'Johan', title: 'Old miner', x: G.x + 2, z: G.z + 47, face: 1, color: 3, race: 'dwarf', roles: ['quests'] },
   { id: 'ragna', name: 'Ragna', title: 'Imbuer & herbwife', x: V.x - 4, z: V.z + 11, face: 4, color: 4, race: 'gnome', roles: ['imbuer', 'shop', 'quests'], sells: ['vial'] },
 ];
@@ -552,6 +583,11 @@ const R: Recipe[] = [
   { id: 'cooked_trout', skill: 'cooking', station: ['campfire', 'stove'], level: 5, inputs: [{ item: 'raw_trout', qty: 1 }], output: { item: 'cooked_trout', qty: 1 }, xp: 15, seconds: 2.2, burns: true },
   { id: 'cooked_char', skill: 'cooking', station: ['campfire', 'stove'], level: 12, inputs: [{ item: 'raw_char', qty: 1 }], output: { item: 'cooked_char', qty: 1 }, xp: 25, seconds: 2.5, burns: true },
   { id: 'cooked_wolf_meat', skill: 'cooking', station: ['campfire', 'stove'], level: 3, inputs: [{ item: 'raw_wolf_meat', qty: 1 }], output: { item: 'cooked_wolf_meat', qty: 1 }, xp: 12, seconds: 2.4, burns: true },
+  { id: 'cooked_herring', skill: 'cooking', station: ['campfire', 'stove'], level: 8, inputs: [{ item: 'raw_herring', qty: 1 }], output: { item: 'cooked_herring', qty: 1 }, xp: 20, seconds: 2.2, burns: true },
+  { id: 'cooked_mackerel', skill: 'cooking', station: ['campfire', 'stove'], level: 12, inputs: [{ item: 'raw_mackerel', qty: 1 }], output: { item: 'cooked_mackerel', qty: 1 }, xp: 28, seconds: 2.4, burns: true },
+  { id: 'cooked_cod', skill: 'cooking', station: ['campfire', 'stove'], level: 16, inputs: [{ item: 'raw_cod', qty: 1 }], output: { item: 'cooked_cod', qty: 1 }, xp: 36, seconds: 2.6, burns: true },
+  { id: 'cooked_halibut', skill: 'cooking', station: ['campfire', 'stove'], level: 22, inputs: [{ item: 'raw_halibut', qty: 1 }], output: { item: 'cooked_halibut', qty: 1 }, xp: 50, seconds: 2.8, burns: true },
+  { id: 'cooked_wolffish', skill: 'cooking', station: ['campfire', 'stove'], level: 28, inputs: [{ item: 'raw_wolffish', qty: 1 }], output: { item: 'cooked_wolffish', qty: 1 }, xp: 66, seconds: 3, burns: true },
   { id: 'cooked_pike', skill: 'cooking', station: ['campfire', 'stove'], level: 18, inputs: [{ item: 'raw_pike', qty: 1 }], output: { item: 'cooked_pike', qty: 1 }, xp: 38, seconds: 2.8, burns: true },
 ];
 // Metal armour: stone uses shaped stone, iron uses bars (+ a little shaped stone), counts from the design doc.

@@ -80,9 +80,36 @@ function grubenHeight(x: number, z: number): number {
   return Math.max(1, h);
 }
 
+/**
+ * Saltfjorden: the third region, a sea inlet over the western road. Steep rocky shores either
+ * side of deep salt water that widens to the south; a fishing village on the east shore.
+ * Local layout: you arrive at the north-east; the village is mid-way down the east shore.
+ */
+export const FJORD = { x: -1056, z: 0, half: 96, name: 'Saltfjorden' };
+export const FJORD_SPOTS = {
+  arrival: { x: 44, z: -66, r: 9, h: 5 },
+  village: { x: 34, z: 8, r: 12, h: 2.4 },
+};
+export const inFjord = (x: number, z: number) => Math.abs(x - FJORD.x) < FJORD.half + 60 && Math.abs(z - FJORD.z) < FJORD.half + 60;
+/** Where the fjord's channel runs (local x of its middle) at local z. */
+export const fjordMid = (lz: number) => Math.sin(lz / 40) * 10 - 6;
+
+function fjordHeight(x: number, z: number): number {
+  const lx = x - FJORD.x, lz = z - FJORD.z;
+  // Distance from the channel; the channel widens towards the open sea in the south.
+  const d = Math.abs(lx - fjordMid(lz)) * (1 - 0.45 * smooth(20, 90, lz));
+  let h = -9 + smooth(15, 32, d) * 14 + (fbm(x / 30, z / 30) - 0.5) * 4;
+  h += Math.max(0, d - 40) * 0.4 + (fbm(x / 14 + 3, z / 14, 3) - 0.5) * 2 * smooth(30, 45, d);
+  for (const p of Object.values(FJORD_SPOTS)) h = h + (p.h - h) * (1 - smooth(p.r, p.r + 10, Math.hypot(lx - p.x, lz - p.z)));
+  const edge = Math.max(Math.abs(lx), Math.abs(lz));
+  h += smooth(FJORD.half - 30, FJORD.half - 4, edge) * 30;
+  return h;
+}
+
 /** Ground height in metres at world position (x, z). */
 export function heightAt(x: number, z: number): number {
   if (x > 600) return grubenHeight(x, z);
+  if (x < -600) return fjordHeight(x, z);
   // Rolling hills.
   let h = (fbm(x / 70, z / 70) - 0.42) * 18 + (fbm(x / 22 + 40, z / 22 - 17, 3) - 0.5) * 3;
   h += 3;

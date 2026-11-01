@@ -66,4 +66,11 @@ export class Water {
   animate(t: number): void {
     this.normal.offset.set(t * 0.012, t * 0.007);
   }
+
+  /** Keep the water plane under you (regions far apart share one plane); snapped so the ripples don't slide. */
+  follow(x: number, z: number): void {
+    const snap = 9 * 8;
+    this.mesh.position.x = Math.round(x / snap) * snap;
+    this.mesh.position.z = Math.round(z / snap) * snap;
+  }
 }
