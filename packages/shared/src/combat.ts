@@ -38,6 +38,7 @@ export const SPECIALS: Record<WeaponClass | 'fists', Special> = {
   staff: { name: 'Bonk', cd: 6, mult: 1.8, kind: 'single', blurb: 'A clumsy two-handed bonk.' },
   fireStaff: { name: 'Ignite', cd: 12, mult: 0.45, kind: 'ignite', radius: 22, blurb: 'Every burning enemy within 22 m takes 45% of a firebolt per burn stack (up to 135% at 3 stacks).' },
   lifeStaff: { name: 'Mending Circle', cd: 14, mult: 1.6, kind: 'mend', radius: 8, blurb: 'Heal everyone within 8 m (you too) for 1.6× a heal.' },
+  tideStaff: { name: 'Tentacle Slap', cd: 9, mult: 2.6, kind: 'single', blurb: 'A little tentacle bursts up under your target and slaps it: 2.6× damage.' },
   frostStaff: { name: 'Frost Nova', cd: 15, mult: 0.8, kind: 'nova', radius: 5, blurb: 'Burst of frost around your target: freeze everything within 5 m of it for 2.5 s.' },
 };
 
@@ -70,7 +71,7 @@ export function weaponClass(main: Stack | undefined): WeaponClass | 'fists' {
 }
 
 export function styleOf(c: WeaponClass | 'fists'): Style {
-  return c === 'bow' ? 'ranged' : c === 'fireStaff' || c === 'frostStaff' || c === 'lifeStaff' ? 'magic' : 'melee';
+  return c === 'bow' ? 'ranged' : c === 'fireStaff' || c === 'frostStaff' || c === 'lifeStaff' || c === 'tideStaff' ? 'magic' : 'melee';
 }
 
 export function attackRange(main: Stack | undefined): number {

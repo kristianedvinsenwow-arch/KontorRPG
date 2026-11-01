@@ -34,6 +34,7 @@ export interface Stats {
   lifesteal: number;      // heal this fraction of the damage you deal (capped at 15%)
   atkSpeed: number;       // faster basic attacks (capped at +30%)
   healTaken: number;      // more healing from potions, food and healers
+  size: number;           // you grow (kraken ink): purely how big you look
   aoeRadius: number;      // area attacks and Mending Circle reach further (capped at +50%)
   aoeDmg: number;         // area attacks hit harder (Whirlwind, cones, Frost Nova, Ignite, Cleave, Radiance)
   burnStacks: number;     // extra burn stacks a fire staff can build (3 + this)
@@ -75,7 +76,7 @@ export type StatKey = keyof Stats;
 export function emptyStats(): Stats {
   return {
     moveSpeed: 0, maxHp: 0, hpPct: 0, regen: 0, armour: 0, ward: 0, physRed: 0, magicRed: 0, magicTaken: 0, dodge: 0, block: 0, thorns: 0,
-    meleeDmg: 0, rangedDmg: 0, magicDmg: 0, spellPower: 0, allDmg: 0, crit: 0, cdr: 0, specialDmg: 0, burnDmg: 0, frostPower: 0, arrowSave: 0, lifesteal: 0, atkSpeed: 0, healTaken: 0, aoeRadius: 0, aoeDmg: 0, burnStacks: 0, brittle: 0, shatter: 0, healPower: 0, healCrit: 0, overShield: 0, holySplash: 0, execute: 0, bleed: 0, cleave: 0, multishot: 0, pierce: 0,
+    meleeDmg: 0, rangedDmg: 0, magicDmg: 0, spellPower: 0, allDmg: 0, crit: 0, cdr: 0, specialDmg: 0, burnDmg: 0, frostPower: 0, arrowSave: 0, size: 0, lifesteal: 0, atkSpeed: 0, healTaken: 0, aoeRadius: 0, aoeDmg: 0, burnStacks: 0, brittle: 0, shatter: 0, healPower: 0, healCrit: 0, overShield: 0, holySplash: 0, execute: 0, bleed: 0, cleave: 0, multishot: 0, pierce: 0,
     miningSpeed: 0, woodSpeed: 0, fishSpeed: 0, luck: 0, gemChance: 0, doubleYield: 0, rareFish: 0, fishEase: 0, burnChance: 0, craftSpeed: 0, nodeSave: 0, potionPower: 0, potionTime: 0,
     xp: 0, skillLvl: 0, skillXp: 0, sell: 0, bagSlots: 0,
   };
@@ -100,7 +101,7 @@ export const STAT_LABEL: Record<StatKey, [string, 'pct' | 'flat' | 'pts']> = {
   crit: ['critical chance', 'pct'], cdr: ['right-click cooldown reduction', 'pct'], specialDmg: ['right-click damage', 'pct'],
   burnDmg: ['burn and Ignite damage', 'pct'], frostPower: ['freeze duration (and half as much frostbolt damage)', 'pct'], arrowSave: ['chance to save an arrow', 'pct'],
   lifesteal: ['of damage dealt healed (lifesteal)', 'pct'], atkSpeed: ['attack speed', 'pct'], healTaken: ['healing received', 'pct'],
-  aoeRadius: ['area size', 'pct'], aoeDmg: ['area damage', 'pct'],
+  size: ['bigger', 'pct'], aoeRadius: ['area size', 'pct'], aoeDmg: ['area damage', 'pct'],
   burnStacks: ['max burn stacks', 'flat'], brittle: ['Brittle: frozen enemies take 3 burn stacks at once', 'flat'], shatter: ['damage to frozen enemies', 'pct'],
   healPower: ['healing', 'pct'], healCrit: ['critical heals restore more', 'pct'], overShield: ['overhealing kept as a shield', 'pct'], holySplash: ['of Mending Circle’s heal as damage around each friend', 'pct'],
   execute: ['damage to enemies under 30% HP', 'pct'], bleed: ['of a melee crit as a bleed over 4 s', 'pct'], cleave: ['of two-handed hits splashed onto enemies beside the target', 'pct'],

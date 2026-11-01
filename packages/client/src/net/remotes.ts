@@ -108,6 +108,9 @@ export class Remotes {
         a.s.z + (c.s.z - a.s.z) * t,
       );
       g.rotation.y = lerpAngle(a.s.yaw, c.s.yaw, t);
+      // Grown by kraken ink: ease up to the new size.
+      const want = RACES[r.model.race].scale * (1 + (c.s.sz ?? 0));
+      r.model.body.scale.setScalar(r.model.body.scale.x + (want - r.model.body.scale.x) * Math.min(1, dt * 3));
       const spd = a.s.spd + (c.s.spd - a.s.spd) * t;
       animateCharacter(r.model, spd, c.s.pitch, c.s.act === 'swing' || c.s.act === 'spin', dt);
       if (c.s.act === 'spin') r.model.body.rotation.y += dt * 14; else r.model.body.rotation.y = 0;

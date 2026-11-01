@@ -125,6 +125,37 @@ function jotunbane(): THREE.Group {
   return g;
 }
 
+function tentacleWhip(): THREE.Group {
+  const g = new THREE.Group();
+  mesh(new THREE.CylinderGeometry(0.024, 0.028, 0.2, 8).translate(0, 0.1, 0), BONE(), g);
+  ball(g, v3(0, 0.21, 0), 0.04, GOLD(), 8);
+  // The tentacle itself: tapering segments with suckers, swaying out to one side.
+  const skin = std(0x8a3a4a, 0.05, 0.5), under = std(0xd89aa0, 0, 0.6);
+  let parent: THREE.Object3D = g, r = 0.045;
+  for (let i = 0; i < 9; i++) {
+    const seg = new THREE.Group(); seg.position.y = i ? 0.13 : 0.22; seg.rotation.z = i ? 0.09 : 0; seg.rotation.x = i ? 0.04 : 0; parent.add(seg);
+    mesh(new THREE.CylinderGeometry(r * 0.88, r, 0.14, 7).translate(0, 0.07, 0), skin, seg);
+    if (i % 2 === 0) ball(seg, v3(0, 0.07, -r * 0.8), r * 0.35, under, 5);
+    parent = seg; r *= 0.86;
+  }
+  return g;
+}
+
+function krakensTrident(): THREE.Group {
+  const g = new THREE.Group();
+  const coral = std(0xd86a5a, 0.2, 0.5), gold = GOLD(), skin = std(0x8a3a4a, 0.05, 0.5);
+  mesh(new THREE.CylinderGeometry(0.022, 0.026, 1.6, 8).translate(0, 0.8, 0), coral, g);
+  // A tentacle wound up the shaft.
+  for (let i = 0; i < 14; i++) { const a = i * 0.9; ball(g, v3(Math.cos(a) * 0.035, 0.25 + i * 0.085, Math.sin(a) * 0.035), 0.022, skin, 6); }
+  bx(g, 0.26, 0.04, 0.04, gold, 0, 1.62, 0);
+  for (const sx of [-1, 0, 1]) {
+    mesh(new THREE.CylinderGeometry(0.012, 0.014, 0.24, 6).translate(0, 0.12, 0), gold, g).position.set(sx * 0.11, 1.62, 0);
+    const tip = mesh(new THREE.ConeGeometry(0.028, 0.11, 4), gold, g); tip.position.set(sx * 0.11, 1.92, 0); tip.scale.z = 0.4;
+  }
+  ball(g, v3(0, 1.66, -0.02), 0.04, std(0x3aa8ff, 0.2, 0.2, 0x2a90ff, 1.6), 10); // a bead of living water
+  return g;
+}
+
 /** A unique weapon's model, or null to use the normal one for its type. */
 export function makeUniqueHeld(id: string): THREE.Group | null {
   switch (id) {
@@ -134,6 +165,8 @@ export function makeUniqueHeld(id: string): THREE.Group | null {
     case 'sea_kings_trident': return trident();
     case 'ships_anchor': return anchor();
     case 'jotunbane': return jotunbane();
+    case 'tentacle_whip': return tentacleWhip();
+    case 'krakens_trident': return krakensTrident();
   }
   return null;
 }
@@ -156,6 +189,26 @@ function pirateHat(): THREE.Group {
   // The Jolly Roger: a little skull and crossbones on the front.
   const s = skull(hat, 0, 0.065, -0.128, 0.9);
   for (const sx of [-1, 1]) bx(s, 0.07, 0.008, 0.006, BONE(), 0, -0.03, 0.006, 0, 0, sx * 0.6);
+  return g;
+}
+
+function tinyKraken(): THREE.Group {
+  // A little kraken sitting on your head, arms draped down round your ears, big eyes looking ahead.
+  const g = new THREE.Group();
+  const skin = std(0x9a4458, 0.05, 0.5), under = std(0xe0a8b0, 0, 0.6), eyeW = std(0xf8f0d0, 0, 0.4), pupil = std(0x101010, 0, 0.5);
+  const body = ball(g, v3(0, 0.19, 0.02), 0.12, skin, 14); body.scale.set(1, 1.15, 1.05);
+  ball(g, v3(0, 0.3, 0.06), 0.08, skin, 10).scale.set(0.9, 1.1, 1);
+  for (const sx of [-1, 1]) { ball(g, v3(sx * 0.05, 0.2, -0.1), 0.032, eyeW, 8); ball(g, v3(sx * 0.05, 0.2, -0.128), 0.014, pupil, 6); }
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2;
+    const arm = new THREE.Group(); arm.position.set(Math.sin(a) * 0.1, 0.12, Math.cos(a) * 0.1 + 0.02); arm.rotation.y = a; g.add(arm);
+    let parent: THREE.Object3D = arm, r = 0.022;
+    for (let i = 0; i < 4; i++) {
+      const seg = new THREE.Group(); seg.position.y = i ? -0.05 : 0; seg.rotation.x = i ? -0.35 : 1.4; parent.add(seg);
+      mesh(new THREE.CylinderGeometry(r * 0.85, r, 0.055, 6).translate(0, -0.027, 0), i % 2 ? under : skin, seg);
+      parent = seg; r *= 0.82;
+    }
+  }
   return g;
 }
 
@@ -242,7 +295,7 @@ function kingSpikes(): THREE.Group {
 }
 
 /** Hats that replace the normal helm entirely. */
-export const REPLACES_HELM = new Set(['captains_hat']);
+export const REPLACES_HELM = new Set(['captains_hat', 'tiny_kraken']);
 
 /**
  * Put unique armour pieces on a character (and take off the ones it no longer wears). Cheap to
@@ -256,7 +309,7 @@ export function dressUniques(c: Character, head: string | undefined, chest: stri
   for (const o of st._uniq ?? []) o.parent?.remove(o);
   const added: THREE.Object3D[] = [];
   const put = (parent: THREE.Object3D, o: THREE.Object3D | null) => { if (!o) return; o.traverse((x) => (x.userData.keep = true)); parent.add(o); added.push(o); };
-  put(c.head, head === 'captains_hat' ? pirateHat() : head === 'barrow_helm' ? barrowCrown() : head === 'trollshaman_helm' ? shamanHorns() : null);
+  put(c.head, head === 'captains_hat' ? pirateHat() : head === 'tiny_kraken' ? tinyKraken() : head === 'barrow_helm' ? barrowCrown() : head === 'trollshaman_helm' ? shamanHorns() : null);
   put(c.upper, chest === 'knuts_bellyplate' ? cauldronLid() : chest === 'chaplains_breastplate' ? chaplainTabard() : null);
   for (const l of c.legs) put(l.knee, legs === 'trolliron_greaves' ? kneeSpikes() : legs === 'wisplit_greaves' ? wispStuds() : null);
   if (shoulders === 'mine_kings_pauldrons') for (const p of c.pauldrons) put(p, kingSpikes());

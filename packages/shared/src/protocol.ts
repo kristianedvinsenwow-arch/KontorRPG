@@ -32,6 +32,8 @@ export interface PlayerState {
   mhp?: number;
   /** Riding this mount (item id). */
   mnt?: string;
+  /** Grown by an elixir (fraction, e.g. 0.25 = a quarter bigger). */
+  sz?: number;
   /** Chosen title (shown under the name). */
   title?: string;
 }
@@ -120,7 +122,7 @@ export type ServerMsg =
   | { t: 'buffs'; list: Buff[] }
   | { t: 'hit'; to: string; dmg: number; crit?: boolean; kind: 'phys' | 'magic' | 'burn' | 'heal' | 'block' | 'dodge'; from?: string }
   /** `x`/`z`/`r`: a spot on the ground (the Kraken's tentacles: `eruptWarn`, then `erupt`; `ink`: radius of the cloud). */
-  | { t: 'fx'; kind: 'arrow' | 'firebolt' | 'frostbolt' | 'spin' | 'nova' | 'ignite' | 'slam' | 'slamWarn' | 'magic' | 'guard' | 'heal' | 'mend' | 'eruptWarn' | 'erupt' | 'ink'; from: string; to?: string; x?: number; z?: number; r?: number }
+  | { t: 'fx'; kind: 'arrow' | 'firebolt' | 'frostbolt' | 'spin' | 'nova' | 'ignite' | 'slam' | 'slamWarn' | 'magic' | 'guard' | 'heal' | 'mend' | 'eruptWarn' | 'erupt' | 'ink' | 'waterbolt' | 'tentacle'; from: string; to?: string; x?: number; z?: number; r?: number }
   | { t: 'fish'; state: 'bite'; difficulty: number; seconds: number }
   | { t: 'fish'; state: 'cast' | 'lost' | 'caught' | 'cancel' }
   | { t: 'dead'; by: string }

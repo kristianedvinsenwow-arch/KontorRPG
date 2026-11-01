@@ -82,7 +82,7 @@ export const MOBS: Record<MobKind, MobDef> = {
   tide_wraith: { kind: 'tide_wraith', name: 'Tide wraith', level: 17, hp: 120, dmg: 10, interval: 2.3, range: 14, speed: 3.6, aggro: 15, armour: 4, ward: 16, magic: true, xp: 210, gold: [1, 4],
     drops: [{ item: 'grave_dust', chance: 0.5, qty: [1, 3] }, { item: 'wisp_essence', chance: 0.2, qty: [1, 1] }, { gear: 3, chance: 0.06 }], respawnSec: [140, 220], scale: 1 },
   kraken: { kind: 'kraken', name: 'The Kraken', level: 18, hp: 1800, dmg: 15, interval: 2.2, range: 6.5, speed: 0, aggro: 18, armour: 18, ward: 14, xp: 2600, gold: [40, 80],
-    drops: [{ item: 'pearl', chance: 1, qty: [2, 4] }, { gear: 3, chance: 0.7, legendary: 0.05 }, { gear: 4, chance: 0.2 }, { item: 'krakens_eye', chance: 0.08, qty: [1, 1] }, { item: 'kraken_ink', chance: 1, qty: [2, 4] }],
+    drops: [{ item: 'pearl', chance: 1, qty: [2, 4] }, { gear: 3, chance: 0.7, legendary: 0.05 }, { gear: 4, chance: 0.2 }, { item: 'krakens_eye', chance: 0.08, qty: [1, 1] }, { item: 'tentacle_whip', chance: 0.07, qty: [1, 1] }, { item: 'krakens_trident', chance: 0.07, qty: [1, 1] }, { item: 'tiny_kraken', chance: 0.06, qty: [1, 1] }, { item: 'kraken_ink', chance: 1, qty: [2, 4] }],
     respawnSec: [90 * 60, 150 * 60], boss: true, rooted: true, slam: { every: 13, r: 7.5, mult: 1.6 }, erupt: { every: 7, r: 2.6, mult: 1.5, count: 3 }, ink: true, enrage: 0.3, adds: 0.6, scale: 3.4 },
   // Gruben (levels 13–22)
   lynx: { kind: 'lynx', name: 'Lynx', level: 13, hp: 95, dmg: 6.5, interval: 1.5, range: 1.8, speed: 5, aggro: 9, armour: 8, ward: 6, xp: 130, gold: [0, 0],

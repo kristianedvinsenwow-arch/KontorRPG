@@ -47,10 +47,10 @@ export class Fx {
   }
 
   /** A projectile from `from` to (a moving) `to`, arriving after distance / speed. */
-  projectile(kind: 'arrow' | 'firebolt' | 'frostbolt' | 'magic' | 'heal', from: THREE.Vector3, to: () => THREE.Vector3 | null): void {
+  projectile(kind: 'arrow' | 'firebolt' | 'frostbolt' | 'magic' | 'heal' | 'waterbolt', from: THREE.Vector3, to: () => THREE.Vector3 | null): void {
     const end0 = to();
     if (!end0) return;
-    const obj = kind === 'arrow' ? ARROW.clone() : bolt(kind === 'firebolt' ? 0xff7a2a : kind === 'frostbolt' ? 0x9fdcff : kind === 'heal' ? 0x7fe08a : 0xb070ff);
+    const obj = kind === 'arrow' ? ARROW.clone() : bolt(kind === 'firebolt' ? 0xff7a2a : kind === 'frostbolt' ? 0x9fdcff : kind === 'heal' ? 0x7fe08a : kind === 'waterbolt' ? 0x3aa8ff : 0xb070ff);
     const dur = Math.max(0.12, from.distanceTo(end0) / PROJECTILE_SPEED);
     obj.position.copy(from);
     this.add(obj, dur, (k, o) => {
@@ -63,6 +63,26 @@ export class Fx {
   }
 
   /** An expanding ring on the ground (spin, nova, slam). */
+  /** Tentacle Slap: a little purple tentacle shoots up out of the ground, curls over and slaps down. */
+  tentacle(at: THREE.Vector3): void {
+    const g = new THREE.Group(); g.position.copy(at);
+    const skin = new THREE.MeshStandardMaterial({ color: 0x8a3a4a, roughness: 0.5 });
+    let parent: THREE.Object3D = g, r = 0.13;
+    const segs: THREE.Object3D[] = [];
+    for (let i = 0; i < 6; i++) {
+      const seg = new THREE.Group(); seg.position.y = i ? 0.3 : 0; parent.add(seg);
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(r * 0.8, r, 0.32, 8).translate(0, 0.16, 0), skin); seg.add(m);
+      segs.push(seg); parent = seg; r *= 0.82;
+    }
+    this.add(g, 0.8, (k, o) => {
+      // Up out of the ground (0–30%), then curl over hard (30–55%), then sink back.
+      const up = Math.min(1, k / 0.3), down = Math.max(0, (k - 0.6) / 0.4);
+      o.scale.set(1, up * (1 - down), 1);
+      const curl = Math.min(1, Math.max(0, (k - 0.3) / 0.25));
+      segs.forEach((s2, i) => (s2.rotation.x = i ? curl * 0.45 : 0));
+    });
+  }
+
   ring(at: THREE.Vector3, radius: number, color: number, dur = 0.5): void {
     const m = new THREE.Mesh(new THREE.RingGeometry(0.8, 1, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8, depthWrite: false, side: THREE.DoubleSide }));
     m.position.copy(at).add(new THREE.Vector3(0, 0.15, 0));

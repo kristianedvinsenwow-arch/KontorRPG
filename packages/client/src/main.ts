@@ -341,8 +341,8 @@ net.on((msg) => {
       const from = posOf(msg.from);
       if (!from) break;
       const at = msg.x != null && msg.z != null ? new THREE.Vector3(msg.x, groundAt(msg.x, msg.z), msg.z) : from;
-      sound.play(msg.kind === 'arrow' ? 'bow' : msg.kind === 'firebolt' ? 'fire' : msg.kind === 'frostbolt' ? 'frost' : msg.kind === 'magic' ? 'zap' : msg.kind === 'guard' ? 'block' : msg.kind === 'mend' ? 'heal' : msg.kind === 'erupt' ? 'slam' : msg.kind === 'ink' ? 'ignite' : msg.kind === 'eruptWarn' ? 'none' : msg.kind, at);
-      if (msg.kind === 'arrow' || msg.kind === 'firebolt' || msg.kind === 'frostbolt' || msg.kind === 'magic' || msg.kind === 'heal') {
+      sound.play(msg.kind === 'arrow' ? 'bow' : msg.kind === 'firebolt' ? 'fire' : msg.kind === 'frostbolt' ? 'frost' : msg.kind === 'waterbolt' ? 'frost' : msg.kind === 'tentacle' ? 'slam' : msg.kind === 'magic' ? 'zap' : msg.kind === 'guard' ? 'block' : msg.kind === 'mend' ? 'heal' : msg.kind === 'erupt' ? 'slam' : msg.kind === 'ink' ? 'ignite' : msg.kind === 'eruptWarn' ? 'none' : msg.kind, at);
+      if (msg.kind === 'arrow' || msg.kind === 'firebolt' || msg.kind === 'frostbolt' || msg.kind === 'magic' || msg.kind === 'heal' || msg.kind === 'waterbolt') {
         const start = msg.from === myId && me ? new THREE.Vector3(me.x, me.y + eyeHeight - 0.2, me.z).add(new THREE.Vector3(-Math.sin(me.yaw), 0, -Math.cos(me.yaw)).multiplyScalar(0.6)) : from;
         const to = msg.to;
         fx.projectile(msg.kind, start, () => (to ? posOf(to) : null));
@@ -357,6 +357,7 @@ net.on((msg) => {
         if (gp) fx.warn(new THREE.Vector3(gp.x, groundAt(gp.x, gp.z), gp.z), r, 1.3);
         hud.toast(`${k ? MOBS[k].name : 'It'} raises its arms — get clear!`, 1300, 'error');
       }
+      else if (msg.kind === 'tentacle') { const tp = (msg.to ? posOf(msg.to) : null) ?? at; const g0 = new THREE.Vector3(tp.x, groundAt(tp.x, tp.z), tp.z); fx.tentacle(g0); fx.ring(g0, 1.4, 0x3aa8ff, 0.5); }
       else if (msg.kind === 'eruptWarn') fx.warn(at, msg.r ?? 2.5, 1.6); // tentacles coming up here
       else if (msg.kind === 'erupt') { fx.ring(at, (msg.r ?? 2.5) + 0.6, 0x9a3a4a, 0.6); fx.ring(at, (msg.r ?? 2.5) * 0.6, 0xbfe8f0, 0.45); }
       else if (msg.kind === 'ink') {
@@ -719,7 +720,7 @@ function frame() {
     }
     const g = gameStore.get();
     const style = weaponClass(g.equip.mainHand);
-    const act = now < swingUntil ? (spinT > 0 ? 'spin' : g.held === 'mainHand' ? (style === 'bow' ? 'shoot' : style === 'fireStaff' || style === 'frostStaff' ? 'cast' : 'swing') : 'swing') : undefined;
+    const act = now < swingUntil ? (spinT > 0 ? 'spin' : g.held === 'mainHand' ? (style === 'bow' ? 'shoot' : style === 'fireStaff' || style === 'frostStaff' || style === 'tideStaff' ? 'cast' : 'swing') : 'swing') : undefined;
     sendInput(now, act);
     const under = inCaveRegion(me.x, me.z);
     gfx.setUnderground(under);
@@ -765,7 +766,7 @@ function frame() {
     }
     if (slow) sound.ambience({ day, rain: weather.rain, snow: weather.snow, region, indoors: homeAt(me.x, me.z) >= 0, height: me.y, nearWater: ambWater, fire: ambFire });
     const bob = me.onGround ? Math.min(1, me.speed / 5) : 0;
-    cam.position.set(me.x, me.y + eyeHeight + mountLift + Math.abs(Math.sin(walkPh)) * 0.04 * bob * (eyeHeight / EYE_HEIGHT), me.z);
+    cam.position.set(me.x, me.y + eyeHeight * (1 + Math.max(0, stats?.all.size ?? 0)) + mountLift + Math.abs(Math.sin(walkPh)) * 0.04 * bob * (eyeHeight / EYE_HEIGHT), me.z);
     cam.rotation.set(me.pitch, me.yaw + (spinT > 0 ? (1 - spinT / 0.45) * Math.PI * 2 : 0), 0, 'YXZ');
     spinT = Math.max(0, spinT - dt);
     gfx.follow(cam.position);

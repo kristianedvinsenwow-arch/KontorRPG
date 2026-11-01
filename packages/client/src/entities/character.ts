@@ -430,6 +430,7 @@ const SWING_ANIM_SEC = 0.62;
 /** Tier colours for metal gear (design doc §6). Leather is the starter look. */
 export const GEAR_COLORS: Record<string, { color: number; metal: number; rough: number }> = {
   leather: { color: 0x8a6a48, metal: 0.05, rough: 0.7 },
+  kraken: { color: 0x8a3a4a, metal: 0.1, rough: 0.5 },
   cloth: { color: 0x6d5f8a, metal: 0, rough: 0.95 },
   birch: { color: 0xd8d2c0, metal: 0, rough: 0.7 },
   pine: { color: 0x8a6440, metal: 0, rough: 0.7 },

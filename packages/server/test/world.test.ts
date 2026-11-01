@@ -1112,3 +1112,21 @@ test('Sjøgrotta: walk in from Saltfjorden; monsters, ore, fishable pools; the K
   assert.ok(p.hp < hp0, 'and they hurt');
   assert.ok(Math.hypot(kraken.x - kraken.spawn.x, kraken.z - kraken.spawn.z) < 0.01, 'it never leaves its pool');
 });
+
+test('the Kraken-caller trident: water bolts, and Tentacle Slap with no bolt', () => {
+  const { world, c, p, place, advance } = game(() => 0.5);
+  p.equip.mainHand = { id: 'krakens_trident', qty: 1, r: 3 };
+  world.recompute(p);
+  const wolf = [...world.mobs.values()].find((m) => m.def.kind === 'wolf')!;
+  wolf.def = { ...wolf.def, hp: 10000 }; wolf.hp = 10000;
+  place(wolf.x + 8, wolf.z);
+  world.handle(c, { t: 'attack', target: wolf.id, special: false });
+  assert.ok(c.inbox.some((m) => m.t === 'fx' && (m as { kind: string }).kind === 'waterbolt'));
+  advance(1500); world.step();
+  const hp1 = wolf.hp;
+  assert.ok(hp1 < 10000 && !wolf.burn, 'hit, and nothing burns');
+  world.handle(c, { t: 'attack', target: wolf.id, special: true });
+  assert.ok(c.inbox.some((m) => m.t === 'fx' && (m as { kind: string }).kind === 'tentacle'));
+  advance(500); world.step();
+  assert.ok(wolf.hp < hp1);
+});

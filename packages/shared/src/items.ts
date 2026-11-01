@@ -13,11 +13,11 @@ export type Slot =
   | 'mainHand' | 'offHand' | 'ring' | 'neck' | 'pickaxe' | 'hatchet' | 'rod' | 'knife' | 'ammo' | 'mount';
 
 export type ItemKind = 'ore' | 'gem' | 'material' | 'bar' | 'log' | 'ammo' | 'fish' | 'meat' | 'food' | 'herb' | 'potion' | 'mount' | 'junk' | 'tool' | 'weapon' | 'armour' | 'bag' | 'coins' | 'trinket' | 'plans';
-export type WeaponClass = 'sword' | 'mace' | 'longsword' | 'battleaxe' | 'warhammer' | 'halberd' | 'spear' | 'bow' | 'staff' | 'fireStaff' | 'frostStaff' | 'lifeStaff';
+export type WeaponClass = 'sword' | 'mace' | 'longsword' | 'battleaxe' | 'warhammer' | 'halberd' | 'spear' | 'bow' | 'staff' | 'fireStaff' | 'frostStaff' | 'lifeStaff' | 'tideStaff';
 export type ArmourType = 'cloth' | 'leather' | 'metal';
 export type ToolKind = 'pickaxe' | 'hatchet' | 'rod' | 'knife';
 /** Visual material for models and icons. */
-export type Look = 'stone' | 'iron' | 'steel' | 'silversteel' | 'silver' | 'coal' | 'gold' | 'birch' | 'pine' | 'leather' | 'goblin' | 'lynx' | 'naga' | 'coral' | 'seaglass' | 'cloth' | 'linen' | 'jute' | 'ramie' | 'cotton' | 'bamboo' | 'silk' | 'bone';
+export type Look = 'stone' | 'iron' | 'steel' | 'silversteel' | 'silver' | 'coal' | 'gold' | 'birch' | 'pine' | 'leather' | 'goblin' | 'lynx' | 'naga' | 'coral' | 'seaglass' | 'cloth' | 'linen' | 'jute' | 'ramie' | 'cotton' | 'bamboo' | 'silk' | 'bone' | 'kraken';
 
 export interface ItemDef {
   id: string;
@@ -304,7 +304,7 @@ const POTIONS: [string, string, NonNullable<ItemDef['potion']>, number, string][
   ['healing_draught', 'Healing draught', { heal: 20, sec: 10 }, 3, 'Heals 20 HP over 10 s. Works mid-fight.'],
   ['cloudberry_tonic', 'Cloudberry tonic', { heal: 38, sec: 10 }, 6, 'Heals 38 HP over 10 s. Works mid-fight.'],
   ['grave_draught', 'Grave draught', { heal: 70, sec: 12 }, 12, 'Heals 70 HP over 12 s. Works mid-fight. Tastes like a cellar.'],
-  ['ink_elixir', 'Kraken-ink elixir', { buff: { name: 'Elixir: kraken ink', stats: { aoeRadius: 0.15, aoeDmg: 0.1 }, sec: 900 } }, 14, 'Area attacks reach 15% further and hit 10% harder for 15 min.'],
+  ['ink_elixir', 'Kraken-ink elixir', { buff: { name: 'Elixir: kraken ink', stats: { aoeRadius: 0.25, aoeDmg: 0.18, maxHp: 10, size: 0.3 }, sec: 1200 } }, 16, 'For 20 min: area attacks reach 25% further and hit 18% harder, +10 max HP — and you grow a third bigger.'],
   ['strength_elixir', 'Roseroot elixir', { buff: { name: 'Elixir: roseroot', stats: { meleeDmg: 0.08, rangedDmg: 0.08 }, sec: 900 } }, 8, '+8% melee and ranged damage for 15 min.'],
   ['mind_elixir', 'Lantern elixir', { buff: { name: 'Elixir: lantern', stats: { magicDmg: 0.1, ward: 2 }, sec: 900 } }, 10, '+10% magic damage and +2 ward for 15 min.'],
   ['warding_elixir', 'Warding elixir', { buff: { name: 'Elixir: warding', stats: { magicRed: 0.08, armour: 3 }, sec: 900 } }, 10, '+8% magic damage reduction and +3 armour for 15 min.'],
@@ -458,6 +458,10 @@ add({ id: 'mine_kings_runegauntlets', name: 'Mine King’s rune-gauntlets', kind
 add({ id: 'mine_kings_pauldrons', name: 'Mine King’s pauldrons', kind: 'armour', stack: 1, tier: 4, look: 'silversteel', slot: 'shoulders', armourType: 'metal', armour: 7, ward: 3, fixedRarity: 4, heavy: 0.03, mods: { allDmg: 0.06, physRed: 0.05 }, sellValue: 90, blurb: 'Silversteel the size of cart wheels. They weigh you down, and nothing much gets through.' });
 add({ id: 'mine_kings_ring', name: 'Mine King’s signet', kind: 'trinket', stack: 1, slot: 'ring', fixedRarity: 4, mods: { maxHp: 8, allDmg: 0.06, miningSpeed: 0.1, gemChance: 0.3 }, sellValue: 90, blurb: 'Heavy, cold silver. The Mine King wore it for three hundred years.' });
 add({ id: 'krakens_eye', name: 'Kraken’s eye', kind: 'trinket', stack: 1, slot: 'neck', fixedRarity: 4, mods: { maxHp: 12, aoeDmg: 0.1, aoeRadius: 0.1, ward: 3 }, sellValue: 120, blurb: 'A milky, fist-sized eye on a silver chain. It still looks around sometimes. Area attacks reach further and hit harder.' });
+// The Kraken's own (epic, tier 3.5).
+add({ id: 'tentacle_whip', name: 'Tentacle whip', kind: 'weapon', stack: 1, tier: 3.5, look: 'kraken', slot: 'mainHand', weapon: 'sword', dps: 6.6, interval: 1.5, range: 3.6, fixedRarity: 3, mods: { crit: 0.04, specialDmg: 0.12 }, sellValue: 110, blurb: 'One of the Kraken’s smaller arms, still twitching, on a whalebone grip. One-handed, with a long reach. Right click: Heavy Strike.' });
+add({ id: 'krakens_trident', name: 'Kraken-caller trident', kind: 'weapon', stack: 1, tier: 3.5, look: 'kraken', slot: 'mainHand', weapon: 'tideStaff', dps: 6.6, interval: 2.2, range: 24, twoHanded: true, fixedRarity: 3, mods: { magicDmg: 0.06, aoeDmg: 0.06 }, sellValue: 130, blurb: 'A coral-gold trident that hums with the sea. Fires bolts of water (not fire, not frost: they don’t mix with either). Right click: Tentacle Slap — a little tentacle bursts up under your target and slaps it.' });
+add({ id: 'tiny_kraken', name: 'Tiny kraken', kind: 'armour', stack: 1, tier: 3, look: 'kraken', slot: 'head', armourType: 'leather', armour: 3, ward: 4, fixedRarity: 3, mods: { magicDmg: 0.04, luck: 4, rareFish: 0.1 }, sellValue: 90, blurb: 'One of the Kraken’s brood, sitting on your head with its arms round your ears. It seems happy there. Lucky, too.' });
 add({ id: 'kraken_ink', name: 'Kraken ink', kind: 'material', stack: 20, tier: 3, sellValue: 6, blurb: 'Black, cold and endless. Alchemists brew it into an elixir of reach.' });
 add({ id: 'trolltooth_necklace', name: 'Trolltooth necklace', kind: 'trinket', stack: 1, slot: 'neck', fixedRarity: 4, mods: { maxHp: 10, meleeDmg: 0.06, luck: 5 }, sellValue: 60, blurb: 'Old Knut’s own. Rarely, he drops it.' });
 

@@ -221,6 +221,7 @@ export function iconFor(id: string): string {
   else if (d?.weapon === 'fireStaff') staff(g, a, '#ff7a2a');
   else if (d?.weapon === 'frostStaff') staff(g, a, '#8fd8ff');
   else if (d?.weapon === 'lifeStaff') staff(g, a, '#7fe08a');
+  else if (d?.weapon === 'tideStaff') staff(g, a, '#3aa8ff');
   else if (d?.slot === 'ring') { g.strokeStyle = id === 'mine_kings_ring' ? '#b08a3a' : '#d8dde4'; g.lineWidth = 6; g.beginPath(); g.arc(32, 38, 14, 0, Math.PI * 2); g.stroke(); const gc = GEM_COLOR[id.split('_')[0]] ?? (id === 'mine_kings_ring' ? '#c02a38' : null); if (gc) gem2(g, 32, 20, gc); }
   else if (d?.slot === 'neck') { g.strokeStyle = '#d8dde4'; g.lineWidth = 3; g.beginPath(); g.arc(32, 22, 18, 0, Math.PI); g.stroke(); const gc = GEM_COLOR[id.split('_')[0]]; if (gc) gem2(g, 32, 46, gc); else dot(g, 32, 44, 6, '#d8dde4'); }
   else if (d?.slot) armourPiece(g, d.slot, a, b);

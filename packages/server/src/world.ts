@@ -390,6 +390,8 @@ export class World {
     p.stats = computeStats(p.build, p.equip, p.talents, p.xp, p.buffs, now);
     const mount = p.state.mnt ? ITEMS[p.state.mnt]?.mount : undefined;
     if (mount) p.stats.speedCap = maxSpeed(mount.mult, p.stats.all.moveSpeed);
+    const sz = Math.round(Math.max(0, p.stats.all.size) * 100) / 100;
+    if (sz) p.state.sz = sz; else delete p.state.sz;
     if (p.stats.maxHp > before) p.hp += p.stats.maxHp - before;
     p.hp = Math.min(p.hp, p.stats.maxHp);
     this.sendHp(p);

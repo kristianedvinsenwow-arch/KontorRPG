@@ -16,7 +16,7 @@ import type { World } from './world.js';
 const GEAR_BY_TIER: Record<number, string[]> = {};
 for (const d of Object.values(ITEMS)) {
   if (!d.slot || d.fixedRarity || d.kind === 'ammo' || d.kind === 'bag' || !d.tier) continue;
-  if (d.weapon === 'fireStaff' || d.weapon === 'frostStaff' || d.weapon === 'lifeStaff') continue;
+  if (d.weapon === 'fireStaff' || d.weapon === 'frostStaff' || d.weapon === 'lifeStaff' || d.weapon === 'tideStaff') continue;
   if (d.weapon === 'warhammer' || d.weapon === 'halberd' || d.weapon === 'spear') continue; // only from plans
   (GEAR_BY_TIER[d.tier] ??= []).push(d.id);
 }
@@ -391,7 +391,13 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
       }).sort((a, b) => Math.hypot(a.x - m.x, a.z - m.z) - Math.hypot(b.x - m.x, b.z - m.z))[0];
       if (behind) w.later(now + flight(behind), () => { if (!behind.dead) strike(behind, mult * s.pierce); });
     }
-    const kind = cls === 'bow' ? 'arrow' : cls === 'fireStaff' ? 'firebolt' : cls === 'lifeStaff' ? 'heal' : 'frostbolt';
+    // Tentacle Slap: no bolt — a tentacle bursts up under the target a moment later.
+    if (cls === 'tideStaff' && sp) {
+      w.broadcastNear(p.state, { t: 'fx', kind: 'tentacle', from: p.state.id, to: m.id, x: m.x, z: m.z, r: 1.2 });
+      w.later(now + 350, () => { if (!m.dead) strike(m, mult); });
+      return;
+    }
+    const kind = cls === 'bow' ? 'arrow' : cls === 'fireStaff' ? 'firebolt' : cls === 'lifeStaff' ? 'heal' : cls === 'tideStaff' ? 'waterbolt' : 'frostbolt';
     w.broadcastNear(p.state, { t: 'fx', kind, from: p.state.id, to: m.id });
     w.later(now + flight(m), () => {
       if (m.dead) return;
