@@ -104,7 +104,7 @@ export class World {
     return {
       v: 1,
       nodes: [...this.nodes].map(([id, n]) => [id, n.left, n.total, n.until] as [string, number, number, number]),
-      mobs: [...this.mobs.values()].filter((m) => m.dead && m.respawnAt > now).map((m) => [m.id, m.respawnAt] as [string, number]),
+      mobs: [...this.mobs.values()].filter((m) => m.dead && m.respawnAt > now && Number.isFinite(m.respawnAt)).map((m) => [m.id, m.respawnAt] as [string, number]),
       ground: [...this.ground.values()].filter((g) => g.expires > now).map((g) => ({ item: g.item, x: g.x, z: g.z, expires: g.expires })),
     };
   }

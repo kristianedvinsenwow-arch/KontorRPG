@@ -920,3 +920,28 @@ test('the world is never saved over before it has been loaded from the database'
   await w.start();
   assert.equal(w.nodes.get('camp-0')?.left, 0);
 });
+
+test('bosses: slams are telegraphed (step out to dodge), they enrage, the Mine King calls his guard at half health', () => {
+  const { world, p, advance } = game(() => 0.5);
+  const king = world.mobs.get('mine-king')!;
+  const guards = [...world.mobs.values()].filter((m) => m.spawn.summonedBy === 'mine-king');
+  assert.equal(guards.length, 2);
+  assert.ok(guards.every((g) => g.dead), 'the guard sleeps');
+  const put = (x: number, z: number) => { const y = h(x, z); Object.assign(p.state, { x, y, z }); p.lastValid = { x, y, z, at: world.now() }; };
+  put(king.x + 2, king.z);
+  king.target = p.state.id; king.nextSlam = 0; king.nextAtk = world.now() + 60_000;
+  advance(100); world.step();
+  assert.ok(king.slamAt, 'winding up');
+  const hp0 = p.hp;
+  put(king.x + 12, king.z); // step out of the ring
+  advance(1400); world.step();
+  assert.equal(p.hp, hp0, 'dodged the slam');
+  p.lastHealAt = world.now();
+  damageMob(world, king, king.def.hp * 0.8, p.state.id, world.now());
+  king.target = p.state.id; put(king.x + 2, king.z);
+  advance(100); world.step();
+  assert.ok(king.enraged && king.called);
+  assert.ok(guards.every((g) => !g.dead && g.target === p.state.id), 'the guard goes for the healer');
+  damageMob(world, king, 99999, p.state.id, world.now());
+  assert.ok(guards.every((g) => g.dead && g.respawnAt === Infinity), 'and goes back to sleep with him');
+});

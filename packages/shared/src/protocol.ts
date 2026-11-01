@@ -116,7 +116,7 @@ export type ServerMsg =
   | { t: 'hp'; hp: number; max: number }
   | { t: 'buffs'; list: Buff[] }
   | { t: 'hit'; to: string; dmg: number; crit?: boolean; kind: 'phys' | 'magic' | 'burn' | 'heal' | 'block' | 'dodge'; from?: string }
-  | { t: 'fx'; kind: 'arrow' | 'firebolt' | 'frostbolt' | 'spin' | 'nova' | 'ignite' | 'slam' | 'magic' | 'guard'; from: string; to?: string }
+  | { t: 'fx'; kind: 'arrow' | 'firebolt' | 'frostbolt' | 'spin' | 'nova' | 'ignite' | 'slam' | 'slamWarn' | 'magic' | 'guard' | 'heal' | 'mend'; from: string; to?: string }
   | { t: 'fish'; state: 'bite'; difficulty: number; seconds: number }
   | { t: 'fish'; state: 'cast' | 'lost' | 'caught' | 'cancel' }
   | { t: 'dead'; by: string }

@@ -72,6 +72,17 @@ export class Fx {
     });
   }
 
+  /** A telegraph: a red disc on the ground that fills in until the hit lands. */
+  warn(at: THREE.Vector3, radius: number, dur: number): void {
+    const g = new THREE.Group();
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(radius, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff2a10, transparent: true, opacity: 0.15, depthWrite: false }));
+    const edge = new THREE.Mesh(new THREE.RingGeometry(radius - 0.12, radius, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff4a20, transparent: true, opacity: 0.9, depthWrite: false, side: THREE.DoubleSide }));
+    const fill = new THREE.Mesh(new THREE.CircleGeometry(1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff2a10, transparent: true, opacity: 0.3, depthWrite: false }));
+    g.add(disc, edge, fill);
+    g.position.copy(at).add(new THREE.Vector3(0, 0.1, 0));
+    this.add(g, dur, (k) => { fill.scale.setScalar(Math.max(0.01, k * radius)); (disc.material as THREE.MeshBasicMaterial).opacity = 0.12 + 0.12 * Math.sin(k * 20); });
+  }
+
   /** A short flash of light (ignite, hits). */
   flash(at: THREE.Vector3, color: number): void {
     const l = this.flashLight;

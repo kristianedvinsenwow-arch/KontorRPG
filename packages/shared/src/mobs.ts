@@ -34,6 +34,10 @@ export interface MobDef {
   skin?: { item: string; qty: [number, number] };
   /** Boss slam: every n seconds, hit everyone within r metres for mult × damage. */
   slam?: { every: number; r: number; mult: number };
+  /** Below this share of HP it enrages: attacks 30% faster and 20% harder. */
+  enrage?: number;
+  /** Below this share of HP it calls helpers (summoned spawns, `summonedBy` this mob), who go for the healer. */
+  adds?: number;
   scale: number;
   flying?: boolean;
 }
@@ -49,9 +53,9 @@ export const MOBS: Record<MobKind, MobDef> = {
     drops: [{ item: 'goblin_trinket', chance: 0.5, qty: [1, 2] }, { item: 'iron_arrowheads', chance: 0.15, qty: [5, 10] }, { gear: 1, chance: 0.06 }, { gear: 2, chance: 0.03 }, { item: 'spear_plans', chance: 0.012, qty: [1, 1] }], skin: { item: 'goblin_skin', qty: [1, 2] }, respawnSec: [120, 200], scale: 1.1 },
   cave_shaman: { kind: 'cave_shaman', name: 'Goblin shaman', level: 8, hp: 60, dmg: 5, interval: 2.2, range: 14, speed: 3.4, aggro: 14, armour: 3, ward: 8, magic: true, xp: 85, gold: [1, 4],
     drops: [{ item: 'quartz', chance: 0.1, qty: [1, 1] }, { gear: 2, chance: 0.05 }, { item: 'spear_plans', chance: 0.02, qty: [1, 1] }], respawnSec: [150, 240], scale: 1 },
-  troll: { kind: 'troll', name: 'Old Knut', level: 12, hp: 550, dmg: 15, interval: 2.6, range: 3.6, speed: 3.2, aggro: 12, armour: 15, ward: 5, xp: 800, gold: [15, 30],
+  troll: { kind: 'troll', name: 'Old Knut', level: 12, hp: 500, dmg: 12, interval: 2.6, range: 3.6, speed: 3.2, aggro: 12, armour: 15, ward: 5, xp: 800, gold: [15, 30],
     drops: [{ item: 'troll_tooth', chance: 1, qty: [1, 2] }, { gear: 2, chance: 0.6, legendary: 0.04 }, { item: 'trolltooth_necklace', chance: 0.03, qty: [1, 1] }, { item: 'knuts_bellyplate', chance: 0.04, qty: [1, 1] }, { item: 'warhammer_plans', chance: 0.2, qty: [1, 1] }, { item: 'jotunbane', chance: 0.015, qty: [1, 1] }, { item: 'garnet', chance: 0.25, qty: [1, 1] }],
-    respawnSec: [90 * 60, 150 * 60], boss: true, slam: { every: 10, r: 5, mult: 2 }, scale: 2.3 },
+    respawnSec: [90 * 60, 150 * 60], boss: true, slam: { every: 11, r: 5, mult: 1.8 }, enrage: 0.25, scale: 2.3 },
   // Gruben (levels 13–22)
   lynx: { kind: 'lynx', name: 'Lynx', level: 13, hp: 95, dmg: 6.5, interval: 1.5, range: 1.8, speed: 5, aggro: 9, armour: 8, ward: 6, xp: 130, gold: [0, 0],
     drops: [{ item: 'raw_wolf_meat', chance: 0.4, qty: [1, 2] }], skin: { item: 'lynx_pelt', qty: [1, 2] }, respawnSec: [90, 160], scale: 0.9 },
@@ -62,12 +66,12 @@ export const MOBS: Record<MobKind, MobDef> = {
   hill_troll: { kind: 'hill_troll', name: 'Scree troll', level: 18, hp: 320, dmg: 12.5, interval: 2.8, range: 3, speed: 3, aggro: 10, armour: 20, ward: 6, xp: 420, gold: [4, 9],
     drops: [{ item: 'silver_ore', chance: 0.5, qty: [2, 4] }, { item: 'coal', chance: 0.5, qty: [2, 5] }, { item: 'garnet', chance: 0.1, qty: [1, 1] }, { gear: 3, chance: 0.12 }, { item: 'trolliron_greaves', chance: 0.03, qty: [1, 1] }, { item: 'halberd_plans', chance: 0.05, qty: [1, 1] }],
     respawnSec: [240, 360], slam: { every: 12, r: 4, mult: 1.6 }, scale: 1.7 },
-  mine_king: { kind: 'mine_king', name: 'The Mine King', level: 22, hp: 1300, dmg: 24, interval: 2.4, range: 3.4, speed: 3.4, aggro: 14, armour: 26, ward: 14, xp: 2500, gold: [40, 80],
+  mine_king: { kind: 'mine_king', name: 'The Mine King', level: 22, hp: 1200, dmg: 19, interval: 2.4, range: 3.4, speed: 3.4, aggro: 14, armour: 26, ward: 14, xp: 2500, gold: [40, 80],
     drops: [{ item: 'kings_crown', chance: 1, qty: [1, 1] }, { gear: 3, chance: 0.6, legendary: 0.05 }, { gear: 4, chance: 0.25, legendary: 0.05 }, { item: 'mine_kings_ring', chance: 0.04, qty: [1, 1] }, { item: 'mine_kings_pauldrons', chance: 0.08, qty: [1, 1] }, { item: 'jotunbane', chance: 0.04, qty: [1, 1] }, { item: 'dovre_stallion', chance: 0.02, qty: [1, 1] }, { item: 'garnet', chance: 0.4, qty: [1, 2] }],
-    respawnSec: [120 * 60, 180 * 60], boss: true, slam: { every: 9, r: 5.5, mult: 2.2 }, scale: 1.6 },
+    respawnSec: [120 * 60, 180 * 60], boss: true, slam: { every: 10, r: 5.5, mult: 2 }, enrage: 0.25, adds: 0.5, scale: 1.6 },
 };
 
-export interface Spawn { id: string; kind: MobKind; x: number; z: number; leash: number }
+export interface Spawn { id: string; kind: MobKind; x: number; z: number; leash: number; /** Only appears when this boss calls for help. */ summonedBy?: string }
 
 export const MOB_AREAS = [
   { name: 'Wolf pack', x: 74, z: 36, kind: 'wolf' as MobKind, n: 4, r: 10 },
@@ -105,6 +109,9 @@ function spawns(): Spawn[] {
   out.push({ id: 'mine-king', kind: 'mine_king', x: pit.x, z: pit.z - 4, leash: 18 });
   out.push({ id: 'pit-draug-0', kind: 'draug', x: pit.x - 7, z: pit.z + 3, leash: 14 });
   out.push({ id: 'pit-draug-1', kind: 'draug', x: pit.x + 7, z: pit.z + 3, leash: 14 });
+  // The Mine King's honour guard: they rise when he's down to half.
+  out.push({ id: 'king-guard-0', kind: 'draug', x: pit.x - 4, z: pit.z - 8, leash: 22, summonedBy: 'mine-king' });
+  out.push({ id: 'king-guard-1', kind: 'draug', x: pit.x + 4, z: pit.z - 8, leash: 22, summonedBy: 'mine-king' });
   return out;
 }
 export const SPAWNS: Spawn[] = spawns();

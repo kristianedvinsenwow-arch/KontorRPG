@@ -340,7 +340,14 @@ net.on((msg) => {
       } else if (msg.kind === 'spin') fx.ring(from.clone().setY(from.y - 1), 3.6, 0xe8e0c8);
       else if (msg.kind === 'nova') fx.ring(from.clone().setY(from.y - 1), 6, 0x9fdcff, 0.7);
       else if (msg.kind === 'ignite') fx.flash(from, 0xff7a2a);
-      else if (msg.kind === 'slam') fx.ring(from.clone().setY(from.y - 1.5), 5, 0xb08a60, 0.6);
+      else if (msg.kind === 'slam') fx.ring(from.clone().setY(from.y - 1.5), MOBS[mobs.get(msg.from)?.k ?? 'troll']?.slam?.r ?? 5, 0xb08a60, 0.6);
+      else if (msg.kind === 'slamWarn') {
+        // A slam is coming: a red ring on the ground where it will land. Get out!
+        const k = mobs.get(msg.from)?.k, r = (k && MOBS[k].slam?.r) || 5;
+        const gp = mobs.position(msg.from);
+        if (gp) fx.warn(new THREE.Vector3(gp.x, groundAt(gp.x, gp.z), gp.z), r, 1.3);
+        hud.toast(`${k ? MOBS[k].name : 'It'} raises its arms — get clear!`, 1300, 'error');
+      }
       else if (msg.kind === 'guard') fx.ring(from.clone().setY(from.y - 1), 1.2, 0xc8d8ff, 0.5);
       break;
     }

@@ -55,6 +55,8 @@ export interface ServerPlayer {
   buffs: Buff[];
   hp: number;
   lastHurtAt: number;
+  /** When this player last healed someone (adds go for healers). */
+  lastHealAt?: number;
   /** Potion healing over time, and when the next potion can be drunk. */
   hot: { perSec: number; until: number; nextTick: number } | null;
   potionReadyAt: number;
@@ -94,6 +96,11 @@ export interface Mob {
   taunt?: { by: string; until: number };
   /** When it last looked for the closest attacker. */
   nextThreat?: number;
+  /** A slam winding up: lands at this time. */
+  slamAt?: number;
+  enraged?: boolean;
+  /** Has called its helpers this fight. */
+  called?: boolean;
 }
 
 export interface Ground extends GroundItem { expires: number }

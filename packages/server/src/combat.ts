@@ -42,6 +42,7 @@ export function createMobs(w: World): Map<string, Mob> {
       id: s.id, spawn: s, def, x: s.x, y, z: s.z, yaw: w.rand() * 6.28, hp: def.hp, dead: false, respawnAt: 0, target: null, returning: false,
       nextAtk: 0, nextSlam: 0, burn: null, slowUntil: 0, frozenUntil: 0, dmgBy: new Map(), act: undefined, actUntil: 0, wander: { x: s.x, z: s.z, at: 0 }, corpseUntil: 0, skinned: false,
     });
+    if (s.summonedBy) Object.assign(out.get(s.id)!, { dead: true, respawnAt: Infinity }); // dormant until called
   }
   return out;
 }
@@ -114,27 +115,41 @@ export function stepMobs(w: World, dt: number, now: number): void {
     }
     if (m.returning) {
       moveToward(m, m.spawn.x, m.spawn.z, m.def.speed * 1.4, dt);
-      if (home < 1.5) { m.returning = false; m.hp = m.def.hp; m.dmgBy.clear(); m.burn = null; }
+      if (home < 1.5) { m.returning = false; m.hp = m.def.hp; m.dmgBy.clear(); m.burn = null; resetBoss(w, m); }
     } else if (target) {
       const d = Math.hypot(target.state.x - m.x, target.state.z - m.z);
       const reach = m.def.range + 0.35 + mobRadius(m) * 0.5;
-      if (d > reach * 0.85) moveToward(m, target.state.x, target.state.z, speed, dt, reach * 0.8);
+      if (m.slamAt) { /* rooted while winding up */ } else if (d > reach * 0.85) moveToward(m, target.state.x, target.state.z, speed, dt, reach * 0.8);
       else m.yaw = Math.atan2(-(target.state.x - m.x), -(target.state.z - m.z));
-      if (!frozen && m.def.slam && now >= m.nextSlam && d < m.def.slam.r + 1) {
-        m.nextSlam = now + m.def.slam.every * 1000;
-        m.act = 'slam'; m.actUntil = now + 900;
-        w.broadcastNear(m, { t: 'fx', kind: 'slam', from: m.id });
-        for (const p of w.players.values()) {
-          if (!p.dead && sameRegion(m, p.state) && Math.hypot(p.state.x - m.x, p.state.z - m.z) <= m.def.slam.r) hurtPlayer(w, p, m, m.def.dmg * m.def.slam.mult, false, now);
+      // Enrage, and calling the honour guard, at low health.
+      if (m.def.enrage && !m.enraged && m.hp < m.def.hp * m.def.enrage) {
+        m.enraged = true;
+        w.broadcastNear(m, { t: 'notice', kind: 'error', text: `${m.def.name} is enraged!` });
+      }
+      if (m.def.adds && !m.called && m.hp < m.def.hp * m.def.adds) { m.called = true; callAdds(w, m, now); }
+      const fury = m.enraged ? 1.2 : 1;
+      if (m.slamAt) {
+        // Winding up a slam (the red ring on the ground): stand still, then hit everyone still inside.
+        if (now >= m.slamAt) {
+          m.slamAt = undefined;
+          w.broadcastNear(m, { t: 'fx', kind: 'slam', from: m.id });
+          for (const p of w.players.values()) {
+            if (!p.dead && sameRegion(m, p.state) && Math.hypot(p.state.x - m.x, p.state.z - m.z) <= m.def.slam!.r) hurtPlayer(w, p, m, m.def.dmg * m.def.slam!.mult * fury, false, now);
+          }
         }
+      } else if (!frozen && m.def.slam && now >= m.nextSlam && d < m.def.slam.r + 1) {
+        m.nextSlam = now + m.def.slam.every * 1000;
+        m.slamAt = now + SLAM_WARN_MS;
+        m.act = 'slam'; m.actUntil = now + SLAM_WARN_MS + 400;
+        w.broadcastNear(m, { t: 'fx', kind: 'slamWarn', from: m.id });
       } else if (!frozen && d <= reach && now >= m.nextAtk) {
-        m.nextAtk = now + m.def.interval * 1000;
+        m.nextAtk = now + m.def.interval * 1000 * (m.enraged ? 0.7 : 1);
         m.act = 'atk'; m.actUntil = now + 500;
         if (m.def.magic) {
           w.broadcastNear(m, { t: 'fx', kind: 'magic', from: m.id, to: target.state.id });
           const tgt = target;
           w.later(now + (d / PROJECTILE_SPEED) * 1000, () => { if (!m.dead && !tgt.dead) hurtPlayer(w, tgt, m, m.def.dmg, true, w.now()); });
-        } else hurtPlayer(w, target, m, m.def.dmg, false, now);
+        } else hurtPlayer(w, target, m, m.def.dmg * fury, false, now);
       }
     } else if (now >= m.wander.at) {
       // Idle: amble to a nearby point now and then.
@@ -157,8 +172,33 @@ function moveToward(m: Mob, x: number, z: number, speed: number, dt: number, sto
   if (inCaveRegion(nx, nz) ? true : groundAt(nx, nz) > -0.3) { m.x = nx; m.z = nz; }
 }
 
+const SLAM_WARN_MS = 1300;
+
+/** The boss's helpers rise next to it and go for whoever has been healing (else the weakest). */
+function callAdds(w: World, boss: Mob, now: number): void {
+  const healer = [...w.players.values()]
+    .filter((p) => !p.dead && sameRegion(boss, p.state) && Math.hypot(p.state.x - boss.x, p.state.z - boss.z) < 30)
+    .sort((a, b) => ((b.lastHealAt ?? 0) > now - 20_000 ? 1 : 0) - ((a.lastHealAt ?? 0) > now - 20_000 ? 1 : 0) || a.hp - b.hp)[0];
+  let n = 0;
+  for (const a of w.mobs.values()) {
+    if (a.spawn.summonedBy !== boss.id) continue;
+    respawnMob(a, now);
+    const ang = n++ * Math.PI + boss.yaw;
+    a.x = boss.x + Math.cos(ang) * 3; a.z = boss.z + Math.sin(ang) * 3; a.y = groundAt(a.x, a.z);
+    a.target = healer?.state.id ?? null;
+    if (healer) a.taunt = { by: healer.state.id, until: now + 12_000 };
+  }
+  if (n) w.broadcastNear(boss, { t: 'notice', kind: 'error', text: `${boss.def.name} calls his guard from the stone!` });
+}
+
+/** A boss that resets (or dies) puts its helpers back to sleep. */
+function resetBoss(w: World, m: Mob): void {
+  m.enraged = false; m.called = false; m.slamAt = undefined;
+  for (const a of w.mobs.values()) if (a.spawn.summonedBy === m.id) { a.dead = true; a.respawnAt = Infinity; a.target = null; }
+}
+
 function respawnMob(m: Mob, now: number): void {
-  Object.assign(m, { dead: false, hp: m.def.hp, x: m.spawn.x, z: m.spawn.z, y: groundAt(m.spawn.x, m.spawn.z), target: null, returning: false, burn: null, slowUntil: 0, frozenUntil: 0, nextSlam: now + 4000 });
+  Object.assign(m, { dead: false, hp: m.def.hp, x: m.spawn.x, z: m.spawn.z, y: groundAt(m.spawn.x, m.spawn.z), target: null, returning: false, burn: null, slowUntil: 0, frozenUntil: 0, nextSlam: now + 4000, enraged: false, called: false, slamAt: undefined, taunt: undefined });
   m.dmgBy.clear();
 }
 
@@ -301,7 +341,8 @@ export function damageMob(w: World, m: Mob, dmg: number, by: string, now: number
   m.hp = 0;
   m.burn = null;
   const [lo, hi] = m.def.respawnSec;
-  m.respawnAt = now + (lo + w.rand() * (hi - lo)) * 1000;
+  m.respawnAt = m.spawn.summonedBy ? Infinity : now + (lo + w.rand() * (hi - lo)) * 1000;
+  if (m.def.boss) resetBoss(w, m);
   if (m.def.skin) { m.corpseUntil = now + CORPSE_SEC * 1000; m.skinned = false; m.respawnAt = Math.max(m.respawnAt, m.corpseUntil + 2000); }
   // No parties: everyone who hurt it at all gets the full XP, quest and achievement credit.
   let top: ServerPlayer | undefined, topDmg = 0;
