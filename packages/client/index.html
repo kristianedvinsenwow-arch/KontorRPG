@@ -25,7 +25,6 @@
       <input id="chatin" name="chat" type="search" autocomplete="off" data-lpignore="true" data-1p-ignore maxlength="200" placeholder="Say something… (Enter to send, Esc to cancel)" hidden />
     </div>
     <div id="prompt" hidden></div>
-    <div id="pops"></div>
     <div id="jobbar" class="chip" hidden><span id="jobtext"></span><div class="bar"><i id="jobfill"></i></div></div>
     <div id="purse" class="chip"><span class="gold" id="goldtext">0 g</span><span id="bagtext">Bag 0/16</span></div>
     <div id="keys" class="chip">
@@ -33,6 +32,9 @@
     </div>
     <div id="fps"></div>
   </div>
+
+  <!-- Item and XP pop-ups: above everything, so they show over (or beside) an open menu. -->
+  <div id="pops"></div>
 
   <!-- Start menu = character creator. The right-hand window is drawn by the renderer (live preview). -->
   <section id="menu" class="overlay">
