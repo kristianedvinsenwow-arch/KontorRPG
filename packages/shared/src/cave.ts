@@ -3,7 +3,7 @@
  * in its own region far outside the overworld (around CAVE.x, CAVE.z). An entrance in the hills
  * teleports you there; the exit brings you back. Shape = corridors (capsules) + chambers (circles).
  */
-import { heightAt, pierDeck, GRUBEN, inGruben, FJORD, FJORD_SPOTS, inFjord } from './terrain.js';
+import { heightAt, pierDeck, GRUBEN, inGruben, FJORD, inFjord, BOAT_HOME, BOAT_FJORD } from './terrain.js';
 import { CHUNK_SIZE, WORLD_HALF } from './constants.js';
 import { houseFloor } from './houses.js';
 
@@ -100,17 +100,17 @@ export const regionAt = (x: number, z: number): Region => (inCaveRegion(x, z) ? 
  * The Gruben pass is in the eastern mountains past the wolf pack.
  */
 /** `level` is only a recommendation (shown as a warning); anyone can walk through. */
-export interface Portal { id: string; name: string; at: { x: number; z: number; r: number }; to: { x: number; z: number }; level?: number }
+/** `use`: taken with E (a rowboat) instead of by walking in. */
+export interface Portal { id: string; name: string; at: { x: number; z: number; r: number }; to: { x: number; z: number }; level?: number; use?: boolean }
 export const GRUBEN_PASS = { x: 99, z: 49.5, r: 2.6 };
-/** The coast road over the western hills to Saltfjorden. */
-export const FJORD_ROAD = { x: -96, z: 35, r: 2.6 };
-const FJ_IN = { x: FJORD.x + FJORD_SPOTS.arrival.x, z: FJORD.z + FJORD_SPOTS.arrival.z };
+/** Rowboats at the end of Bjørkvik's pier and Saltfjorden's jetty: press E to row across. */
+const step = (p: { x: number; z: number }, dx: number, dz: number) => ({ x: p.x + dx, z: p.z + dz });
 export const PORTALS: Portal[] = [
   { id: 'cave', name: 'The Old Mine', at: CAVE_ENTRANCE, to: CAVE_START },
   { id: 'cave_out', name: 'Out of the mine', at: CAVE_EXIT, to: CAVE_EXIT_OUT },
   { id: 'gruben', name: 'The pass to Gruben', at: GRUBEN_PASS, to: { x: GRUBEN.x, z: GRUBEN.z + 58 }, level: 12 },
-  { id: 'fjord', name: 'The coast road to Saltfjorden', at: FJORD_ROAD, to: { x: FJ_IN.x - 2, z: FJ_IN.z + 4 }, level: 8 },
-  { id: 'fjord_out', name: 'Back to the valley', at: { x: FJ_IN.x + 3, z: FJ_IN.z - 4, r: 2.6 }, to: { x: FJORD_ROAD.x + 4.5, z: FJORD_ROAD.z } },
+  { id: 'fjord', name: 'Rowboat to Saltfjorden', at: { ...BOAT_HOME, r: 2 }, to: step(BOAT_FJORD, 1.5, 0), use: true },
+  { id: 'fjord_out', name: 'Rowboat to Bjørkvik', at: { ...BOAT_FJORD, r: 2 }, to: BOAT_HOME, use: true },
   { id: 'gruben_out', name: 'Back to the valley', at: { x: GRUBEN.x, z: GRUBEN.z + 64, r: 2.6 }, to: { x: GRUBEN_PASS.x - 4.5, z: GRUBEN_PASS.z - 2.5 } },
 ];
 export const PORTAL_BY_ID: Map<string, Portal> = new Map(PORTALS.map((p) => [p.id, p]));

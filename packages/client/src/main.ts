@@ -408,7 +408,7 @@ function setPrompt(html: string | null) {
 }
 
 // ---------------------------------------------------------------- what you're pointing at / standing by
-type Near = { kind: 'npc'; id: string; name: string } | { kind: 'home' | 'door' | 'bed'; id: number; name: string } | { kind: 'station'; id: string; name: string } | { kind: 'loot'; id: number; name: string } | { kind: 'corpse'; id: string; name: string } | null;
+type Near = { kind: 'npc'; id: string; name: string } | { kind: 'boat'; id: string; name: string } | { kind: 'home' | 'door' | 'bed'; id: number; name: string } | { kind: 'station'; id: string; name: string } | { kind: 'loot'; id: number; name: string } | { kind: 'corpse'; id: string; name: string } | null;
 type Aim = { kind: 'mob'; m: MobState } | { kind: 'ally'; id: string } | { kind: 'vein'; v: Vein } | { kind: 'plant'; p: Plant } | { kind: 'tree'; t: Tree } | { kind: 'water'; p: THREE.Vector3 } | null;
 let near: Near = null;
 let aimed: Aim = null;
@@ -434,6 +434,7 @@ function use() {
     else openPanel('home', { home: near.id });
   }
   else if (near.kind === 'station') openPanel('craft', { station: near.id });
+  else if (near.kind === 'boat') { net.send({ t: 'travel', portal: near.id }); sound.play('splash'); }
 }
 
 const PLANT_LOOK = 8;
@@ -533,10 +534,12 @@ function interact(now: number, playing: boolean) {
       const tb = look(bed.x, bed.z, 0.6, -0.3, 0.8);
       if (tb < best) { best = tb; near = { kind: 'bed', id: h.id, name: 'bed' }; }
     }
+    // A rowboat at the end of the pier: stand at the end and press E.
+    if (!near) for (const p of PORTALS) if (p.use && regionAt(p.at.x, p.at.z) === regionAt(me.x, me.z) && Math.hypot(me.x - p.at.x, me.z - p.at.z) < p.at.r + 0.6) near = { kind: 'boat', id: p.id, name: p.name };
   }
-  // Portals (the mine, the Gruben pass): walk in.
+  // Portals (the mine, the Gruben pass): walk in. (Rowboats are taken with E.)
   if (now > travelAt) {
-    const portal = PORTALS.find((p) => regionAt(p.at.x, p.at.z) === regionAt(me!.x, me!.z) && Math.hypot(me!.x - p.at.x, me!.z - p.at.z) < p.at.r);
+    const portal = PORTALS.find((p) => !p.use && regionAt(p.at.x, p.at.z) === regionAt(me!.x, me!.z) && Math.hypot(me!.x - p.at.x, me!.z - p.at.z) < p.at.r);
     if (portal) { net.send({ t: 'travel', portal: portal.id }); travelAt = now + 3000; }
   }
 
@@ -637,7 +640,7 @@ function interact(now: number, playing: boolean) {
     const what = `<b>${type.name}</b> <span class="dim">· ${skill} ${type.level} · gives ${ITEMS[type.item]?.name ?? type.item}</span>`;
     setPrompt(block ? `<span class="bad">${block}</span>` : plantClose(aimed.p) ? `Hold <b>click</b> to pick · ${what}` : `${what} · walk closer to pick`);
   } else if (aimed?.kind === 'water') setPrompt('<b>Click</b> to cast');
-  else if (near) setPrompt(`<b>E</b> ${near.kind === 'loot' ? `Pick up ${near.name}` : near.kind === 'corpse' ? `Skin the ${near.name}${g.equip.knife ? '' : ' <span class="bad">(needs a skinning knife)</span>'}` : near.kind === 'npc' ? `Talk to ${near.name}` : near.kind === 'home' ? (near.name === 'chest' ? 'Open your chest' : `Knock on the ${near.name}`) : near.kind === 'bed' ? 'Rest (Rested: more XP for 30 min)' : near.kind === 'door' ? (myRoom() === near.id ? `${places.doorOpen(near.id) ? 'Close' : 'Open'} your door` : `Knock on ${near.name}`) : `Use the ${near.name}`}`);
+  else if (near) setPrompt(`<b>E</b> ${near.kind === 'loot' ? `Pick up ${near.name}` : near.kind === 'corpse' ? `Skin the ${near.name}${g.equip.knife ? '' : ' <span class="bad">(needs a skinning knife)</span>'}` : near.kind === 'npc' ? `Talk to ${near.name}` : near.kind === 'home' ? (near.name === 'chest' ? 'Open your chest' : `Knock on the ${near.name}`) : near.kind === 'bed' ? 'Rest (Rested: more XP for 30 min)' : near.kind === 'boat' ? `Take the ${near.name.toLowerCase()}` : near.kind === 'door' ? (myRoom() === near.id ? `${places.doorOpen(near.id) ? 'Close' : 'Open'} your door` : `Knock on ${near.name}`) : `Use the ${near.name}`}`);
   else setPrompt(null);
 
   // Purse and crafting bar.

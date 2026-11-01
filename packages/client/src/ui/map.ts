@@ -5,7 +5,7 @@
  */
 import {
   CAVE, CAVE_ENTRANCE, CAVE_ROOMS, CAVE_TUNNELS, MINING_SPOTS, MOB_AREAS, MOBS, NPCS, VILLAGE, WATER_LEVEL, WORLD_HALF,
-  FLAX_FIELDS, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, FJORD_ROAD, HOMES, VEINS, caveClearance, heightAt, inCaveRegion, regionAt, type Region,
+  FLAX_FIELDS, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, PORTAL_BY_ID, HOMES, VEINS, caveClearance, heightAt, inCaveRegion, regionAt, type Region,
 } from '@kontor/shared';
 
 export const mapInfo: { me: { x: number; z: number; yaw: number } | null; others: { x: number; z: number; name: string; color: string }[] } = { me: null, others: [] };
@@ -94,10 +94,10 @@ export function drawMap(): HTMLElement {
       mark(CAVE_ENTRANCE.x, CAVE_ENTRANCE.z, 'The Old Mine (lv 5–12)', '#b77be8', 6);
       mark(GRUBEN_PASS.x, GRUBEN_PASS.z, 'Pass to Gruben (monsters lv 13–22)', '#b77be8', 6);
       for (const f of FLAX_FIELDS) mark(f.x, f.z, '✿ Flax', '#7a9ae8', 4);
-      mark(FJORD_ROAD.x, FJORD_ROAD.z, 'Coast road to Saltfjorden (sea fishing)', '#b77be8', 6);
+      { const b = PORTAL_BY_ID.get('fjord')!.at; mark(b.x, b.z, 'Rowboat to Saltfjorden (sea fishing)', '#b77be8', 5); }
     } else if (r === 'fjord') {
       mark(FJORD.x + FJORD_SPOTS.village.x, FJORD.z + FJORD_SPOTS.village.z, 'Fishing village', '#f2a23a', 7);
-      mark(FJORD.x + FJORD_SPOTS.arrival.x, FJORD.z + FJORD_SPOTS.arrival.z, 'Road back to the valley', '#b77be8', 6);
+      { const b = PORTAL_BY_ID.get('fjord_out')!.at; mark(b.x, b.z, 'Rowboat to Bjørkvik', '#b77be8', 5); }
     } else {
       const S = GRUBEN_SPOTS;
       mark(GRUBEN.x + S.arrival.x, GRUBEN.z + S.arrival.z, 'Gruben camp', '#f2a23a', 7);

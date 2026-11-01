@@ -154,11 +154,26 @@ export const PIER = (() => {
   return { x: sx, z: sz, ux, uz, length: 17, width: 2.8, deck: 0.75 };
 })();
 
-/** Deck height if (x, z) is on the pier, else null. */
+/** Saltfjorden's jetty: from the village shore out west into the fjord. */
+export const FJORD_PIER = (() => {
+  const lz = FJORD_SPOTS.village.z - 4, z = FJORD.z + lz;
+  let x = FJORD.x + FJORD_SPOTS.village.x;
+  while (fjordHeight(x, z) > 0.45 && x > FJORD.x - 40) x -= 0.5;
+  return { x: x + 3, z, ux: -1, uz: 0, length: 11, width: 2.4, deck: 0.75 };
+})();
+/** Where the rowboats tie up: the far end of each pier, on the deck. */
+const pierEnd = (P: { x: number; z: number; ux: number; uz: number; length: number }) => ({ x: P.x + P.ux * (P.length - 0.8), z: P.z + P.uz * (P.length - 0.8) });
+export const BOAT_HOME = pierEnd(PIER);
+export const BOAT_FJORD = pierEnd(FJORD_PIER);
+
+/** Deck height if (x, z) is on a pier (Bjørkvik's or Saltfjorden's jetty), else null. */
 export function pierDeck(x: number, z: number): number | null {
-  const px = x - PIER.x, pz = z - PIER.z;
-  const along = px * PIER.ux + pz * PIER.uz, side = -px * PIER.uz + pz * PIER.ux;
-  return along >= 0 && along <= PIER.length && Math.abs(side) <= PIER.width / 2 ? PIER.deck : null;
+  for (const P of [PIER, FJORD_PIER]) {
+    const px = x - P.x, pz = z - P.z;
+    const along = px * P.ux + pz * P.uz, side = -px * P.uz + pz * P.ux;
+    if (along >= 0 && along <= P.length && Math.abs(side) <= P.width / 2) return P.deck;
+  }
+  return null;
 }
 
 /** Small deterministic random generator for placing props per chunk. */

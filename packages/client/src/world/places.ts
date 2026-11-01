@@ -5,7 +5,7 @@
  * checks the same spots.
  */
 import * as THREE from 'three';
-import { STABLE, CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, FJORD_ROAD, fjordMid, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
+import { STABLE, CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, FJORD_PIER, fjordMid, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
 import { mat, bx, mesh, canvasTex } from '../engine/procgen.js';
 import { makeCharacter, animateCharacter, type Character } from '../entities/character.js';
 import { applyGear } from '../entities/held.js';
@@ -76,9 +76,8 @@ export class Places {
     this.passGate(GRUBEN_PASS.x, GRUBEN_PASS.z, 70, 34, 'Pass to Gruben', 'Walk through · monsters level 13–22 · the Mine King');
     this.gruben();
     this.stable();
-    this.signpost(-80, 27, [['Saltfjorden (coast road)', FJORD_ROAD.x, FJORD_ROAD.z], ['Bjørkvik', VILLAGE.x, VILLAGE.z]]);
-    this.passGate(FJORD_ROAD.x, FJORD_ROAD.z, -80, 30, 'Coast road to Saltfjorden', 'Walk through · sea fishing (Fishing 8+)');
     this.fjord();
+    this.rowboat(PIER, 'fjord', 'Rowboat to Saltfjorden', 'E at the end of the pier · sea fishing (Fishing 8+)');
   }
 
   /**
@@ -508,6 +507,24 @@ export class Places {
   }
 
   /** Bjørkvik's fishing pier: plank deck on stilts down to the lake bed, a lantern at the end. */
+  /** A little rowboat tied up beside a pier's far end. */
+  private rowboat(P: typeof PIER, portal: string, name: string, sub: string): void {
+    const end = PORTAL_BY_ID.get(portal)!.at;
+    const g = new THREE.Group();
+    // Beside the end of the pier, bow pointing out along it.
+    g.position.set(end.x - P.uz * (P.width / 2 + 0.9), 0.3, end.z + P.ux * (P.width / 2 + 0.9));
+    g.rotation.y = Math.atan2(P.ux, P.uz);
+    this.group.add(g);
+    const hull = mat(0x8a5a32, 'wood', { r: 0.8 }), trim = mat(0xe8e2d4, 'wood', { r: 0.8 });
+    const shell = mesh(new THREE.SphereGeometry(1, 16, 8, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), hull, g);
+    shell.scale.set(0.62, 0.42, 1.55);
+    (shell.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
+    const rim = mesh(new THREE.TorusGeometry(1, 0.035, 6, 24), trim, g); rim.rotation.x = Math.PI / 2; rim.scale.set(0.62, 1.55, 1);
+    for (const z of [-0.5, 0.4]) bx(g, 1.1, 0.05, 0.22, M.plank, 0, -0.12, z); // thwarts
+    for (const sx of [-1, 1]) { const oar = bx(g, 0.05, 0.05, 2.2, M.wood, sx * 0.5, 0.02, 0.1, 0, sx * 0.15, 0); void oar; }
+    tag(name, sub, 'place', new THREE.Vector3(end.x, P.deck + 2.2, end.z), 30);
+  }
+
   private pier(): void {
     const P = PIER;
     const g = new THREE.Group();
@@ -645,8 +662,7 @@ export class Places {
   /** Saltfjorden: the gate back, and a fishing village — red boathouses, drying racks, a jetty. */
   private fjord(): void {
     const F = FJORD, vx = FJORD_VILLAGE.x, vz = FJORD_VILLAGE.z;
-    const back = PORTAL_BY_ID.get('fjord_out')!.at;
-    this.passGate(back.x, back.z, back.x - 3, back.z + 5, 'Back to the valley', 'Walk through to the coast road');
+    this.rowboat(FJORD_PIER, 'fjord_out', 'Rowboat to Bjørkvik', 'E at the end of the jetty');
     const red = mat(0x8a2e24, 'wood', { r: 0.9 });
     const white = mat(0xe8e2d4, 'wood', { r: 0.9 });
     const shoreX = (lz: number) => F.x + fjordMid(lz) + 20; // roughly where the east shore meets the water
@@ -667,13 +683,12 @@ export class Places {
       bx(g, 2.6, 0.1, 0.1, M.darkWood, 0, 1.95, 0);
       for (let k = 0; k < 6; k++) { const f = mesh(new THREE.ConeGeometry(0.08, 0.6, 5), mat(0xc8b890, null, { r: 0.8 }), g); f.position.set(-1 + k * 0.4, 1.6, 0); f.rotation.x = Math.PI; }
     }
-    // A small jetty out into the fjord.
-    const jz = vz - 4, jx0 = shoreX(FJORD_SPOTS.village.z - 4) + 2;
-    const jetty = this.place(jx0 - 4, jz, jx0, jz);
-    jetty.position.y = 0.6;
-    bx(jetty, 1.8, 0.15, 9, M.plank, 0, 0, 0);
-    for (const sz of [-4, 0, 4]) for (const sx of [-0.8, 0.8]) bx(jetty, 0.18, 2.4, 0.18, M.darkWood, sx, -1.1, sz);
-    this.signpost(vx - 2, vz - 10, [['Coast road (back)', F.x + FJORD_SPOTS.arrival.x, F.z + FJORD_SPOTS.arrival.z], ['Deep water ≈', F.x + fjordMid(0), F.z]]);
+    // The jetty out into the fjord (walkable: see pierDeck), where the boat ties up.
+    const P = FJORD_PIER;
+    const jetty = new THREE.Group(); jetty.position.set(P.x, 0, P.z); jetty.rotation.y = Math.atan2(P.ux, P.uz); this.group.add(jetty);
+    for (let d = 0; d < P.length; d += 0.5) bx(jetty, P.width, 0.08, 0.46, M.plank, 0, P.deck - 0.04, d + 0.25);
+    for (let d = 0.3; d <= P.length; d += 2.2) for (const sx of [-1, 1]) { const post = mesh(new THREE.CylinderGeometry(0.09, 0.1, 4, 7), M.darkWood, jetty); post.position.set(sx * (P.width / 2 - 0.1), P.deck - 2, d); }
+    this.signpost(vx - 2, vz - 10, [['Jetty · boat to Bjørkvik', P.x + P.ux * P.length, P.z], ['Deep water ≈', F.x + fjordMid(0), F.z]]);
     tag('Saltfjorden', 'Sea fishing · Fishing 8–28 · rare catches from the deeps', 'place', new THREE.Vector3(vx, heightAt(vx, vz) + 6, vz), 50);
   }
 

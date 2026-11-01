@@ -964,10 +964,10 @@ test('life staff: heal another player (and yourself); Mending Circle heals every
   assert.ok(p.hp > 3 && tank.hp > 3, 'Mending Circle');
 });
 
-test('Saltfjorden: the coast road takes you there; sea fish need Fishing 8; the deeps hold the alligator', async () => {
-  const { FJORD, FJORD_ROAD, regionAt: reg, isFishable: fishable, heightAt: hh, fjordMid } = await import('@kontor/shared');
+test('Saltfjorden: the rowboat at the end of the pier takes you there; sea fish need Fishing 8; the deeps hold the alligator', async () => {
+  const { FJORD, BOAT_HOME, regionAt: reg, isFishable: fishable, heightAt: hh, fjordMid } = await import('@kontor/shared');
   const { world, c, p, place, last, advance } = game(() => 0.00001);
-  place(FJORD_ROAD.x + 0.5, FJORD_ROAD.z);
+  place(BOAT_HOME.x, BOAT_HOME.z);
   world.handle(c, { t: 'travel', portal: 'fjord' });
   assert.equal(reg(p.state.x, p.state.z), 'fjord');
   assert.equal(p.achievements.c.fjord, 1);
@@ -983,4 +983,15 @@ test('Saltfjorden: the coast road takes you there; sea fish need Fishing 8; the 
   world.handle(c, { t: 'cast', x: cx, z: wz });
   assert.equal(p.fishing?.item, 'swordfish_blade', 'the deeps roll first (rigged dice)');
   void advance;
+});
+
+test('the rowboat brings you back, onto the end of the pier', async () => {
+  const { BOAT_HOME, BOAT_FJORD, groundAt: gnd, regionAt: reg } = await import('@kontor/shared');
+  const { world, c, p, place } = game();
+  place(BOAT_HOME.x, BOAT_HOME.z);
+  world.handle(c, { t: 'travel', portal: 'fjord' });
+  assert.ok(Math.hypot(p.state.x - BOAT_FJORD.x, p.state.z - BOAT_FJORD.z) < 3 && gnd(p.state.x, p.state.z) > 0.5, 'on the jetty');
+  world.handle(c, { t: 'travel', portal: 'fjord_out' });
+  assert.equal(reg(p.state.x, p.state.z), 'valley');
+  assert.ok(Math.hypot(p.state.x - BOAT_HOME.x, p.state.z - BOAT_HOME.z) < 1);
 });

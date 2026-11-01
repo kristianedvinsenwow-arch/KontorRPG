@@ -5,7 +5,7 @@
  */
 import { CHUNK_SIZE, SPIKE_CHUNKS, WATER_LEVEL } from './constants.js';
 import { heightAt, mulberry32, VILLAGE, LAKE, PIER, GRUBEN, GRUBEN_SPOTS, inGruben, FJORD, FJORD_SPOTS, inFjord } from './terrain.js';
-import { CAVE, CAVE_ENTRANCE, CHUNK_RANGES, GRUBEN_PASS, FJORD_ROAD, caveClearance, caveFloor, caveRoomCentre, inBounds } from './cave.js';
+import { CAVE, CAVE_ENTRANCE, CHUNK_RANGES, GRUBEN_PASS, caveClearance, caveFloor, caveRoomCentre, inBounds } from './cave.js';
 import { ARMOUR_PIECES, CLOTHS, ITEMS, JEWELS } from './items.js';
 import { HOUSES, houseAt, toWorld, type HouseFrame } from './houses.js';
 import type { SkillId } from './skills.js';
@@ -60,10 +60,8 @@ export const PATHS: [number, number][][] = [
   [[-40, 26], [-44, 8], [-50, -20], [-58, -48]],
   // Into Ulvedalen.
   [[-46, -4], [-58, -9], [-70, -13]],
-  // Along the lake's north shore to the coast road.
-  [[-40, 26], [-56, 29], [-76, 31], [-92, 34]],
-  // Saltfjorden: from the road down the east shore to the village.
-  [[FJ.x + 44, FJ.z - 62], [FJ.x + 40, FJ.z - 40], [FJ.x + 37, FJ.z - 16], [FJ.x + 34, FJ.z + 4]],
+  // Saltfjorden: up from the village along the east shore.
+  [[FJ.x + 34, FJ.z + 4], [FJ.x + 37, FJ.z - 16], [FJ.x + 40, FJ.z - 40], [FJ.x + 44, FJ.z - 62]],
   // Over the wolf meadows to the Gruben pass.
   [[66, 33], [84, 42], [96, 48]],
   // Gruben: from the arrival camp up the valley to the miners' village and the pit.
@@ -93,7 +91,7 @@ export function keepClear(x: number, z: number): boolean {
     const lx = x - FJ.x, lz = z - FJ.z, sp = FJORD_SPOTS;
     return Math.hypot(lx - sp.arrival.x, lz - sp.arrival.z) < sp.arrival.r + 5 || Math.hypot(lx - sp.village.x, lz - sp.village.z) < sp.village.r + 5;
   }
-  if (Math.hypot(x - GRUBEN_PASS.x, z - GRUBEN_PASS.z) < 7 || Math.hypot(x - FJORD_ROAD.x, z - FJORD_ROAD.z) < 7) return true;
+  if (Math.hypot(x - GRUBEN_PASS.x, z - GRUBEN_PASS.z) < 7) return true;
   if (Math.hypot(x, z) < 18 || Math.hypot(x - VILLAGE.x, z - VILLAGE.z) < VILLAGE.r + 7 || Math.hypot(x - CAVE_ENTRANCE.x, z - CAVE_ENTRANCE.z) < 8) return true;
   // The pier and a strip of shore around it.
   const px = x - PIER.x, pz = z - PIER.z, along = px * PIER.ux + pz * PIER.uz, side = -px * PIER.uz + pz * PIER.ux;
