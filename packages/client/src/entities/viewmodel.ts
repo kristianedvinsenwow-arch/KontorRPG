@@ -22,6 +22,10 @@ export interface Viewmodel {
   swing(): void;
   /** Show this item in hand (tool or weapon id), or nothing. */
   setHeld(id: string | undefined): void;
+  /** A shield on the left arm (item id), or none. */
+  setShield(id: string | undefined): void;
+  /** Raise the shield (Parry / Shield Bash). */
+  guard(): void;
   update(dt: number, speed: number, lookDx: number, lookDy: number): void;
 }
 
@@ -119,6 +123,29 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
   limb(drawHand, v3(0.02, -0.01, 0.04), v3(0.14, -0.2, 0.36), 0.03, 0.045, skin, 10);
   limb(drawHand, v3(0.08, -0.1, 0.19), v3(0.2, -0.32, 0.56), 0.05, 0.06, sleeve, 12);
   let bowTool: THREE.Group | null = null;
+
+  // ---- Shield: a kite shield on the left forearm, at the lower left of the view.
+  const shieldRig = new THREE.Group();
+  root.add(shieldRig);
+  shieldRig.visible = false;
+  const shieldMat = new THREE.MeshStandardMaterial({ color: 0x8a8a88, roughness: 0.5, metalness: 0.6, side: THREE.DoubleSide });
+  const rimMat = new THREE.MeshStandardMaterial({ color: 0x5a4a38, roughness: 0.8 });
+  {
+    const kite = new THREE.Shape();
+    kite.moveTo(0, 0.2); kite.quadraticCurveTo(0.14, 0.19, 0.15, 0.1); kite.quadraticCurveTo(0.12, -0.1, 0, -0.26); kite.quadraticCurveTo(-0.12, -0.1, -0.15, 0.1); kite.quadraticCurveTo(-0.14, 0.19, 0, 0.2);
+    const face = mesh(new THREE.ExtrudeGeometry(kite, { depth: 0.02, bevelEnabled: true, bevelThickness: 0.008, bevelSize: 0.01, bevelSegments: 2 }), shieldMat, shieldRig, false);
+    face.position.z = -0.01;
+    // The side you see: wooden planks with a leather strap.
+    const back = mesh(new THREE.ShapeGeometry(kite), mat(0x7a5a3a, 'wood', { r: 0.8 }), shieldRig, false);
+    back.position.z = 0.0205; back.scale.setScalar(0.93);
+    const boss = ball(shieldRig, v3(0, 0.03, -0.02), 0.035, shieldMat, 10); boss.scale.z = 0.6;
+    const band = mesh(new THREE.BoxGeometry(0.3, 0.025, 0.012), rimMat, shieldRig, false); band.position.set(0, 0.03, -0.012);
+    // The arm behind it.
+    limb(shieldRig, v3(0.02, -0.02, 0.05), v3(0.12, -0.2, 0.42), 0.04, 0.055, sleeve, 10);
+  }
+  shieldRig.scale.setScalar(0.7);
+  const shieldRest = new THREE.Vector3(-0.4, -0.3, -0.52);
+  let shieldUp = 0, guardT = 0;
   root.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = false; o.receiveShadow = false; } });
 
   const rest = new THREE.Vector3(0.37, -0.39, -0.24);
@@ -131,6 +158,12 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
   return {
     root,
     swing() { if (!active) { active = true; swing = 0; } },
+    setShield(id) {
+      const has = !!id;
+      shieldRig.visible = has;
+      if (id) { const look = ITEMS[id]?.look ?? 'iron'; shieldMat.color.setHex(({ stone: 0x8d8a84, iron: 0x7e8288, steel: 0xb4bac2, silversteel: 0xcfdce8 } as Record<string, number>)[look] ?? 0x8a8a88); }
+    },
+    guard() { guardT = 1; },
     setHeld(id) {
       if (id === heldId) return;
       heldId = id;
@@ -179,6 +212,18 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
       if (active) {
         swing += dt / SWING_SEC;
         if (swing >= 1) { swing = 0; active = false; }
+      }
+      // Shield: bobs with you, and swings up and across to cover you on a guard.
+      if (shieldRig.visible) {
+        guardT = Math.max(0, guardT - dt / 0.9);
+        const want = guardT > 0 ? 1 : 0;
+        shieldUp += (want - shieldUp) * Math.min(1, dt * 12);
+        shieldRig.position.set(
+          shieldRest.x + shieldUp * 0.16 + Math.sin(ph + 1) * 0.01 * bob + sway.x,
+          shieldRest.y + shieldUp * 0.18 + Math.abs(Math.cos(ph)) * 0.012 * bob + sway.y,
+          shieldRest.z + shieldUp * 0.12,
+        );
+        shieldRig.rotation.set(0.15 - shieldUp * 0.1, 0.5 - shieldUp * 0.45, 0.15 - shieldUp * 0.1);
       }
       if (bow) {
         // Draw (raise a touch, pull the string to the cheek), release (snap + small kick), recover.

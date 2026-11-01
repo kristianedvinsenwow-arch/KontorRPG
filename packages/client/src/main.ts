@@ -206,6 +206,9 @@ uiStore.subscribe((u) => {
 gameStore.subscribe((g) => {
   recomputeStats();
   viewmodel.setHeld(g.equip[g.held]?.id);
+  // The shield shows in first person with a one-handed weapon out.
+  const off = g.equip.offHand, mh = g.equip.mainHand;
+  viewmodel.setShield(g.held === 'mainHand' && off && ITEMS[off.id]?.armourType === 'metal' && !(mh && ITEMS[mh.id]?.twoHanded) ? off.id : undefined);
   preview.setGear(gearFromEquip(g.equip, g.held));
 });
 
@@ -463,6 +466,7 @@ function special() {
     for (const m of mobs.all()) { if (m.st & 8) continue; const d = Math.hypot(m.x - me.x, m.z - me.z); if (d < bd) { bd = d; target = m; } }
   }
   if (sp.kind === 'guard' || sp.kind === 'mend') {
+    if (sp.kind === 'guard') viewmodel.guard();
     // Raise the shield: no target needed.
     net.send({ t: 'attack', target: target?.id ?? 'none', special: true });
     viewmodel.swing();
@@ -471,6 +475,7 @@ function special() {
   }
   if (!target) return hud.toast(`${sp.name}: aim at an enemy.`, 1400, 'error');
   net.send({ t: 'attack', target: target.id, special: true });
+  if (sp.guard) viewmodel.guard();
   viewmodel.swing();
   swingUntil = performance.now() + SWING_SEC * 1000;
   if (sp.kind === 'spin') spinT = 0.45;
