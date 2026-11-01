@@ -16,3 +16,4 @@ export * from './player.js';
 export * from './houses.js';
 export * from './sky.js';
 export * from './achievements.js';
+export * from './zones.js';

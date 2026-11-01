@@ -5,7 +5,7 @@
  */
 import {
   CAVE, CAVE_ENTRANCE, CAVE_ROOMS, CAVE_TUNNELS, MINING_SPOTS, MOB_AREAS, MOBS, NPCS, VILLAGE, WATER_LEVEL, WORLD_HALF,
-  FLAX_FIELDS, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, PORTAL_BY_ID, HOMES, VEINS, caveClearance, heightAt, inCaveRegion, regionAt, type Region,
+  ZONES, ZONE_LINKS, type ZonePlan, FLAX_FIELDS, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, PORTAL_BY_ID, HOMES, VEINS, caveClearance, heightAt, inCaveRegion, regionAt, type Region,
 } from '@kontor/shared';
 
 export const mapInfo: { me: { x: number; z: number; yaw: number } | null; others: { x: number; z: number; name: string; color: string }[] } = { me: null, others: [] };
@@ -64,14 +64,91 @@ function paintCave(): HTMLCanvasElement {
   return c;
 }
 
-export function drawMap(): HTMLElement {
+/** What the map shows: your zone (or one you clicked), or the whole world. Reset each time it opens. */
+const view: { world: boolean; zone: Region | null } = { world: false, zone: null };
+export function resetMapView(): void { view.world = false; view.zone = null; }
+const hereRegion = (): Region => (mapInfo.me ? regionAt(mapInfo.me.x, mapInfo.me.z) : 'valley');
+
+/** The map panel: right click zooms out to the world; click a zone there to zoom back in. */
+export function drawMap(rerender: () => void): HTMLElement {
+  const el = view.world ? drawWorld(rerender) : drawZone(view.zone ?? hereRegion());
+  el.addEventListener('contextmenu', (e) => { e.preventDefault(); view.world = !view.world; rerender(); });
+  const hint = document.createElement('p');
+  hint.className = 'note';
+  hint.textContent = view.world ? 'Click a zone to look at it · right click to go back' : 'Right click to zoom out to the whole world';
+  el.append(hint);
+  return el;
+}
+
+/** Overview of every zone (built and planned), laid out as in the world plan, with the ways between them. */
+function drawWorld(rerender: () => void): HTMLElement {
   const wrap = document.createElement('div');
   wrap.className = 'mapwrap';
   const c = document.createElement('canvas');
   c.width = c.height = SIZE;
   c.className = 'map';
   const g = c.getContext('2d')!;
-  const region: Region = mapInfo.me ? regionAt(mapInfo.me.x, mapInfo.me.z) : 'valley';
+  g.fillStyle = '#1a2026'; g.fillRect(0, 0, SIZE, SIZE);
+  const pad = 14, cw = (SIZE - pad * 2) / 3, rh = [150, 190, 170], ry = [pad, pad + rh[0], pad + rh[0] + rh[1]];
+  const rect = (z: ZonePlan) => ({ x: pad + z.col * cw + 4, y: ry[z.row] + 4, w: z.w * cw - 8, h: rh[z.row] - 8 });
+  const here = hereRegion();
+  const outdoorHere = here === 'cave' ? 'valley' : here;
+  for (const z of ZONES) {
+    const r = rect(z), built = !!z.region;
+    if (built) {
+      const reg = z.region as Outdoor;
+      if (!painted.has(reg)) painted.set(reg, paintTerrain(reg));
+      g.save(); g.beginPath(); g.roundRect(r.x, r.y, r.w, r.h, 8); g.clip();
+      const img = painted.get(reg)!, side = Math.max(r.w, r.h);
+      g.drawImage(img, r.x + (r.w - side) / 2, r.y + (r.h - side) / 2, side, side);
+      g.fillStyle = 'rgba(0,0,0,.25)'; g.fillRect(r.x, r.y, r.w, r.h);
+      g.restore();
+    } else {
+      g.fillStyle = '#262c32'; g.beginPath(); g.roundRect(r.x, r.y, r.w, r.h, 8); g.fill();
+    }
+    g.strokeStyle = z.region === outdoorHere ? '#f2a23a' : built ? 'rgba(236,231,218,.6)' : 'rgba(236,231,218,.18)';
+    g.lineWidth = z.region === outdoorHere ? 3 : 1.5; g.setLineDash(built ? [] : [6, 5]);
+    g.beginPath(); g.roundRect(r.x, r.y, r.w, r.h, 8); g.stroke(); g.setLineDash([]);
+    g.textAlign = 'center';
+    g.fillStyle = built ? '#f2a23a' : '#6a7078'; g.font = '800 28px "Saira Condensed", sans-serif';
+    g.fillText(String(z.tier), r.x + r.w / 2, r.y + r.h / 2 - 6);
+    label(g, z.name, r.x + r.w / 2, r.y + r.h / 2 + 18, built ? '#fff' : '#8a9098');
+    g.font = '400 11px "IBM Plex Mono", monospace'; g.fillStyle = built ? '#d8d4c8' : '#6a7078';
+    z.blurb.split(' · ').forEach((line, i) => { g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.7)'; g.strokeText(line, r.x + r.w / 2, r.y + r.h / 2 + 36 + i * 14); g.fillText(line, r.x + r.w / 2, r.y + r.h / 2 + 36 + i * 14); });
+    if (z.region === outdoorHere) label(g, '● you are here', r.x + r.w / 2, r.y + 18, '#f2a23a');
+  }
+  // The ways between zones: a short arrow across the shared edge.
+  for (const [a, b] of ZONE_LINKS) {
+    const A = rect(ZONES.find((z) => z.id === a)!), B = rect(ZONES.find((z) => z.id === b)!);
+    const ax = A.x + A.w / 2, ay = A.y + A.h / 2, bx = B.x + B.w / 2, by = B.y + B.h / 2;
+    // Midpoint of the shared edge, nudged towards the overlap of the two boxes.
+    const ox = Math.max(A.x, B.x) + (Math.min(A.x + A.w, B.x + B.w) - Math.max(A.x, B.x)) / 2;
+    const oy = Math.max(A.y, B.y) + (Math.min(A.y + A.h, B.y + B.h) - Math.max(A.y, B.y)) / 2;
+    const horiz = Math.abs(bx - ax) > Math.abs(by - ay) && Math.min(A.y + A.h, B.y + B.h) > Math.max(A.y, B.y);
+    const mx = horiz ? (ax < bx ? A.x + A.w + 4 : A.x - 4) : ox, my = horiz ? oy : (ay < by ? A.y + A.h + 4 : A.y - 4);
+    const dx = horiz ? Math.sign(bx - ax) : 0, dy = horiz ? 0 : Math.sign(by - ay);
+    g.strokeStyle = '#f2a23a'; g.fillStyle = '#f2a23a'; g.lineWidth = 3;
+    g.beginPath(); g.moveTo(mx - dx * 12, my - dy * 12); g.lineTo(mx + dx * 8, my + dy * 8); g.stroke();
+    g.beginPath(); g.moveTo(mx + dx * 14, my + dy * 14); g.lineTo(mx + dx * 4 - dy * 7, my + dy * 4 + dx * 7); g.lineTo(mx + dx * 4 + dy * 7, my + dy * 4 - dx * 7); g.closePath(); g.fill();
+  }
+  c.addEventListener('click', (e) => {
+    const b = c.getBoundingClientRect(), x = ((e.clientX - b.left) / b.width) * SIZE, y = ((e.clientY - b.top) / b.height) * SIZE;
+    const z = ZONES.find((zz) => { const r = rect(zz); return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; });
+    if (!z?.region) return; // planned zones can't be opened yet
+    view.world = false; view.zone = z.region; rerender();
+  });
+  c.style.cursor = 'pointer';
+  wrap.append(c);
+  return wrap;
+}
+
+function drawZone(region: Region): HTMLElement {
+  const wrap = document.createElement('div');
+  wrap.className = 'mapwrap';
+  const c = document.createElement('canvas');
+  c.width = c.height = SIZE;
+  c.className = 'map';
+  const g = c.getContext('2d')!;
   const under = region === 'cave';
   let toPx: (x: number, z: number) => [number, number];
   if (under) {
@@ -114,7 +191,7 @@ export function drawMap(): HTMLElement {
     g.fillStyle = o.color; g.beginPath(); g.arc(px, py, 4, 0, Math.PI * 2); g.fill();
     label(g, o.name, px, py - 8, o.color);
   }
-  if (mapInfo.me) {
+  if (mapInfo.me && regionAt(mapInfo.me.x, mapInfo.me.z) === region) {
     const [px, py] = toPx(mapInfo.me.x, mapInfo.me.z);
     g.save(); g.translate(px, py); g.rotate(-mapInfo.me.yaw);
     g.fillStyle = '#fff'; g.strokeStyle = '#000'; g.lineWidth = 2;
@@ -177,6 +254,7 @@ function label(g: CanvasRenderingContext2D, text: string, x: number, y: number, 
 }
 
 export function mapTitle(): string {
-  const r = mapInfo.me ? regionAt(mapInfo.me.x, mapInfo.me.z) : 'valley';
+  if (view.world) return 'The world — zones by the order you reach them';
+  const r = view.zone ?? hereRegion();
   return r === 'cave' ? 'The Old Mine' : r === 'gruben' ? 'Gruben — the old mine valley' : r === 'fjord' ? 'Saltfjorden — the fishing fjord' : 'Mofjellet and Bjørkvik';
 }

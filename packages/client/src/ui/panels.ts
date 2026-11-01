@@ -11,7 +11,7 @@ import {
 import { gameStore, settingsStore, uiStore, type GameState } from '../state/store.js';
 import { iconFor, rarityColor } from './icons.js';
 import { attachTip, hideTip, itemTip } from './tooltip.js';
-import { drawMap, mapTitle } from './map.js';
+import { drawMap, mapTitle, resetMapView } from './map.js';
 
 const $ = (id: string) => document.getElementById(id)!;
 export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] {
@@ -576,7 +576,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     else if (u.panel === 'home') card.replaceChildren(...homePanel(g, u.home));
     else if (u.panel === 'talents') card.replaceChildren(...talents(g));
     else if (u.panel === 'achievements') card.replaceChildren(...achievements(g));
-    else if (u.panel === 'map') { const c = drawMap(); card.replaceChildren(header('Map', mapTitle(), 'M'), c); }
+    else if (u.panel === 'map') { const c = drawMap(render); card.replaceChildren(header('Map', mapTitle(), 'M'), c); }
     hideTip();
   }
 
@@ -585,6 +585,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     if (u.panel !== lastPanel) {
       const was = lastPanel;
       lastPanel = u.panel;
+      if (u.panel === 'map') resetMapView(); // opens on your own zone
       if (['skills', 'craft', 'npc', 'home', 'talents', 'map', 'achievements', 'character'].includes(was) && u.panel === 'none') onClose();
     }
     render();

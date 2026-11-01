@@ -159,7 +159,7 @@ export const FJORD_PIER = (() => {
   const lz = FJORD_SPOTS.village.z - 4, z = FJORD.z + lz;
   let x = FJORD.x + FJORD_SPOTS.village.x;
   while (fjordHeight(x, z) > 0.45 && x > FJORD.x - 40) x -= 0.5;
-  return { x: x + 3, z, ux: -1, uz: 0, length: 11, width: 2.4, deck: 0.75 };
+  return { x: x + 1.5, z, ux: -1, uz: 0, length: 11, width: 2.4, deck: 0.75 };
 })();
 /** Where the rowboats tie up: the far end of each pier, on the deck. */
 const pierEnd = (P: { x: number; z: number; ux: number; uz: number; length: number }) => ({ x: P.x + P.ux * (P.length - 0.8), z: P.z + P.uz * (P.length - 0.8) });

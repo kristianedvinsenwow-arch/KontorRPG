@@ -15,6 +15,8 @@ import { rockGeo } from './props.js';
 import type { Collider } from './props.js';
 
 const GRUBEN_CAMP = { x: GRUBEN.x + GRUBEN_SPOTS.arrival.x, z: GRUBEN.z + GRUBEN_SPOTS.arrival.z };
+/** Metres of railing left off the pier's end, on the boat's side. */
+const BOAT_GAP = 4.6;
 const FJORD_VILLAGE = { x: FJORD.x + FJORD_SPOTS.village.x, z: FJORD.z + FJORD_SPOTS.village.z };
 
 const M = {
@@ -77,7 +79,7 @@ export class Places {
     this.gruben();
     this.stable();
     this.fjord();
-    this.rowboat(PIER, 'fjord', 'Rowboat to Saltfjorden', 'E at the end of the pier · sea fishing (Fishing 8+)');
+    this.rowboat(PIER, 'fjord', null, null); // labelled by the pier's own tag
   }
 
   /**
@@ -508,7 +510,7 @@ export class Places {
 
   /** Bjørkvik's fishing pier: plank deck on stilts down to the lake bed, a lantern at the end. */
   /** A little rowboat tied up beside a pier's far end. */
-  private rowboat(P: typeof PIER, portal: string, name: string, sub: string): void {
+  private rowboat(P: typeof PIER, portal: string, name: string | null, sub: string | null): void {
     const end = PORTAL_BY_ID.get(portal)!.at;
     const g = new THREE.Group();
     // Beside the end of the pier, bow pointing out along it.
@@ -522,7 +524,7 @@ export class Places {
     const rim = mesh(new THREE.TorusGeometry(1, 0.035, 6, 24), trim, g); rim.rotation.x = Math.PI / 2; rim.scale.set(0.62, 1.55, 1);
     for (const z of [-0.5, 0.4]) bx(g, 1.1, 0.05, 0.22, M.plank, 0, -0.12, z); // thwarts
     for (const sx of [-1, 1]) { const oar = bx(g, 0.05, 0.05, 2.2, M.wood, sx * 0.5, 0.02, 0.1, 0, sx * 0.15, 0); void oar; }
-    tag(name, sub, 'place', new THREE.Vector3(end.x, P.deck + 2.2, end.z), 30);
+    if (name) tag(name, sub, 'place', new THREE.Vector3(end.x, P.deck + 2.2, end.z), 30);
   }
 
   private pier(): void {
@@ -540,15 +542,17 @@ export class Places {
       const len = P.deck - bottom;
       const post = mesh(new THREE.CylinderGeometry(0.09, 0.1, len, 7), M.darkWood, g);
       post.position.set(sx * (P.width / 2 - 0.1), bottom + len / 2, d);
-      // Railing posts along the outer two thirds.
-      if (d > P.length * 0.35) { bx(g, 0.07, 0.9, 0.07, M.darkWood, sx * (P.width / 2 - 0.1), P.deck + 0.45, d); }
+      // Railing posts along the outer two thirds — except by the rowboat (the −X side at the end), so you can step in.
+      if (d > P.length * 0.35 && !(sx < 0 && d > P.length - BOAT_GAP)) { bx(g, 0.07, 0.9, 0.07, M.darkWood, sx * (P.width / 2 - 0.1), P.deck + 0.45, d); }
     }
-    for (const sx of [-1, 1]) bx(g, 0.06, 0.06, P.length * 0.65, M.wood, sx * (P.width / 2 - 0.1), P.deck + 0.85, P.length * 0.675);
+    bx(g, 0.06, 0.06, P.length * 0.65, M.wood, P.width / 2 - 0.1, P.deck + 0.85, P.length * 0.675);
+    const railEnd = P.length - BOAT_GAP, railStart = P.length * 0.35;
+    bx(g, 0.06, 0.06, railEnd - railStart, M.wood, -(P.width / 2 - 0.1), P.deck + 0.85, (railStart + railEnd) / 2);
     const lampPost = bx(g, 0.1, 2, 0.1, M.darkWood, P.width / 2 - 0.1, P.deck + 1, P.length - 0.2); void lampPost;
     const lamp = new THREE.Object3D(); lamp.position.set(P.width / 2 - 0.3, P.deck + 2, P.length - 0.2); g.add(lamp);
     this.fires.push({ light: lamp, mats: [], base: 3, color: 0xffb060, range: 9 });
     const end = new THREE.Vector3(P.x + P.ux * (P.length - 1), P.deck + 2.4, P.z + P.uz * (P.length - 1));
-    tag('Fishing pier', 'Cast off the end', 'place', end, 30);
+    tag('Fishing pier', 'Cast off the end · E at the end: rowboat to Saltfjorden', 'place', end, 30);
   }
 
   /** A split-rail fence around Bjørkvik's east side, open towards the paths and the lake. */
@@ -667,9 +671,16 @@ export class Places {
     const white = mat(0xe8e2d4, 'wood', { r: 0.9 });
     const shoreX = (lz: number) => F.x + fjordMid(lz) + 20; // roughly where the east shore meets the water
     // Three boathouses (naust) at the waterline, gable to the water.
-    for (let i = 0; i < 3; i++) {
-      const lz = FJORD_SPOTS.village.z - 12 + i * 8, x = shoreX(lz) + 6, z = F.z + lz;
-      const g = this.place(x, z, x - 10, z, [4, 5.5]);
+    // Spread along the shore, clear of the jetty, each on a low timber footing (not a stone block).
+    for (const lz of [FJORD_SPOTS.village.z - 14, FJORD_SPOTS.village.z + 9, FJORD_SPOTS.village.z + 17]) {
+      const x = shoreX(lz) + 5, z = F.z + lz;
+      const g = this.place(x, z, x - 10, z);
+      let lo = Infinity, hi = -Infinity;
+      for (const dx of [-2.75, 0, 2.75]) for (const dz of [-2, 2]) { const h0 = heightAt(x + dx, z + dz); lo = Math.min(lo, h0); hi = Math.max(hi, h0); }
+      // Dug into the slope at the back, on short stilts at the front.
+      const y = lo + (hi - lo) * 0.55; g.position.y = y;
+      for (const dx of [-2.6, 0, 2.6]) for (const dz of [-1.9, 1.9]) bx(g, 0.22, y - lo + 0.4, 0.22, M.darkWood, dz, -(y - lo + 0.4) / 2 + 0.05, dx);
+      bx(g, 4.2, 0.12, 5.7, M.plank, 0, 0.02, 0);
       bx(g, 4, 2.4, 5.5, red, 0, 1.2, 0);
       for (const sx of [-1, 1]) bx(g, 2.6, 0.12, 5.9, M.roof, sx * 1.05, 2.9, 0, 0, 0, sx * -0.68);
       bx(g, 2, 1.8, 0.06, white, 0, 0.95, -2.78); // doors to the water

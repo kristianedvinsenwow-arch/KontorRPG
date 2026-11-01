@@ -629,6 +629,7 @@ function interact(now: number, playing: boolean) {
 
   // Prompt under the crosshair.
   if (!playing || fishing.active) setPrompt(null);
+  else if (near?.kind === 'boat') setPrompt(`<b>E</b> Travel — ${near.name}`);
   else if (castAt) setPrompt('Waiting for a bite… (walk away to stop)');
   else if (aimed?.kind === 'ally') setPrompt(`<b>Click</b> heal · <b>Right click</b> Mending Circle`);
   else if (aimed?.kind === 'mob') setPrompt(`<b>Click</b> attack · <b>Right click</b> ${specialFor(main, gameStore.get().equip.offHand).name}`);
@@ -640,7 +641,7 @@ function interact(now: number, playing: boolean) {
     const what = `<b>${type.name}</b> <span class="dim">· ${skill} ${type.level} · gives ${ITEMS[type.item]?.name ?? type.item}</span>`;
     setPrompt(block ? `<span class="bad">${block}</span>` : plantClose(aimed.p) ? `Hold <b>click</b> to pick · ${what}` : `${what} · walk closer to pick`);
   } else if (aimed?.kind === 'water') setPrompt('<b>Click</b> to cast');
-  else if (near) setPrompt(`<b>E</b> ${near.kind === 'loot' ? `Pick up ${near.name}` : near.kind === 'corpse' ? `Skin the ${near.name}${g.equip.knife ? '' : ' <span class="bad">(needs a skinning knife)</span>'}` : near.kind === 'npc' ? `Talk to ${near.name}` : near.kind === 'home' ? (near.name === 'chest' ? 'Open your chest' : `Knock on the ${near.name}`) : near.kind === 'bed' ? 'Rest (Rested: more XP for 30 min)' : near.kind === 'boat' ? `Take the ${near.name.toLowerCase()}` : near.kind === 'door' ? (myRoom() === near.id ? `${places.doorOpen(near.id) ? 'Close' : 'Open'} your door` : `Knock on ${near.name}`) : `Use the ${near.name}`}`);
+  else if (near) setPrompt(`<b>E</b> ${near.kind === 'loot' ? `Pick up ${near.name}` : near.kind === 'corpse' ? `Skin the ${near.name}${g.equip.knife ? '' : ' <span class="bad">(needs a skinning knife)</span>'}` : near.kind === 'npc' ? `Talk to ${near.name}` : near.kind === 'home' ? (near.name === 'chest' ? 'Open your chest' : `Knock on the ${near.name}`) : near.kind === 'bed' ? 'Rest (Rested: more XP for 30 min)' : near.kind === 'door' ? (myRoom() === near.id ? `${places.doorOpen(near.id) ? 'Close' : 'Open'} your door` : `Knock on ${near.name}`) : `Use the ${near.name}`}`);
   else setPrompt(null);
 
   // Purse and crafting bar.
