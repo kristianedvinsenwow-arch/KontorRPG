@@ -26,6 +26,8 @@ export interface Viewmodel {
 }
 
 const HAFT_R = 0.022;
+/** Bow in first person: turned so its curve shows and the arrow points in towards the crosshair, and canted. */
+const BOW_YAW = 0.2, BOW_ROLL = -0.25;
 /** Sideways chop: how far the axe tips over (drawn back to the right, swept across to the left). */
 const CHOP_TILT = 1, CHOP_YAW = 0; // pickaxe haft radius before scaling
 
@@ -95,10 +97,33 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
   cuffRing.position.copy(cuffAt);
   cuffRing.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), wrist.clone().sub(cuffAt).normalize());
 
+  // ---- Bow rig: its own arms. The left hand holds the bow out in front, right of centre and canted;
+  // the right hand sits on the string at the arrow's nock and pulls back towards your cheek.
+  const bowRig = new THREE.Group();
+  root.add(bowRig);
+  bowRig.visible = false;
+  const bowHolder = new THREE.Group(); // origin = the bow's grip; local Y runs along the bow
+  bowRig.add(bowHolder);
+  const BOW_S = 0.5;
+  const leftHand = makeGrip(0.024 * BOW_S, skin, knuckle);
+  leftHand.rotation.y = Math.PI; // palm towards you, knuckles to the target
+  bowHolder.add(leftHand);
+  // Left forearm: from the wrist back towards you and down-left, out of the bottom of the screen.
+  limb(bowHolder, v3(0.0, -0.045, 0.02), v3(-0.3, -0.3, 0.4), 0.034, 0.05, skin, 10);
+  limb(bowHolder, v3(-0.15, -0.17, 0.2), v3(-0.42, -0.42, 0.58), 0.054, 0.066, sleeve, 12);
+  // Right (drawing) hand: a loose fist with two fingers on the string, and its forearm going back.
+  const drawHand = new THREE.Group();
+  bowHolder.add(drawHand);
+  const fist = ball(drawHand, v3(0.012, -0.005, 0.02), 0.03, skin, 12); fist.scale.set(0.9, 1.25, 1.1);
+  for (let i = 0; i < 2; i++) { const f = ball(drawHand, v3(-0.004, 0.012 - i * 0.02, -0.004), 0.011, skin, 8); f.scale.set(1.5, 0.8, 0.9); }
+  limb(drawHand, v3(0.02, -0.01, 0.04), v3(0.14, -0.2, 0.36), 0.03, 0.045, skin, 10);
+  limb(drawHand, v3(0.08, -0.1, 0.19), v3(0.2, -0.32, 0.56), 0.05, 0.06, sleeve, 12);
+  let bowTool: THREE.Group | null = null;
   root.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = false; o.receiveShadow = false; } });
 
   const rest = new THREE.Vector3(0.37, -0.39, -0.24);
-  const bowRest = new THREE.Vector3(0.1, -0.3, -0.36);
+  /** Where the bow's grip sits in view: right of centre, a little low, an arm's length out. */
+  const bowRest = new THREE.Vector3(0.17, -0.15, -0.5);
   const sway = new THREE.Vector2();
   let ph = 0, breath = 0, swing = 0, active = false;
   root.visible = false;
@@ -110,10 +135,20 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
       if (id === heldId) return;
       heldId = id;
       if (tool) grip.remove(tool);
+      if (bowTool) { bowHolder.remove(bowTool); bowTool = null; }
       tool = makeHeld(id);
       root.visible = !!tool;
       if (!tool) return;
       bow = !!tool.userData.bow;
+      elbow.visible = !bow;
+      bowRig.visible = bow;
+      if (bow) {
+        bowTool = tool;
+        bowTool.scale.setScalar(BOW_S);
+        bowTool.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = false; o.receiveShadow = false; } });
+        bowHolder.add(bowTool);
+        return;
+      }
       chop = ITEMS[id ?? '']?.tool === 'hatchet';
       tool.scale.setScalar(bow ? 0.55 : s);
       if (bow) {
@@ -146,19 +181,24 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
         if (swing >= 1) { swing = 0; active = false; }
       }
       if (bow) {
-        // Draw (raise to the eye, pull the string), release (snap + small kick), recover.
+        // Draw (raise a touch, pull the string to the cheek), release (snap + small kick), recover.
         const t = active ? swing : 0;
-        const draw = !active ? 0.04 : t < 0.55 ? THREE.MathUtils.smoothstep(t, 0, 0.55) : t < 0.62 ? 1 : Math.max(0, 1 - (t - 0.62) * 12);
+        const draw = !active ? 0.06 : t < 0.55 ? THREE.MathUtils.smoothstep(t, 0, 0.55) : t < 0.62 ? 1 : Math.max(0, 1 - (t - 0.62) * 12);
         const up = !active ? 0 : t < 0.62 ? THREE.MathUtils.smoothstep(t, 0, 0.3) : 1 - THREE.MathUtils.smoothstep(t, 0.7, 1);
         const kick = active && t >= 0.62 && t < 0.8 ? Math.sin(((t - 0.62) / 0.18) * Math.PI) : 0;
-        tool!.userData.draw(draw);
-        (tool!.userData.arrow as THREE.Object3D).visible = !(active && t >= 0.62 && t < 0.95);
-        elbow.position.set(
-          bowRest.x - up * 0.12 + Math.sin(ph) * 0.01 * bob + sway.x,
-          bowRest.y + up * 0.1 + Math.abs(Math.cos(ph)) * 0.012 * bob + Math.sin(breath * 1.6) * 0.004 + sway.y,
-          bowRest.z + kick * 0.05,
+        const b = bowTool!;
+        b.userData.draw(draw);
+        const arrow = b.userData.arrow as THREE.Object3D;
+        arrow.visible = !(active && t >= 0.62 && t < 0.95);
+        // The drawing hand rides the nock (bow space → holder space).
+        drawHand.position.copy(arrow.position).multiplyScalar(BOW_S);
+        bowRig.position.set(
+          bowRest.x - up * 0.05 + Math.sin(ph) * 0.01 * bob + sway.x,
+          bowRest.y + up * 0.04 + Math.abs(Math.cos(ph)) * 0.012 * bob + Math.sin(breath * 1.6) * 0.004 + sway.y,
+          bowRest.z + kick * 0.04,
         );
-        elbow.rotation.set(0.12 + up * 0.08 - kick * 0.12 + Math.sin(breath * 1.6) * 0.006, 0.1 - up * 0.05, 0.05 + sway.x * 1.5);
+        // Turned a little so you see the bow's curve, and canted (top leaning right) like an archer holds it.
+        bowHolder.rotation.set(-kick * 0.1 + Math.sin(breath * 1.6) * 0.005, BOW_YAW - up * 0.12, BOW_ROLL + up * 0.1 + sway.x * 1.5);
         return;
       }
       if (chop) {
