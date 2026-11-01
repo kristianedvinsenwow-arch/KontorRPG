@@ -252,6 +252,7 @@ export function applyGear(c: Character, gear: Gear): void {
   show(c.armour.hat, pick(gear?.hd, true));
   show(c.armour.chest, pick(gear?.c, false));
   show(c.armour.robe, pick(gear?.c, true));
+  for (const sl of c.armour.sleeves) show(sl, pick(gear?.c, true));
   for (const l of c.armour.legs) show(l, pick(gear?.l, false));
   show(c.armour.skirt, pick(gear?.l, true));
   show(c.armour.shield, gear?.o);

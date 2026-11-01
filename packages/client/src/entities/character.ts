@@ -5,7 +5,33 @@
  */
 import * as THREE from 'three';
 import { ITEMS, PLAYER_COLORS, RACES, type Race } from '@kontor/shared';
-import { mat, bx, ball, limb, mesh, mergeStatic, v3, lerp } from '../engine/procgen.js';
+import { mat, bx, ball, limb, mesh, mergeStatic, v3, lerp, canvasTex } from '../engine/procgen.js';
+
+/**
+ * Cloth for robes, skirts, sleeves and hats: pale greys (the gear colour tints it) with soft
+ * vertical folds, a little weave and a darker hem band, so it reads as fabric, not plastic.
+ */
+let clothTex: THREE.CanvasTexture | null = null;
+function clothMaterial(): THREE.MeshStandardMaterial {
+  clothTex ??= canvasTex((g, n) => {
+    g.fillStyle = '#e6e6e6'; g.fillRect(0, 0, n, n);
+    // Folds: soft light/dark bands running down the fabric.
+    for (let x = 0; x < n; x += 2) {
+      const f = Math.sin((x / n) * Math.PI * 2 * 7) * 0.5 + Math.sin((x / n) * Math.PI * 2 * 17 + 1.3) * 0.25;
+      const v = Math.round(214 + f * 34);
+      g.fillStyle = `rgb(${v},${v},${v})`; g.fillRect(x, 0, 2, n);
+    }
+    // Crease lines in the darkest folds.
+    g.strokeStyle = 'rgba(70,70,70,.35)'; g.lineWidth = 1.5;
+    for (let k = 0; k < 7; k++) { const x = ((k + 0.75) / 7) * n; g.beginPath(); g.moveTo(x, 0); g.bezierCurveTo(x + 6, n * 0.3, x - 6, n * 0.65, x + 3, n); g.stroke(); }
+    // Weave: faint speckle.
+    for (let i = 0; i < 2600; i++) { const v = 150 + Math.floor(Math.random() * 90); g.fillStyle = `rgba(${v},${v},${v},.18)`; g.fillRect(Math.random() * n, Math.random() * n, 1, 1); }
+    // Hem: a darker band with a stitched line at the bottom edge (v = 0 is the bottom of a cylinder).
+    g.fillStyle = 'rgba(60,60,60,.35)'; g.fillRect(0, n - 18, n, 18);
+    g.strokeStyle = 'rgba(240,240,240,.55)'; g.setLineDash([5, 4]); g.beginPath(); g.moveTo(0, n - 9); g.lineTo(n, n - 9); g.stroke();
+  }, 256);
+  return new THREE.MeshStandardMaterial({ color: 0xd8d0b8, roughness: 0.95, side: THREE.DoubleSide, map: clothTex });
+}
 
 export interface Character {
   g: THREE.Group;
@@ -23,7 +49,7 @@ export interface Character {
   userData_sh?: string | null;
   /** Armour shown by applyGear (helm, chest plate, shield, greaves). */
   /** Plate/leather pieces, plus cloth's own shapes: a robe, a long skirt and a pointy wizard hat. */
-  armour: { chest: THREE.Group; helm: THREE.Group; shield: THREE.Group; legs: THREE.Group[]; robe: THREE.Group; skirt: THREE.Group; hat: THREE.Group };
+  armour: { chest: THREE.Group; helm: THREE.Group; shield: THREE.Group; legs: THREE.Group[]; robe: THREE.Group; skirt: THREE.Group; hat: THREE.Group; sleeves: THREE.Group[] };
   /** Pauldrons on each shoulder; hidden until something is equipped in the shoulders slot. */
   pauldrons: THREE.Group[];
   race: Race;
@@ -116,7 +142,7 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
     bx(upper, 0.44, 0.06, 0.2 + 0.18 * b, M.belt, 0, 0.16, -0.04 * b);
   }
   // Armour pieces live in their own groups (kept out of merging) and are shown by applyGear.
-  const armour = { chest: new THREE.Group(), helm: new THREE.Group(), shield: new THREE.Group(), legs: [] as THREE.Group[], robe: new THREE.Group(), skirt: new THREE.Group(), hat: new THREE.Group() };
+  const armour = { chest: new THREE.Group(), helm: new THREE.Group(), shield: new THREE.Group(), legs: [] as THREE.Group[], robe: new THREE.Group(), skirt: new THREE.Group(), hat: new THREE.Group(), sleeves: [] as THREE.Group[] };
   {
     const a = armour.chest;
     a.userData.keep = true;
@@ -131,10 +157,10 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
   {
     // Cloth chest: a robe — a loose tunic with a flared hem down over the thighs, and a sash.
     const a = armour.robe;
-    const cloth = new THREE.MeshStandardMaterial({ color: 0xd8d0b8, roughness: 0.95, side: THREE.DoubleSide });
+    const cloth = clothMaterial();
     bx(a, 0.45, 0.46, 0.29, cloth, 0, 0.38, 0);
     if (R.belly > 0) ball(a, v3(0, 0.29, -0.07 - 0.03 * R.belly), 0.21, cloth, 14).scale.set(1.02, 0.95, 0.72 + 0.3 * R.belly);
-    const hemTop = 0.2 * W + 0.04, hemLen = hipY * 0.62;
+    const hemTop = 0.2 * W + 0.065, hemLen = hipY * 0.62;
     const hem = mesh(new THREE.CylinderGeometry(hemTop, hemTop + 0.1, hemLen, 14, 1, true), cloth, a);
     hem.position.y = 0.16 - hemLen / 2; hem.scale.z = 0.8 * Wz;
     bx(a, 0.47, 0.06, 0.31, cloth, 0, 0.17, 0); // sash
@@ -145,7 +171,7 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
   {
     // Cloth legs: a long skirt from the waist almost to the ground, flaring out.
     const a = armour.skirt;
-    const cloth = new THREE.MeshStandardMaterial({ color: 0xd8d0b8, roughness: 0.95, side: THREE.DoubleSide });
+    const cloth = clothMaterial();
     const top = 0.2 * W + 0.03, len = hipY + 0.1;
     const sk = mesh(new THREE.CylinderGeometry(top, top + 0.16, len, 16, 1, true), cloth, a);
     sk.position.y = 0.14 - len / 2; sk.scale.z = 0.85 * Wz;
@@ -213,7 +239,7 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
   {
     // Cloth head: a pointy wizard's hat with a wide brim and a tip that flops back.
     const h = armour.hat;
-    const cloth = new THREE.MeshStandardMaterial({ color: 0xd8d0b8, roughness: 0.95, side: THREE.DoubleSide });
+    const cloth = clothMaterial();
     const hat = new THREE.Group(); hat.position.y = 0.075; hat.rotation.x = 0.12; h.add(hat);
     mesh(new THREE.CylinderGeometry(0.235, 0.24, 0.016, 20), cloth, hat);
     mesh(new THREE.CylinderGeometry(0.075, 0.13, 0.2, 14).translate(0, 0.1, 0), cloth, hat);
@@ -255,6 +281,17 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
     ball(elbow, v3(), 0.055, M.sleeve, 10);
     limb(elbow, v3(), v3(0, -0.24, 0), 0.05, 0.042, M.skin);
     ball(elbow, v3(0, -0.27, 0), 0.048, M.skin, 10);
+    // Robe sleeves (shown with a cloth chest): loose on the upper arm, a wide bell at the wrist.
+    for (const [parent, len, r0, r1] of [[shoulder, 0.3, 0.09, 0.095], [elbow, 0.22, 0.085, 0.13]] as const) {
+      const sl = new THREE.Group();
+      const m = mesh(new THREE.CylinderGeometry(r0, r1, len, 12, 1, true), clothMaterial(), sl);
+      m.position.y = -len / 2 + (parent === shoulder ? 0.03 : 0);
+      if (parent === shoulder) ball(sl, v3(0, 0.005, 0), 0.088, m.material as THREE.Material, 12); // covers the shirt's shoulder
+      sl.traverse((o) => (o.userData.keep = true));
+      sl.visible = false;
+      parent.add(sl);
+      armour.sleeves.push(sl);
+    }
     arms.push({ shoulder, elbow });
     if (sd < 0) {
       // Shield on the left forearm.
