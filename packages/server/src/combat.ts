@@ -21,6 +21,16 @@ for (const d of Object.values(ITEMS)) {
   (GEAR_BY_TIER[d.tier] ??= []).push(d.id);
 }
 
+/** A random piece of gear of this tier, with a rolled rarity (epics possible), as monsters drop it. */
+export function rollGear(w: World, tier: number, luck: number): Stack {
+  const pool = GEAR_BY_TIER[tier] ?? GEAR_BY_TIER[1];
+  const id = pool[Math.floor(w.rand() * pool.length)];
+  const r: Rarity = rollCraftRarity(luck, () => w.rand(), true);
+  const st: Stack = { id, qty: 1 };
+  if (r) { st.r = r; st.fx = rollEffects(ITEMS[id], r, () => w.rand()); }
+  return st;
+}
+
 export const mobRadius = (m: Mob) => 0.45 * m.def.scale;
 
 export function createMobs(w: World): Map<string, Mob> {

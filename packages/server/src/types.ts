@@ -1,7 +1,7 @@
 /** Server-side state shapes shared by the world and its systems. */
 import type {
   AchievementState, Bag, Buff, CharacterBuild, Equipment, GroundItem, HoldSlot, MobDef, PlayerState, PlayerStats, QuestState,
-  ServerMsg, SkillXp, Spawn, TalentAlloc,
+  ServerMsg, SkillXp, Spawn, Stack, TalentAlloc,
 } from '@kontor/shared';
 
 export interface Client {
@@ -18,6 +18,8 @@ export interface Fishing {
   phase: 'wait' | 'bite';
   biteAt: number;
   item: string; xp: number; difficulty: number; rare: boolean;
+  /** A non-fish catch, decided at the cast (its rarity too). */
+  stack?: Stack;
 }
 
 export interface Lease { room: number; until: number }

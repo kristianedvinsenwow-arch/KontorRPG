@@ -33,7 +33,7 @@ export const fishing = {
     const fish = TRACK * (0.45 + Math.random() * 0.4);
     state = {
       difficulty, until: performance.now() + seconds * 1000, done,
-      zone: 0, zoneV: 0, zoneH: Math.min(TRACK * 0.4, 50 * (1 + ease) * (1.1 - difficulty * 0.45)),
+      zone: 0, zoneV: 0, zoneH: Math.min(TRACK * 0.45, Math.max(22, 50 * (1 + ease) * (1.6 - difficulty * 0.9))),
       fish, fishV: 0, fishTarget: fish, nextMove: 0.3, progress: 0.3, t: 0,
     };
     box.hidden = false;
@@ -50,22 +50,24 @@ export const fishing = {
     s.zone += s.zoneV * dt;
     if (s.zone < 0) { s.zone = 0; s.zoneV *= -0.25; }
     if (s.zone > TRACK - s.zoneH) { s.zone = TRACK - s.zoneH; s.zoneV *= -0.25; }
-    // Fish: darts to a new spot often (harder fish: more often, further, faster) and never sits still.
+    // Fish: darts to a new spot now and then (harder catches: more often, further, faster).
+    // Difficulty runs from ~0.05 (an old boot) and 0.15 (perch, gentle) to 0.85 (rare: hard work)
+    // and 1.2 (a horse: nearly impossible).
     if (s.t >= s.nextMove) {
-      const dart = Math.random() < 0.15 + d * 0.35;
-      const jump = (Math.random() - 0.5) * TRACK * (dart ? 0.7 + d * 0.5 : 0.25 + d * 0.4);
+      const dart = Math.random() < 0.05 + d * 0.4;
+      const jump = (Math.random() - 0.5) * TRACK * (dart ? 0.4 + d * 0.6 : 0.1 + d * 0.5);
       s.fishTarget = Math.max(4, Math.min(TRACK - 28, s.fish + jump));
-      s.nextMove = s.t + (1.05 - d * 0.65) * (0.35 + Math.random() * 0.9);
+      s.nextMove = s.t + Math.max(0.25, 1.4 - d * 0.9) * (0.35 + Math.random() * 0.9);
     }
-    const accel = 80 + d * 300;
+    const accel = 30 + d * 330;
     s.fishV += Math.sign(s.fishTarget - s.fish) * accel * dt * 10;
-    s.fishV += Math.sin(s.t * (5 + d * 6)) * (20 + d * 60) * dt * 10;
+    s.fishV += Math.sin(s.t * (4 + d * 7)) * (10 + d * 65) * dt * 10;
     s.fishV *= 0.86;
     s.fish += s.fishV * dt;
     s.fish = Math.max(0, Math.min(TRACK - 24, s.fish));
     const inside = s.fish + 12 >= s.zone && s.fish + 12 <= s.zone + s.zoneH;
     const grace = s.t < GRACE;
-    s.progress += (inside ? 0.24 - d * 0.06 : grace ? 0 : -(0.2 + d * 0.16)) * dt;
+    s.progress += (inside ? 0.32 - d * 0.12 : grace ? 0 : -(0.08 + d * 0.3)) * dt;
     if (hintEl.dataset.g !== '1') hintEl.dataset.g = '1', hintEl.innerHTML = 'Hold <b>click</b> to raise the bar · keep the fish inside';
     zoneEl.style.height = `${s.zoneH}px`;
     zoneEl.style.bottom = `${s.zone}px`;

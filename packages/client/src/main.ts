@@ -340,7 +340,8 @@ net.on((msg) => {
       else if (msg.state === 'bite') {
         fx.bite();
         if (castAt) sound.play('splash', { x: castAt.x, y: 0, z: castAt.z });
-        hud.toast('A bite! Hold click to reel it in.', 2000, 'rare');
+        const d = msg.difficulty;
+        hud.toast(d >= 1 ? 'Something HUGE is on the line — this will be a fight!' : d >= 0.75 ? 'It pulls hard — something special?' : d >= 0.4 ? 'A bite! A lively one.' : 'A bite! Hold click to reel it in.', 2500, 'rare');
         fishing.start(msg.difficulty, msg.seconds, stats?.scoped.fishing.fishEase ?? 0, (ok) => net.send({ t: 'reel', ok }));
       } else {
         if (castAt) sound.play(msg.state === 'lost' ? 'lost' : 'splash', { x: castAt.x, y: 0, z: castAt.z });

@@ -3,10 +3,11 @@
  * (cast → bite → the client's reel minigame → catch). All rolls happen here.
  */
 import {
-  FISH_TABLE, ITEMS, MINE_RANGE, RARE_FISH, TREE_BY_ID, TREE_TYPES, VEIN_BY_ID, VEIN_TYPES, CAST_RANGE,
-  PICK_SEC, PLANT_BY_ID, regionAt, weatherAt, PLANT_TYPES, isFishable, levelOf, roomFor, swingSeconds, type NodeTypeDef,
+  FISH_TABLE, LAKE_TREASURE, ITEMS, MINE_RANGE, RARE_FISH, TREE_BY_ID, TREE_TYPES, VEIN_BY_ID, VEIN_TYPES, CAST_RANGE,
+  PICK_SEC, PLANT_BY_ID, regionAt, weatherAt, PLANT_TYPES, isFishable, levelOf, roomFor, swingSeconds, type NodeTypeDef, type Stack,
 } from '@kontor/shared';
 import type { ServerPlayer } from './types.js';
+import { rollGear } from './combat.js';
 import type { World } from './world.js';
 
 const SLOT_FOR = { mining: 'pickaxe', woodcutting: 'hatchet', tailoring: 'pickaxe', herbalism: 'pickaxe' } as const;
@@ -119,8 +120,22 @@ export function cast(w: World, p: ServerPlayer, x: number, z: number): void {
   const wait = (4 + w.rand() * 9) / (1 + Math.max(0, st.fishSpeed)) / rainy;
   // Decide the fish now; the client only learns what it was if the catch succeeds.
   const lvl = levelOf(p.xp, 'fishing');
-  let pick = { item: FISH_TABLE[0].item, xp: FISH_TABLE[0].xp, difficulty: FISH_TABLE[0].difficulty, rare: false };
-  if (w.rand() < RARE_FISH.chance * (1 + st.rareFish) * (1 + st.luck * 0.01)) pick = { item: RARE_FISH.item, xp: RARE_FISH.xp, difficulty: RARE_FISH.difficulty, rare: true };
+  let pick: { item: string; xp: number; difficulty: number; rare: boolean; stack?: Stack } = { item: FISH_TABLE[0].item, xp: FISH_TABLE[0].xp, difficulty: FISH_TABLE[0].difficulty, rare: false };
+  const luckK = (1 + st.rareFish) * (1 + st.luck * 0.01);
+  const treasure = LAKE_TREASURE.find((t) => lvl >= t.level && w.rand() < t.chance * luckK);
+  if (treasure) {
+    let stack: Stack;
+    let diff = treasure.difficulty;
+    if (treasure.what === 'gem') { const gems = ['quartz', 'quartz', 'sapphire', 'garnet']; stack = { id: gems[Math.floor(w.rand() * gems.length)], qty: 1 }; if (stack.id !== 'quartz') diff += 0.07; }
+    else if (treasure.what === 'gear') {
+      const tier = lvl >= 18 && w.rand() < 0.35 ? 2 : 1;
+      stack = rollGear(w, tier, st.luck);
+      diff += (tier - 1) * 0.06 + (stack.r ?? 0) * 0.04; // a rare iron helm fights harder than a plain stone one
+    }
+    else if (treasure.what === 'plans') stack = { id: ['spear_plans', 'halberd_plans', 'warhammer_plans'][Math.floor(w.rand() * 3)], qty: 1 };
+    else stack = { id: 'fjord_horse', qty: 1 };
+    pick = { item: stack.id, xp: treasure.xp, difficulty: Math.min(1.25, diff), rare: true, stack };
+  } else if (w.rand() < RARE_FISH.chance * (1 + st.rareFish) * (1 + st.luck * 0.01)) pick = { item: RARE_FISH.item, xp: RARE_FISH.xp, difficulty: RARE_FISH.difficulty, rare: true };
   else {
     const table = FISH_TABLE.filter((f) => f.level <= lvl);
     let roll = w.rand() * table.reduce((s, f) => s + f.weight, 0);
@@ -154,14 +169,14 @@ export function reel(w: World, p: ServerPlayer, ok: boolean): void {
   // A real minigame takes a moment; an instant "ok" is a bot.
   if (!ok || now - f.biteAt < 2500 || now - f.biteAt > REEL_WINDOW + 2000) return stopFishing(w, p, 'lost');
   const st = p.stats.scoped.fishing;
-  const qty = w.rand() < st.doubleYield + st.luck * 0.002 && !f.rare ? 2 : 1;
-  const left = w.give(p, { id: f.item, qty });
+  const qty = f.stack ? f.stack.qty : w.rand() < st.doubleYield + st.luck * 0.002 && !f.rare ? 2 : 1;
+  const left = w.give(p, f.stack ? { ...f.stack } : { id: f.item, qty });
   if (left === qty) return stopFishing(w, p, 'lost');
   const xp = w.addXp(p, 'fishing', f.xp);
   p.client.send({ t: 'gain', skill: 'fishing', xp, item: f.item, qty: qty - left, rare: f.rare });
   w.count(p, 'fish');
   if (f.item === 'golden_perch') w.count(p, 'golden');
-  if (f.rare) w.broadcast({ t: 'notice', kind: 'rare', text: `${p.state.name} landed a ${ITEMS[f.item].name}!` });
+  if (f.rare) w.broadcast({ t: 'notice', kind: 'rare', text: `${p.state.name} fished up ${f.stack?.r ? ['', 'an uncommon ', 'a rare ', 'an epic ', 'a legendary '][f.stack.r] : 'a '}${ITEMS[f.item].name}${f.item === 'fjord_horse' ? ' — dripping wet!' : '!'}` });
   p.dirty = true;
   w.sendInv(p);
   stopFishing(w, p, 'caught');

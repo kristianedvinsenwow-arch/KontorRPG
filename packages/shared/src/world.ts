@@ -284,13 +284,24 @@ export const PLANT_BY_ID: Map<string, Plant> = new Map(PLANTS.map((p) => [p.id, 
 
 /** Fish in the lake by level; weights are relative. Rare fish roll separately. */
 export const FISH_TABLE: { item: string; level: number; xp: number; weight: number; difficulty: number }[] = [
-  { item: 'raw_perch', level: 1, xp: 10, weight: 50, difficulty: 0.25 },
-  { item: 'raw_trout', level: 5, xp: 18, weight: 30, difficulty: 0.4 },
-  { item: 'raw_char', level: 12, xp: 30, weight: 20, difficulty: 0.55 },
-  { item: 'raw_pike', level: 18, xp: 45, weight: 14, difficulty: 0.7 },
-  { item: 'old_boot', level: 1, xp: 2, weight: 4, difficulty: 0.1 },
+  { item: 'raw_perch', level: 1, xp: 10, weight: 50, difficulty: 0.15 },
+  { item: 'raw_trout', level: 5, xp: 18, weight: 30, difficulty: 0.3 },
+  { item: 'raw_char', level: 12, xp: 30, weight: 20, difficulty: 0.45 },
+  { item: 'raw_pike', level: 18, xp: 45, weight: 14, difficulty: 0.6 },
+  { item: 'old_boot', level: 1, xp: 2, weight: 4, difficulty: 0.05 },
 ];
-export const RARE_FISH = { item: 'golden_perch', chance: 1 / 120, xp: 80, difficulty: 0.8 };
+export const RARE_FISH = { item: 'golden_perch', chance: 1 / 120, xp: 80, difficulty: 0.85 };
+/**
+ * Things at the bottom of the lake, rolled before the fish (chances per cast, before luck). The
+ * catch is decided when you cast, and the better it is the harder it fights: gems are tricky,
+ * gear is very hard (more so the higher its tier and rarity), and a horse is nearly impossible.
+ */
+export const LAKE_TREASURE: { what: 'gem' | 'gear' | 'plans' | 'mount'; chance: number; level: number; xp: number; difficulty: number }[] = [
+  { what: 'gem', chance: 1 / 70, level: 4, xp: 40, difficulty: 0.75 },
+  { what: 'gear', chance: 1 / 160, level: 6, xp: 70, difficulty: 0.9 },
+  { what: 'plans', chance: 1 / 900, level: 12, xp: 120, difficulty: 1.05 },
+  { what: 'mount', chance: 1 / 3000, level: 15, xp: 250, difficulty: 1.2 },
+];
 /** You must stand within this of the water's edge, and cast at most this far. */
 export const CAST_RANGE = 14;
 /** A point is fishable if it's lake water deep enough. */

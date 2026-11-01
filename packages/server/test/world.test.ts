@@ -890,3 +890,22 @@ test('plans teach a weapon for good; giantslayer hits big monsters harder', asyn
   const { giantslayerMult } = await import('@kontor/shared');
   assert.ok(giantslayerMult(MOBS.goblin.scale) < 0.8 && giantslayerMult(MOBS.troll.scale) > 1.5);
 });
+
+test('fishing: the catch is decided at the cast; treasure fights harder than a perch', () => {
+  const { world, c, p, place, last, advance } = game(() => 0.0001);
+  p.xp.fishing = xpForLevel(5);
+  world.recompute(p);
+  let sx = LAKE.x, sz = LAKE.z;
+  for (let d = 0; d < 60; d += 0.5) { if (h(LAKE.x + d, LAKE.z) > 0.4) { sx = LAKE.x + d; break; } }
+  place(sx, sz);
+  let cx = sx - 6; while (!isFishable(cx, sz)) cx -= 1;
+  world.handle(c, { t: 'cast', x: cx, z: sz });
+  assert.equal(p.fishing?.item, 'quartz', 'a gem from the lake bed, decided at the cast');
+  advance(20_000); world.step();
+  const bite = last('fish') as any;
+  assert.equal(bite.state, 'bite');
+  assert.ok(bite.difficulty >= 0.75, `harder than fish (${bite.difficulty})`);
+  advance(3000);
+  world.handle(c, { t: 'reel', ok: true });
+  assert.ok(countItem(p.bag, 'quartz') === 1);
+});
