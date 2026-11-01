@@ -587,14 +587,14 @@ function interact(now: number, playing: boolean) {
     if (healer && (aimed?.kind === 'ally' || (!aimed && gameStore.get().hp < gameStore.get().maxHp))) {
       // Life staff: heal whoever you aim at, or yourself.
       if (now >= nextAttackAt) {
-        nextAttackAt = now + attackInterval(main) * 1000;
+        nextAttackAt = now + attackInterval(main, stats?.all) * 1000;
         net.send({ t: 'heal', target: aimed?.kind === 'ally' ? aimed.id : 'self' });
         viewmodel.swing();
         swingUntil = now + SWING_SEC * 1000;
       }
     } else if (aimed?.kind === 'mob') {
       if (now >= nextAttackAt) {
-        nextAttackAt = now + attackInterval(main) * 1000;
+        nextAttackAt = now + attackInterval(main, stats?.all) * 1000;
         net.send({ t: 'attack', target: aimed.m.id, special: false });
         if (attackRange(main) < 6) sound.play('swing');
         viewmodel.swing();

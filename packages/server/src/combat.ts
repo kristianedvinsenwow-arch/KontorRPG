@@ -300,7 +300,7 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
     p.client.send({ t: 'cooldown', until: Date.now() + (p.nextSpecialAt - now) });
   } else {
     if (now < p.nextAttackAt - 150) return;
-    p.nextAttackAt = now + attackInterval(main) * 1000;
+    p.nextAttackAt = now + attackInterval(main, s) * 1000;
   }
   if (p.held !== 'mainHand') { p.held = 'mainHand'; w.refreshGear(p); }
   if (cls === 'bow') {
@@ -320,12 +320,14 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
     const { dmg: d0, crit } = roll(mult);
     let dmg = giant ? d0 * giantslayerMult(t.def.scale) : d0;
     if (t.frozenUntil > w.now()) dmg *= 1 + s.shatter; // Shatter: the freeze holds
-    if (style === 'melee' && t.hp < t.def.hp * 0.3) dmg *= 1 + s.execute;
+    if (t.hp < t.def.hp * 0.3) dmg *= 1 + s.execute; // Executioner / gear
     if (sp?.stun) t.frozenUntil = Math.max(t.frozenUntil, w.now() + sp.stun * 1000);
     if (sp?.taunt) { t.taunt = { by: p.state.id, until: w.now() + sp.taunt * 1000 }; t.target = p.state.id; }
     const final = Math.max(0.5, Math.round(mitigate(dmg, magic, t.def.armour, t.def.ward) * 10) / 10);
     w.broadcastNear(t, { t: 'hit', to: t.id, dmg: final, crit, kind: magic ? 'magic' : 'phys', from: p.state.id });
     then?.(t);
+    // Lifesteal: heal a share of what you dealt.
+    if (s.lifesteal > 0 && !p.dead && p.hp < p.stats.maxHp) { p.hp = Math.min(p.stats.maxHp, p.hp + final * Math.min(0.15, s.lifesteal)); w.sendHp(p); }
     if (style === 'melee' && crit && s.bleed > 0) t.bleed = { perSec: (final * s.bleed) / 4, until: w.now() + 4000, by: p.state.id, nextTick: w.now() + 1000 };
     damageMob(w, t, final, p.state.id, w.now(), cls === 'fireStaff');
   };
@@ -415,7 +417,7 @@ export function heal(w: World, p: ServerPlayer, targetId: string): void {
   const t = targetId === p.state.id || targetId === 'self' ? p : [...w.players.values()].find((q) => q.state.id === targetId);
   if (!t || t.dead || !sameRegion(t.state, p.state)) return;
   if (Math.hypot(t.state.x - p.state.x, t.state.z - p.state.z) > attackRange(main) + 1) return w.notice(p, 'Out of range.', 'error');
-  p.nextAttackAt = now + attackInterval(main) * 1000;
+  p.nextAttackAt = now + attackInterval(main, p.stats.all) * 1000;
   if (p.held !== 'mainHand') { p.held = 'mainHand'; w.refreshGear(p); }
   p.act = 'cast'; p.actUntil = now + 600;
   const s = p.stats.all;
@@ -428,6 +430,7 @@ export function heal(w: World, p: ServerPlayer, targetId: string): void {
 
 function applyHeal(w: World, healer: ServerPlayer, t: ServerPlayer, amount: number, now: number): void {
   const before = t.hp;
+  amount *= 1 + Math.max(0, t.stats.all.healTaken); // healing received (gear)
   t.hp = Math.min(t.stats.maxHp, t.hp + amount);
   const done = Math.round((t.hp - before) * 10) / 10;
   healer.lastHealAt = now;

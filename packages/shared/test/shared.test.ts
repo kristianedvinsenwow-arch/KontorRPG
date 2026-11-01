@@ -291,3 +291,12 @@ test('plate dulls spells and healing; runed boss plate does not', () => {
   for (const id of Object.keys(ITEMS).filter((k) => ITEMS[k].runed))
     assert.ok(Object.values(MOBS_P).some((m) => m.drops.some((d) => 'item' in d && d.item === id)), `${id} drops`);
 });
+
+import { EFFECTS, effectGroups, attackInterval } from '../src/index.js';
+test('new rollable effects: area, lifesteal and attack speed on weapons only, healing on cloth', () => {
+  const groupsOf = (id: string) => EFFECTS.filter((e) => e.groups.some((g) => effectGroups(ITEMS[id]).includes(g))).map((e) => e.key);
+  assert.ok(groupsOf('iron_sword').includes('lifesteal') && groupsOf('iron_sword').includes('atkSpeed') && groupsOf('iron_sword').includes('aoeDmg'));
+  assert.ok(!groupsOf('iron_breastplate').includes('lifesteal') && groupsOf('iron_breastplate').includes('execute'));
+  assert.ok(groupsOf('cloth_breastplate').includes('healPower') && groupsOf('birch_life_staff').includes('healPower'));
+  assert.ok(Math.abs(attackInterval({ id: 'iron_sword', qty: 1 }, { atkSpeed: 1 }) * 1.3 - attackInterval({ id: 'iron_sword', qty: 1 })) < 1e-9, 'capped at +30%');
+});

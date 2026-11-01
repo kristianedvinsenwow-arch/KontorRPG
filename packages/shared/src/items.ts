@@ -102,7 +102,7 @@ export function rollCraftRarity(luck: number, rand: () => number, epic = false):
 
 // ------------------------------------------------------------------ rolled effects
 
-export type EffectGroup = 'general' | 'cloth' | 'leather' | 'metal' | 'mining' | 'woodcutting' | 'fishing';
+export type EffectGroup = 'general' | 'weapon' | 'cloth' | 'leather' | 'metal' | 'mining' | 'woodcutting' | 'fishing';
 
 /** Effect pool. Values are per roll at tier 1, normal multiplier; tier and rarity scale them up. */
 export const EFFECTS: { key: StatKey; groups: EffectGroup[]; min: number; max: number; flat?: boolean }[] = [
@@ -115,6 +115,12 @@ export const EFFECTS: { key: StatKey; groups: EffectGroup[]; min: number; max: n
   { key: 'regen', groups: ['general'], min: 1, max: 3, flat: true },
   { key: 'crit', groups: ['general'], min: 0.01, max: 0.03 },
   { key: 'aoeRadius', groups: ['general'], min: 0.04, max: 0.1 },
+  { key: 'healTaken', groups: ['general'], min: 0.05, max: 0.1 },
+  // weapons only
+  { key: 'lifesteal', groups: ['weapon'], min: 0.02, max: 0.05 },
+  { key: 'atkSpeed', groups: ['weapon'], min: 0.03, max: 0.07 },
+  { key: 'execute', groups: ['leather', 'metal'], min: 0.05, max: 0.12 },
+  { key: 'healPower', groups: ['cloth'], min: 0.04, max: 0.1 },
   { key: 'aoeDmg', groups: ['general'], min: 0.03, max: 0.08 },
   // cloth
   { key: 'magicDmg', groups: ['cloth'], min: 0.03, max: 0.08 },
@@ -150,7 +156,7 @@ export function effectGroups(d: ItemDef): EffectGroup[] {
   if (d.tool === 'rod') return ['fishing'];
   if (d.tool === 'knife') return []; // knives get better by rarity alone: more pelts, more uses
   if (d.armourType) return ['general', d.armourType];
-  if (d.weapon) return ['general', d.weapon === 'bow' ? 'leather' : d.weapon.endsWith('taff') || d.weapon === 'staff' ? 'cloth' : 'metal'];
+  if (d.weapon) return ['general', 'weapon', d.weapon === 'bow' ? 'leather' : d.weapon.endsWith('taff') || d.weapon === 'staff' ? 'cloth' : 'metal'];
   if (d.slot) return ['general'];
   return [];
 }

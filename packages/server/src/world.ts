@@ -701,7 +701,7 @@ export class World {
     this.count(p, 'drunk');
     p.client.send({ t: 'potion', ready: Date.now() + POTION_CD_MS });
     if (pot.heal && pot.sec) {
-      const total = pot.heal * (1 + st.potionPower);
+      const total = pot.heal * (1 + st.potionPower) * (1 + Math.max(0, p.stats.all.healTaken));
       p.hot = { perSec: total / pot.sec, until: now + pot.sec * 1000, nextTick: now + 1000 };
       p.buffs = p.buffs.filter((b) => b.name !== 'Healing');
       p.buffs.push({ name: 'Healing', stats: {}, until: p.hot.until });
@@ -739,7 +739,8 @@ export class World {
     if (p.hp >= p.stats.maxHp && !food.buff) return this.notice(p, 'You’re not hungry.', 'info');
     s.qty--;
     if (s.qty <= 0) p.bag[index] = null;
-    p.hp = Math.min(p.stats.maxHp, p.hp + food.heal);
+    const healed = Math.round(food.heal * (1 + Math.max(0, p.stats.all.healTaken)));
+    p.hp = Math.min(p.stats.maxHp, p.hp + healed);
     if (food.buff) {
       // One food buff at a time; eating again replaces it.
       p.buffs = p.buffs.filter((b) => !b.name.startsWith('Well fed'));
@@ -747,7 +748,7 @@ export class World {
       this.recompute(p);
       p.client.send({ t: 'buffs', list: p.buffs });
     }
-    p.client.send({ t: 'hit', to: p.state.id, dmg: food.heal, kind: 'heal' });
+    p.client.send({ t: 'hit', to: p.state.id, dmg: healed, kind: 'heal' });
     p.dirty = true;
     this.sendHp(p);
     this.sendInv(p);

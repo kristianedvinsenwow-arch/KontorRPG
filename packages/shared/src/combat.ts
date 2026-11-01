@@ -77,8 +77,8 @@ export function attackRange(main: Stack | undefined): number {
   return (main && ITEMS[main.id]?.range) || 2.2;
 }
 
-export function attackInterval(main: Stack | undefined): number {
-  return (main && ITEMS[main.id]?.interval) || 1.4;
+export function attackInterval(main: Stack | undefined, s?: Pick<Stats, 'atkSpeed'>): number {
+  return ((main && ITEMS[main.id]?.interval) || 1.4) / (1 + Math.min(0.3, Math.max(0, s?.atkSpeed ?? 0)));
 }
 
 export const hasShield = (off: Stack | undefined) => !!off && ITEMS[off.id]?.slot === 'offHand' && ITEMS[off.id]?.armourType === 'metal';
