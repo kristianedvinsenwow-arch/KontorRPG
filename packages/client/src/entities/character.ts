@@ -4,7 +4,7 @@
  * Legs and arms live in their own groups so they animate; everything else is merged.
  */
 import * as THREE from 'three';
-import { PLAYER_COLORS, RACES, type Race } from '@kontor/shared';
+import { ITEMS, PLAYER_COLORS, RACES, type Race } from '@kontor/shared';
 import { mat, bx, ball, limb, mesh, mergeStatic, v3, lerp } from '../engine/procgen.js';
 
 export interface Character {
@@ -303,7 +303,21 @@ export function animateCharacter(c: Character, speed: number, pitch: number, swi
   }
   const t = c.swing;
   // The model faces −Z: positive X rotation brings an arm forward, and elbows bend forward.
-  if (t > 0) {
+  if (t > 0 && ITEMS[c.heldId ?? '']?.tool === 'hatchet') {
+    // Woodcutting: a sideways chop into the trunk. Draw the axe back out to the right with the
+    // shoulders turned, then whip it across in front at chest height.
+    const a = t < 0.42 ? THREE.MathUtils.smoothstep(t, 0, 0.42) : t < 0.56 ? 1 - ((t - 0.42) / 0.14) * 2 : -1 + THREE.MathUtils.smoothstep(t, 0.56, 1);
+    const w = Math.abs(a);
+    c.arms[1].shoulder.rotation.x = 0.35 + 0.95 * w + (a < 0 ? 0.25 * w : 0);
+    c.arms[1].shoulder.rotation.z = 0.12 + a * 0.75;
+    c.arms[1].shoulder.rotation.y = -a * 1.2; // roll the arm so the axe swings level, not overhead
+    c.arms[1].elbow.rotation.x = 0.95 - 0.55 * w;
+    c.arms[0].shoulder.rotation.x = 0.3 + 0.7 * w;
+    c.arms[0].shoulder.rotation.z = -0.15 + Math.min(0, a) * 0.4;
+    c.arms[0].elbow.rotation.x = 0.6;
+    c.upper.rotation.x = 0;
+    c.upper.rotation.y = a * 0.35;
+  } else if (t > 0) {
     // Two-handed overhead chop: wind up behind the head, strike down in front, recover.
     const up = t < 0.5 ? THREE.MathUtils.smoothstep(t, 0, 0.5) : t < 0.66 ? 1 - THREE.MathUtils.smoothstep(t, 0.5, 0.66) : 0;
     const follow = t >= 0.5 ? (t < 0.75 ? THREE.MathUtils.smoothstep(t, 0.5, 0.66) : 1 - THREE.MathUtils.smoothstep(t, 0.75, 1)) : 0;
@@ -317,16 +331,20 @@ export function animateCharacter(c: Character, speed: number, pitch: number, swi
     c.arms[0].elbow.rotation.x = el + 0.2;
     c.arms[0].shoulder.rotation.z = -0.25 * (1 - up * 0.5); // left hand comes across to the haft
     c.arms[1].shoulder.rotation.z = 0.12; // tool arm a little out from the body, so the tool clears it
+    c.arms[1].shoulder.rotation.y = 0;
     c.upper.rotation.x = -0.12 * up + 0.22 * follow; // lean back on the wind-up, into the strike
+    if (c.race !== 'dwarf') c.upper.rotation.y = 0;
   } else {
     c.arms[0].shoulder.rotation.x = -sw * 0.8;
     c.arms[0].elbow.rotation.x = 0.25;
     c.arms[0].shoulder.rotation.z = 0;
     c.arms[1].shoulder.rotation.z = 0.12;
+    c.arms[1].shoulder.rotation.y = 0;
     // Tool arm: carried with the forearm forward, a little out from the body.
     c.arms[1].shoulder.rotation.x = 0.3 + sw * 0.3;
     c.arms[1].elbow.rotation.x = 0.95;
     c.upper.rotation.x = 0;
+    if (c.race !== 'dwarf') c.upper.rotation.y = 0;
   }
 }
 

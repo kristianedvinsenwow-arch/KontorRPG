@@ -9,6 +9,7 @@
  */
 import * as THREE from 'three';
 import { mat, mesh, limb, ball, v3 } from '../engine/procgen.js';
+import { ITEMS } from '@kontor/shared';
 import { makeHeld } from './held.js';
 
 /** Length of one swing animation; the strike lands at STRIKE_AT of it. */
@@ -24,7 +25,9 @@ export interface Viewmodel {
   update(dt: number, speed: number, lookDx: number, lookDy: number): void;
 }
 
-const HAFT_R = 0.022; // pickaxe haft radius before scaling
+const HAFT_R = 0.022;
+/** Sideways chop: how far the axe tips over (drawn back to the right, swept across to the left). */
+const CHOP_TILT = 1, CHOP_YAW = 0; // pickaxe haft radius before scaling
 
 /** A hand closed around a cylinder of radius r lying along local Y. The palm sits on the −X side; fingers curl round the rest. */
 function makeGrip(r: number, skin: THREE.Material, knuckle: THREE.Material): THREE.Group {
@@ -77,6 +80,8 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
   let tool: THREE.Group | null = null;
   let heldId: string | undefined;
   let bow = false;
+  /** Hatchets chop sideways (into a trunk) instead of the overhead pick swing. */
+  let chop = false;
 
   const hand = makeGrip(HAFT_R * s, skin, knuckle);
   grip.add(hand);
@@ -109,6 +114,7 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
       root.visible = !!tool;
       if (!tool) return;
       bow = !!tool.userData.bow;
+      chop = ITEMS[id ?? '']?.tool === 'hatchet';
       tool.scale.setScalar(bow ? 0.55 : s);
       if (bow) {
         // Bow: upright in front of you (slightly canted), string towards you, arrow pointing
@@ -153,6 +159,26 @@ export function makeViewmodel(vmScene: THREE.Scene): Viewmodel {
           bowRest.z + kick * 0.05,
         );
         elbow.rotation.set(0.12 + up * 0.08 - kick * 0.12 + Math.sin(breath * 1.6) * 0.006, 0.1 - up * 0.05, 0.05 + sway.x * 1.5);
+        return;
+      }
+      if (chop) {
+        // Sideways chop: draw the axe back to the right with the head out, whip it across to the
+        // left at chest height (edge first), then bring it back.
+        let a = 0;
+        if (active) {
+          const t = swing;
+          if (t < 0.42) a = THREE.MathUtils.smoothstep(t, 0, 0.42);
+          else if (t < 0.56) a = 1 - ((t - 0.42) / 0.14) * 2;
+          else a = -1 + THREE.MathUtils.smoothstep(t, 0.56, 1);
+        }
+        const w = Math.abs(a);
+        elbow.position.set(
+          rest.x - 0.12 * w - a * 0.04 + Math.sin(ph) * 0.012 * bob + sway.x,
+          rest.y + w * 0.05 + Math.abs(Math.cos(ph)) * 0.014 * bob + Math.sin(breath * 1.6) * 0.004 + sway.y,
+          rest.z,
+        );
+        // a > 0: drawn back, head tipped out to the right; a < 0: swept across to the left.
+        elbow.rotation.set(0.12 * w + Math.sin(breath * 1.6) * 0.008, -a * CHOP_YAW, -a * (a > 0 ? CHOP_TILT * 1.6 : CHOP_TILT) + sway.x * 1.5);
         return;
       }
       // Swing curve around the elbow: wind up over the shoulder, fast strike, slow recovery.

@@ -100,11 +100,20 @@ function makeHatchet(look: string | undefined): THREE.Group {
   const g = new THREE.Group();
   haft(g, 0.62);
   const m = lookMat(look);
-  const b = mesh(new THREE.CylinderGeometry(0.13, 0.13, 0.018, 3, 1, false, 0, Math.PI * 0.8), m, g);
-  b.rotation.set(Math.PI / 2, 0, -Math.PI * 0.4);
-  b.position.set(0.04, 0.55, 0);
-  bx(g, 0.07, 0.08, 0.05, m, 0, 0.56, 0);
-  b.userData.metal = true;
+  // A proper axe head: a bearded blade flaring out from the eye, cutting edge facing away (+X).
+  const shape = new THREE.Shape();
+  shape.moveTo(0, 0.035);
+  shape.lineTo(0.06, 0.03);
+  shape.quadraticCurveTo(0.1, 0.05, 0.13, 0.085);
+  shape.quadraticCurveTo(0.15, 0.01, 0.135, -0.075);
+  shape.quadraticCurveTo(0.09, -0.05, 0.06, -0.02);
+  shape.lineTo(0, -0.025);
+  shape.closePath();
+  const blade = mesh(new THREE.ExtrudeGeometry(shape, { depth: 0.016, bevelEnabled: true, bevelThickness: 0.004, bevelSize: 0.004, bevelSegments: 1 }).translate(0, 0, -0.008), m, g);
+  blade.position.set(0.0, 0.55, 0);
+  blade.userData.metal = true;
+  bx(g, 0.06, 0.075, 0.045, m, -0.005, 0.555, 0); // the eye around the haft
+  bx(g, 0.035, 0.05, 0.035, m, -0.045, 0.555, 0); // the poll (back)
   return g;
 }
 
