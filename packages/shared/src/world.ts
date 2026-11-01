@@ -341,7 +341,7 @@ export interface Npc { id: string; name: string; title: string; x: number; z: nu
 
 export const NPCS: Npc[] = [
   { id: 'ingrid', name: 'Ingrid', title: 'Trader', x: -9, z: -7, face: 2, color: 5, race: 'human', roles: ['shop'],
-    sells: ['stone_pickaxe', 'stone_hatchet', 'basic_rod', 'small_rucksack', 'leather_backpack'] },
+    sells: ['stone_pickaxe', 'stone_hatchet', 'basic_rod', 'small_rucksack', 'leather_backpack', 'skateboard'] },
   { id: 'mats', name: 'Mats', title: 'Miner', x: 20, z: -15, face: 3, color: 3, race: 'dwarf', roles: ['quests'] },
   { id: 'sigrid', name: 'Sigrid', title: 'Smith', x: 13, z: -6.5, face: 1, color: 0, race: 'human', roles: ['quests'] },
   { id: 'hilde', name: 'Hilde', title: 'Innkeeper', x: V.x, z: V.z - 3.2, face: 0, color: 6, race: 'human', roles: ['inn', 'quests'] },

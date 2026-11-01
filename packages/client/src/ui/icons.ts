@@ -177,6 +177,10 @@ export function iconFor(id: string): string {
   else if (d?.kind === 'log') log(g, a, b);
   else if (d?.kind === 'fish') fish(g, '#8aa0a8', '#5a7078');
   else if (d?.kind === 'food') fish(g, '#c8884a', '#8a5428', true);
+  else if (d?.mount?.board) {
+    poly(g, [[6, 30], [58, 30], [56, 38], [8, 38]], '#d8a040');
+    for (const x of [16, 48]) dot(g, x, 44, 5, '#e8e4da');
+  }
   else if (d?.kind === 'mount') {
     const c = '#' + (d.mount!.coat).toString(16).padStart(6, '0'), mn = '#' + (d.mount!.mane).toString(16).padStart(6, '0');
     poly(g, [[18, 58], [22, 30], [30, 12], [40, 8], [52, 22], [50, 30], [40, 26], [38, 40], [44, 58]], c);

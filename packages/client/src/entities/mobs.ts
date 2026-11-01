@@ -42,7 +42,7 @@ const OGRES: MobKind[] = ['troll', 'hill_troll'];
 const isOgre = (k: MobKind) => OGRES.includes(k);
 const isUndead = (k: MobKind) => k === 'draug' || k === 'mine_king';
 
-function humanoid(kind: MobKind): { g: THREE.Group; c: Character } {
+export function humanoid(kind: MobKind): { g: THREE.Group; c: Character } {
   const race = isOgre(kind) ? 'ogre' : isUndead(kind) ? 'human' : 'gnome';
   const color = kind === 'cave_shaman' ? 4 : kind === 'troll' ? 7 : kind === 'hill_troll' ? 3 : kind === 'cave_goblin' ? 0 : isUndead(kind) ? 7 : 3;
   const c = makeCharacter(color, undefined, race, isOgre(kind) ? 3 : 1);

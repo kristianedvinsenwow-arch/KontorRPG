@@ -175,11 +175,13 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
     // Helm: a domed cap with a nose guard, sized for the head.
     const h = armour.helm;
     const plate = new THREE.MeshStandardMaterial({ color: 0x8a8a88, roughness: 0.5, metalness: 0.6 });
-    const dome = mesh(new THREE.SphereGeometry(0.13, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.55), plate, h);
-    dome.position.y = 0.02; dome.scale.set(1, 1.1, 1.05);
-    bx(h, 0.02, 0.07, 0.02, plate, 0, -0.01, -0.125);
-    const rim = mesh(new THREE.TorusGeometry(0.128, 0.01, 6, 20), plate, h);
-    rim.rotation.x = Math.PI / 2; rim.position.y = 0.0;
+    // Tilted back like the hair, so the front edge sits on the brow and the eyes stay visible.
+    const cap = new THREE.Group(); cap.position.y = 0.035; cap.rotation.x = 0.32; h.add(cap);
+    const dome = mesh(new THREE.SphereGeometry(0.134, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), plate, cap);
+    dome.scale.set(1, 1.08, 1.05);
+    bx(cap, 0.018, 0.06, 0.02, plate, 0, -0.012, -0.138); // nose guard, between the eyes
+    const rim = mesh(new THREE.TorusGeometry(0.134, 0.01, 6, 20), plate, cap);
+    rim.rotation.x = Math.PI / 2; rim.scale.set(1, 1.05, 1);
     h.traverse((o) => (o.userData.keep = true));
     h.visible = false;
     head.add(h);
@@ -304,20 +306,23 @@ export function animateCharacter(c: Character, speed: number, pitch: number, swi
     // Two-handed overhead chop: wind up behind the head, strike down in front, recover.
     const up = t < 0.5 ? THREE.MathUtils.smoothstep(t, 0, 0.5) : t < 0.66 ? 1 - THREE.MathUtils.smoothstep(t, 0.5, 0.66) : 0;
     const follow = t >= 0.5 ? (t < 0.75 ? THREE.MathUtils.smoothstep(t, 0.5, 0.66) : 1 - THREE.MathUtils.smoothstep(t, 0.75, 1)) : 0;
-    const sh = lerp(0.55, 2.75, up) - follow * 0.15;
-    const el = lerp(0.3, 1.35, up) - follow * 0.2;
+    // The strike ends with the arm out in front (not tucked in), so the tool head never ends up
+    // inside the body on the follow-through.
+    const sh = lerp(0.6, 2.75, up) + follow * 0.55;
+    const el = lerp(0.5, 1.35, up) - follow * 0.3;
     c.arms[1].shoulder.rotation.x = sh;
     c.arms[1].elbow.rotation.x = el;
     c.arms[0].shoulder.rotation.x = sh * 0.88;
     c.arms[0].elbow.rotation.x = el + 0.2;
     c.arms[0].shoulder.rotation.z = -0.25 * (1 - up * 0.5); // left hand comes across to the haft
+    c.arms[1].shoulder.rotation.z = 0.12; // tool arm a little out from the body, so the tool clears it
     c.upper.rotation.x = -0.12 * up + 0.22 * follow; // lean back on the wind-up, into the strike
   } else {
     c.arms[0].shoulder.rotation.x = -sw * 0.8;
     c.arms[0].elbow.rotation.x = 0.25;
     c.arms[0].shoulder.rotation.z = 0;
-    c.arms[1].shoulder.rotation.z = 0;
-    // Tool arm: carried with the forearm forward.
+    c.arms[1].shoulder.rotation.z = 0.12;
+    // Tool arm: carried with the forearm forward, a little out from the body.
     c.arms[1].shoulder.rotation.x = 0.3 + sw * 0.3;
     c.arms[1].elbow.rotation.x = 0.95;
     c.upper.rotation.x = 0;

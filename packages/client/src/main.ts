@@ -22,7 +22,7 @@ import { Veins } from './world/veins.js';
 import { Plants } from './world/plants.js';
 import { Precip } from './world/precip.js';
 import { sound } from './engine/audio.js';
-import { makeHorse, animateHorse, SADDLE_Y, type Horse } from './entities/horse.js';
+import { makeHorse, animateHorse, rideLift, type Horse } from './entities/horse.js';
 import { Places } from './world/places.js';
 import { CaveView } from './world/cave.js';
 import { Fx } from './world/fx.js';
@@ -642,7 +642,7 @@ function frame() {
     const mounted = gameStore.get().mounted;
     mountedNow = !!mounted;
     stepPlayer(me, moveIn, colliders, dt, stats?.all.moveSpeed ?? 0, mounted ? ITEMS[mounted]?.mount?.mult ?? 1 : 1);
-    mountLift += ((mounted ? SADDLE_Y - 0.88 : 0) - mountLift) * Math.min(1, dt * 6);
+    mountLift += ((mounted ? rideLift(mounted) : 0) - mountLift) * Math.min(1, dt * 6);
     if (myHorse) {
       myHorse.g.position.set(me.x, me.y, me.z);
       myHorse.g.rotation.y = me.yaw;

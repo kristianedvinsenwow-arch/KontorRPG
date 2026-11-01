@@ -57,7 +57,7 @@ export interface ItemDef {
   /** Skinning knives: chance a skinning attempt ruins the hide, and uses before it breaks. */
   knife?: { fail: number; uses: number };
   /** Mounts: speed multiplier while riding, and coat colours for the model. */
-  mount?: { mult: number; coat: number; mane: number };
+  mount?: { mult: number; coat: number; mane: number; board?: boolean };
   /** Only ever exists at this rarity (boss uniques). */
   fixedRarity?: Rarity;
   /** Extra move-speed penalty on heavy plate (monster-dropped uniques that hit harder in return). */
@@ -372,6 +372,7 @@ for (const j of JEWELS) {
 add({ id: 'small_rucksack', name: 'Small rucksack', kind: 'bag', stack: 1, slot: 'back', bagSlots: 4, sellValue: 10, buyPrice: 40, blurb: '+4 bag slots.' });
 add({ id: 'leather_backpack', name: 'Leather backpack', kind: 'bag', stack: 1, slot: 'back', bagSlots: 8, sellValue: 30, buyPrice: 120, blurb: '+8 bag slots.' });
 // mounts (wear one in the mount slot, press R to ride)
+add({ id: 'skateboard', name: 'Skateboard', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.4, coat: 0xd8a040, mane: 0xe8e4da, board: true }, sellValue: 15, buyPrice: 60, blurb: 'Four wheels and a plank. Roll at 140% speed — gravel paths and all. Not in the mine or indoors.' });
 add({ id: 'fjord_horse', name: 'Fjord horse', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.6, coat: 0xc8a878, mane: 0x3a2a1c }, sellValue: 60, buyPrice: 250, blurb: 'A sturdy dun Fjord horse with a striped mane. Ride at 160% speed. Not in the mine or indoors.' });
 add({ id: 'black_fjord_horse', name: 'Black Fjord horse', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.75, coat: 0x2a2624, mane: 0xd8d0c0 }, sellValue: 120, buyPrice: 600, blurb: 'Rare, dark and quick. Ride at 175% speed.' });
 add({ id: 'dovre_stallion', name: 'Dovre stallion', kind: 'mount', stack: 1, slot: 'mount', fixedRarity: 4, mount: { mult: 2.0, coat: 0x8a9298, mane: 0xeef2f6 }, sellValue: 300, blurb: 'A grey giant of a horse that walked out of the Mine King’s pit. Ride at 200% speed.' });

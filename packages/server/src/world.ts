@@ -361,7 +361,7 @@ export class World {
     if (p.state.mnt) return this.dismount(p, true);
     const m = p.equip.mount, def = m ? ITEMS[m.id] : undefined;
     if (!m || !def?.mount) return this.notice(p, 'You have no mount. Eirik the stablemaster in Bjørkvik sells horses.', 'error');
-    if (regionAt(p.state.x, p.state.z) === 'cave') return this.notice(p, 'No room for a horse down here.', 'error');
+    if (regionAt(p.state.x, p.state.z) === 'cave') return this.notice(p, def.mount.board ? 'Too rough for a skateboard down here.' : 'No room for a horse down here.', 'error');
     if (homeAt(p.state.x, p.state.z) >= 0) return this.notice(p, 'Not indoors!', 'error');
     if (this.now() - p.lastHurtAt < 5000) return this.notice(p, 'You can’t mount up mid-fight.', 'error');
     p.state.mnt = m.id;
