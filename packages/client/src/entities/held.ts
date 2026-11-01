@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { ITEMS, type PlayerState } from '@kontor/shared';
 import { mat, mesh, bx } from '../engine/procgen.js';
 import { makePickaxe, GEAR_COLORS, setHeld, setShoulders, type Character } from './character.js';
+import { makeUniqueHeld, dressUniques, REPLACES_HELM } from './uniques.js';
 
 const lookMat = (look: string | undefined): THREE.Material => {
   const g = GEAR_COLORS[look ?? 'stone'] ?? GEAR_COLORS.stone;
@@ -200,6 +201,8 @@ function makeStaff(look: string | undefined, element?: 'fire' | 'frost' | 'life'
 export function makeHeld(id: string | undefined): THREE.Group | null {
   const def = id ? ITEMS[id] : undefined;
   if (!def) return null;
+  const unique = makeUniqueHeld(id!); // boss and treasure weapons have their own models
+  if (unique) return unique;
   if (def.tool === 'pickaxe') {
     const g = makePickaxe();
     if (def.look !== 'stone') { const m = lookMat(def.look); g.traverse((o) => { if ((o as THREE.Mesh).isMesh && o.userData.metal) (o as THREE.Mesh).material = m; }); }
@@ -248,7 +251,7 @@ export function applyGear(c: Character, gear: Gear): void {
   // Cloth has its own shapes: a pointy hat, a robe, a skirt.
   const cloth = (id: string | undefined) => !!id && ITEMS[id]?.armourType === 'cloth';
   const pick = (id: string | undefined, isCloth: boolean) => (cloth(id) === isCloth ? id : undefined);
-  show(c.armour.helm, pick(gear?.hd, false));
+  show(c.armour.helm, REPLACES_HELM.has(gear?.hd ?? '') ? undefined : pick(gear?.hd, false));
   show(c.armour.hat, pick(gear?.hd, true));
   show(c.armour.chest, pick(gear?.c, false));
   show(c.armour.robe, pick(gear?.c, true));
@@ -256,6 +259,7 @@ export function applyGear(c: Character, gear: Gear): void {
   for (const l of c.armour.legs) show(l, pick(gear?.l, false));
   show(c.armour.skirt, pick(gear?.l, true));
   show(c.armour.shield, gear?.o);
+  dressUniques(c, gear?.hd, gear?.c, gear?.l, gear?.s);
 }
 
 /** Visible gear from your own equipment (for previews). */
