@@ -166,6 +166,7 @@ select:focus { border-color: var(--amber); outline: none; }
 #prompt { position: absolute; left: 50%; top: calc(50% + 26px); transform: translateX(-50%); background: rgba(8, 10, 11, .66); padding: 6px 12px; border-radius: 9px; font-size: 12.5px; text-shadow: 0 1px 2px #000; white-space: nowrap; }
 #prompt b { color: var(--amber); }
 #prompt .bad { color: #ff9a8a; }
+#prompt .dim { color: #c8c4b8; font-weight: 400; }
 #pops { position: fixed; left: 50%; top: 42%; width: 0; z-index: 30; pointer-events: none; }
 .pop { position: absolute; left: 0; transform: translateX(-50%); white-space: nowrap; font: 700 16px var(--display); letter-spacing: .03em; text-shadow: 0 1px 3px #000; animation: rise 1.6s ease-out forwards; display: flex; align-items: center; gap: 6px; }
 .pop img { width: 22px; height: 22px; }

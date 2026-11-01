@@ -436,6 +436,10 @@ function use() {
   else if (near.kind === 'station') openPanel('craft', { station: near.id });
 }
 
+const PLANT_LOOK = 8;
+/** Close enough to pick (the same reach as before). */
+const plantClose = (p: Plant) => !!me && Math.hypot(p.x - me.x, p.z - me.z) < 2.6;
+
 function blocker(a: NonNullable<Aim>): string | null {
   const g = gameStore.get();
   if (a.kind === 'plant') {
@@ -548,7 +552,8 @@ function interact(now: number, playing: boolean) {
   else if (m) aimed = { kind: 'mob', m };
   else {
     const v = veins.target(cam.position, fwd, MINE_RANGE + 0.6);
-    const pl = v ? null : plants.target(cam.position, fwd, 2.6);
+    // Plants are named from a few metres away (so you can tell what's pickable), picked up close.
+    const pl = v ? null : plants.target(cam.position, fwd, PLANT_LOOK);
     if (v) aimed = { kind: 'vein', v };
     else if (pl) aimed = { kind: 'plant', p: pl };
     else {
@@ -599,7 +604,7 @@ function interact(now: number, playing: boolean) {
       sound.play('swing');
       setTimeout(() => { net.send(skill === 'mining' ? { t: 'mine', node: id } : { t: 'chop', node: id }); if (skill === 'mining') veins.hit(id); sound.play(skill === 'mining' ? 'mine' : 'chop'); }, SWING_SEC * STRIKE_AT * 1000);
       swingUntil = now + SWING_SEC * 1000;
-    } else if (aimed?.kind === 'plant' && !block && now >= nextSwingAt) {
+    } else if (aimed?.kind === 'plant' && !block && plantClose(aimed.p) && now >= nextSwingAt) {
       const lvl = levelFromXp(g.xp[PLANT_TYPES[aimed.p.kind].skill] ?? 0);
       nextSwingAt = now + Math.max(PICK_SEC * (1 - 0.01 * (lvl - 1)) * 1000, SWING_SEC * 1000);
       const id = aimed.p.id;
@@ -627,6 +632,10 @@ function interact(now: number, playing: boolean) {
   else if (aimed?.kind === 'vein' || aimed?.kind === 'tree') {
     const name = aimed.kind === 'vein' ? VEIN_TYPES[aimed.v.type].name.toLowerCase() : TREE_TYPES[aimed.t.kind].name.toLowerCase();
     setPrompt(block ? `<span class="bad">${block}</span>` : `Hold <b>click</b> to ${aimed.kind === 'vein' ? 'mine' : 'chop'} ${name}`);
+  } else if (aimed?.kind === 'plant') {
+    const type = PLANT_TYPES[aimed.p.kind], skill = type.skill === 'tailoring' ? 'Tailoring' : 'Herbalism';
+    const what = `<b>${type.name}</b> <span class="dim">· ${skill} ${type.level} · gives ${ITEMS[type.item]?.name ?? type.item}</span>`;
+    setPrompt(block ? `<span class="bad">${block}</span>` : plantClose(aimed.p) ? `Hold <b>click</b> to pick · ${what}` : `${what} · walk closer to pick`);
   } else if (aimed?.kind === 'water') setPrompt('<b>Click</b> to cast');
   else if (near) setPrompt(`<b>E</b> ${near.kind === 'loot' ? `Pick up ${near.name}` : near.kind === 'corpse' ? `Skin the ${near.name}${g.equip.knife ? '' : ' <span class="bad">(needs a skinning knife)</span>'}` : near.kind === 'npc' ? `Talk to ${near.name}` : near.kind === 'home' ? (near.name === 'chest' ? 'Open your chest' : `Knock on the ${near.name}`) : near.kind === 'bed' ? 'Rest (Rested: more XP for 30 min)' : near.kind === 'door' ? (myRoom() === near.id ? `${places.doorOpen(near.id) ? 'Close' : 'Open'} your door` : `Knock on ${near.name}`) : `Use the ${near.name}`}`);
   else setPrompt(null);
