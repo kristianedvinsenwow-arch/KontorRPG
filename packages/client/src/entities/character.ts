@@ -174,7 +174,8 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
   {
     // Helm: a domed cap with a nose guard, sized for the head.
     const h = armour.helm;
-    const plate = new THREE.MeshStandardMaterial({ color: 0x8a8a88, roughness: 0.5, metalness: 0.6 });
+    // Double-sided: from behind or below you see the helmet's inside, not a hole through it.
+    const plate = new THREE.MeshStandardMaterial({ color: 0x8a8a88, roughness: 0.5, metalness: 0.6, side: THREE.DoubleSide });
     // Tilted back like the hair, so the front edge sits on the brow and the eyes stay visible.
     const cap = new THREE.Group(); cap.position.y = 0.035; cap.rotation.x = 0.32; h.add(cap);
     const dome = mesh(new THREE.SphereGeometry(0.134, 16, 8, 0, Math.PI * 2, 0, Math.PI * 0.5), plate, cap);
