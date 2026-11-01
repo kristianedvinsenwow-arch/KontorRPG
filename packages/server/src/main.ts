@@ -33,8 +33,11 @@ const store: CharacterStore | undefined = supa ?? mem;
 const accounts = store ? new Accounts(store, createHash('sha256').update(`kontor-session:${process.env.SESSION_SECRET ?? (SUPABASE_SECRET_KEY || 'dev')}`).digest('hex')) : null;
 if (supa) supa.auth = accounts;
 if (mem) mem.auth = accounts;
-/** Guests are allowed unless REQUIRE_LOGIN=true (recommended once everyone has an account). */
-const requireLogin = !!store && process.env.REQUIRE_LOGIN === 'true';
+/**
+ * With accounts available, everyone logs in: a guest's progress lives only in memory and vanishes
+ * on the next deploy or restart. ALLOW_GUESTS=true brings guests back (e.g. for a quick demo).
+ */
+const requireLogin = !!store && process.env.ALLOW_GUESTS !== 'true';
 const world = new World({ build: BUILD, log, store, requireLogin });
 void world.start();
 const statics = serveStatic(CLIENT_DIST);

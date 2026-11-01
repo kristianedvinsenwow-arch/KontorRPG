@@ -20,5 +20,5 @@ services:
         value: https://xblngcjarybauizqwthb.supabase.co
       - key: SUPABASE_SECRET_KEY
         sync: false # Supabase dashboard → Project Settings → API Keys → Secret keys
-      - key: REQUIRE_LOGIN
-        value: "false" # set to "true" once everyone has logged in once
+      - key: ALLOW_GUESTS
+        value: "false" # guests aren't saved and lose everything on a deploy; "true" lets them in anyway
