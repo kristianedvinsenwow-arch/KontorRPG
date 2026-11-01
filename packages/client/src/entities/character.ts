@@ -22,7 +22,8 @@ export interface Character {
   /** Shoulder tier currently shown (applyGear bookkeeping). */
   userData_sh?: string | null;
   /** Armour shown by applyGear (helm, chest plate, shield, greaves). */
-  armour: { chest: THREE.Group; helm: THREE.Group; shield: THREE.Group; legs: THREE.Group[] };
+  /** Plate/leather pieces, plus cloth's own shapes: a robe, a long skirt and a pointy wizard hat. */
+  armour: { chest: THREE.Group; helm: THREE.Group; shield: THREE.Group; legs: THREE.Group[]; robe: THREE.Group; skirt: THREE.Group; hat: THREE.Group };
   /** Pauldrons on each shoulder; hidden until something is equipped in the shoulders slot. */
   pauldrons: THREE.Group[];
   race: Race;
@@ -115,7 +116,7 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
     bx(upper, 0.44, 0.06, 0.2 + 0.18 * b, M.belt, 0, 0.16, -0.04 * b);
   }
   // Armour pieces live in their own groups (kept out of merging) and are shown by applyGear.
-  const armour = { chest: new THREE.Group(), helm: new THREE.Group(), shield: new THREE.Group(), legs: [] as THREE.Group[] };
+  const armour = { chest: new THREE.Group(), helm: new THREE.Group(), shield: new THREE.Group(), legs: [] as THREE.Group[], robe: new THREE.Group(), skirt: new THREE.Group(), hat: new THREE.Group() };
   {
     const a = armour.chest;
     a.userData.keep = true;
@@ -127,8 +128,30 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
     a.visible = false;
     upper.add(a);
   }
-  if (race === 'ogre') {
-    // Tusks are added on the head below.
+  {
+    // Cloth chest: a robe — a loose tunic with a flared hem down over the thighs, and a sash.
+    const a = armour.robe;
+    const cloth = new THREE.MeshStandardMaterial({ color: 0xd8d0b8, roughness: 0.95, side: THREE.DoubleSide });
+    bx(a, 0.45, 0.46, 0.29, cloth, 0, 0.38, 0);
+    if (R.belly > 0) ball(a, v3(0, 0.29, -0.07 - 0.03 * R.belly), 0.21, cloth, 14).scale.set(1.02, 0.95, 0.72 + 0.3 * R.belly);
+    const hemTop = 0.2 * W + 0.04, hemLen = hipY * 0.62;
+    const hem = mesh(new THREE.CylinderGeometry(hemTop, hemTop + 0.1, hemLen, 14, 1, true), cloth, a);
+    hem.position.y = 0.16 - hemLen / 2; hem.scale.z = 0.8 * Wz;
+    bx(a, 0.47, 0.06, 0.31, cloth, 0, 0.17, 0); // sash
+    a.traverse((o) => (o.userData.keep = true));
+    a.visible = false;
+    upper.add(a);
+  }
+  {
+    // Cloth legs: a long skirt from the waist almost to the ground, flaring out.
+    const a = armour.skirt;
+    const cloth = new THREE.MeshStandardMaterial({ color: 0xd8d0b8, roughness: 0.95, side: THREE.DoubleSide });
+    const top = 0.2 * W + 0.03, len = hipY + 0.1;
+    const sk = mesh(new THREE.CylinderGeometry(top, top + 0.16, len, 16, 1, true), cloth, a);
+    sk.position.y = 0.14 - len / 2; sk.scale.z = 0.85 * Wz;
+    a.traverse((o) => (o.userData.keep = true));
+    a.visible = false;
+    upper.add(a);
   }
   // Backpack: only shown while a bag is worn in the back slot (bigger bag, bigger pack).
   const pack = new THREE.Group();
@@ -183,6 +206,19 @@ export function makeCharacter(colorIndex: number, name?: string, race: Race = 'h
     bx(cap, 0.018, 0.06, 0.02, plate, 0, -0.012, -0.138); // nose guard, between the eyes
     const rim = mesh(new THREE.TorusGeometry(0.134, 0.01, 6, 20), plate, cap);
     rim.rotation.x = Math.PI / 2; rim.scale.set(1, 1.05, 1);
+    h.traverse((o) => (o.userData.keep = true));
+    h.visible = false;
+    head.add(h);
+  }
+  {
+    // Cloth head: a pointy wizard's hat with a wide brim and a tip that flops back.
+    const h = armour.hat;
+    const cloth = new THREE.MeshStandardMaterial({ color: 0xd8d0b8, roughness: 0.95, side: THREE.DoubleSide });
+    const hat = new THREE.Group(); hat.position.y = 0.075; hat.rotation.x = 0.12; h.add(hat);
+    mesh(new THREE.CylinderGeometry(0.235, 0.24, 0.016, 20), cloth, hat);
+    mesh(new THREE.CylinderGeometry(0.075, 0.13, 0.2, 14).translate(0, 0.1, 0), cloth, hat);
+    const tip = new THREE.Group(); tip.position.y = 0.2; tip.rotation.x = 0.55; hat.add(tip);
+    mesh(new THREE.ConeGeometry(0.075, 0.2, 12).translate(0, 0.1, 0), cloth, tip);
     h.traverse((o) => (o.userData.keep = true));
     h.visible = false;
     head.add(h);

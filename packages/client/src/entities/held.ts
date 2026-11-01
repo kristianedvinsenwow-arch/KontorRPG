@@ -245,9 +245,15 @@ export function applyGear(c: Character, gear: Gear): void {
   c.pack.visible = !!gear?.b;
   c.pack.scale.setScalar(gear?.b ? 1 + Math.min(0.5, ((ITEMS[gear.b]?.bagSlots ?? 4) - 4) * 0.028) : 1); // bigger bag, bigger pack
   const show = (g: THREE.Object3D, id: string | undefined) => { g.visible = !!id; if (id) tint(g, ITEMS[id]?.look); };
-  show(c.armour.helm, gear?.hd);
-  show(c.armour.chest, gear?.c);
-  for (const l of c.armour.legs) show(l, gear?.l);
+  // Cloth has its own shapes: a pointy hat, a robe, a skirt.
+  const cloth = (id: string | undefined) => !!id && ITEMS[id]?.armourType === 'cloth';
+  const pick = (id: string | undefined, isCloth: boolean) => (cloth(id) === isCloth ? id : undefined);
+  show(c.armour.helm, pick(gear?.hd, false));
+  show(c.armour.hat, pick(gear?.hd, true));
+  show(c.armour.chest, pick(gear?.c, false));
+  show(c.armour.robe, pick(gear?.c, true));
+  for (const l of c.armour.legs) show(l, pick(gear?.l, false));
+  show(c.armour.skirt, pick(gear?.l, true));
   show(c.armour.shield, gear?.o);
 }
 
