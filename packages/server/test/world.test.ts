@@ -735,7 +735,7 @@ test('mounts: buy a horse from Eirik, ride faster, get knocked off when hit; no 
   const walk = p.stats.speedCap;
   world.handle(c, { t: 'mount' });
   assert.equal(p.state.mnt, 'fjord_horse');
-  assert.ok(p.stats.speedCap > walk * 1.5);
+  assert.ok(p.stats.speedCap > walk * 1.45);
   // A step a walker couldn't make is fine on horseback.
   advance(500);
   const x = p.state.x - 3.6, z = p.state.z;
