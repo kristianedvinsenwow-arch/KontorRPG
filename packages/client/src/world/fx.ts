@@ -47,10 +47,10 @@ export class Fx {
   }
 
   /** A projectile from `from` to (a moving) `to`, arriving after distance / speed. */
-  projectile(kind: 'arrow' | 'firebolt' | 'frostbolt' | 'magic', from: THREE.Vector3, to: () => THREE.Vector3 | null): void {
+  projectile(kind: 'arrow' | 'firebolt' | 'frostbolt' | 'magic' | 'heal', from: THREE.Vector3, to: () => THREE.Vector3 | null): void {
     const end0 = to();
     if (!end0) return;
-    const obj = kind === 'arrow' ? ARROW.clone() : bolt(kind === 'firebolt' ? 0xff7a2a : kind === 'frostbolt' ? 0x9fdcff : 0xb070ff);
+    const obj = kind === 'arrow' ? ARROW.clone() : bolt(kind === 'firebolt' ? 0xff7a2a : kind === 'frostbolt' ? 0x9fdcff : kind === 'heal' ? 0x7fe08a : 0xb070ff);
     const dur = Math.max(0.12, from.distanceTo(end0) / PROJECTILE_SPEED);
     obj.position.copy(from);
     this.add(obj, dur, (k, o) => {

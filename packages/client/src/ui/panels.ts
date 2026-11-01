@@ -472,7 +472,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     // The imbuer.
     if (n.roles.includes('imbuer')) {
       const box = el('div', 'quests');
-      box.append(el('div', 'lbl', 'Imbue a staff'), el('p', 'note', 'Bring a staff from the workbench, a gem and gold, and Ragna makes it magical: fire burns (stacks to 3, Ignite), frost slows (25%, Frost Nova).'));
+      box.append(el('div', 'lbl', 'Imbue a staff'), el('p', 'note', 'Bring a staff from the workbench, a gem and gold, and Ragna makes it magical: fire burns (stacks to 3, Ignite), frost hits slow and hard (Frost Nova), life heals other players (Mending Circle).'));
       let any = false;
       g.bag.forEach((s, i) => {
         const rule = s ? IMBUE[s.id] : undefined;
@@ -483,7 +483,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
         info.append(el('b', '', ITEMS[s.id].name), el('span', 'note', `Costs 1 ${ITEMS[rule.gem].name} (you have ${countItem(g.bag, rule.gem)}) and ${rule.gold} g`));
         const act = el('div', 'ract');
         const ok = countItem(g.bag, rule.gem) > 0 && g.gold >= rule.gold;
-        for (const e of ['fire', 'frost'] as const) { const b = btn(e === 'fire' ? 'Fire' : 'Frost', 'btn', () => send({ t: 'imbue', index: i, element: e })); b.disabled = !ok; act.append(b); }
+        for (const e of ['fire', 'frost', 'life'] as const) { const b = btn(e[0].toUpperCase() + e.slice(1), 'btn', () => send({ t: 'imbue', index: i, element: e })); b.disabled = !ok; act.append(b); }
         row.append(icon(s), info, act);
         box.append(row);
       });

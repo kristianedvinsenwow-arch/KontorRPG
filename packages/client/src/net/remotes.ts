@@ -130,6 +130,25 @@ export class Remotes {
   }
 
   get count(): number { return this.map.size; }
+
+  /** The player under the crosshair (a body-tall capsule), within reach: for healing. */
+  pick(origin: THREE.Vector3, dir: THREE.Vector3, reach: number): string | null {
+    let best: string | null = null, bestT = Infinity;
+    const c = new THREE.Vector3();
+    for (const [id, r] of this.map) {
+      const p = r.model.g.position;
+      c.set(p.x - origin.x, 0, p.z - origin.z);
+      const dxz = dir.x * dir.x + dir.z * dir.z;
+      let t = dxz > 1e-6 ? (c.x * dir.x + c.z * dir.z) / dxz : 0;
+      const y = Math.max(p.y + 0.3, Math.min(p.y + 1.6, origin.y + dir.y * t));
+      c.set(p.x, y, p.z).sub(origin);
+      t = c.dot(dir);
+      if (t < 0 || t > reach + 1) continue;
+      if (c.lengthSq() - t * t > 0.6 * 0.6) continue;
+      if (t < bestT) { bestT = t; best = id; }
+    }
+    return best;
+  }
 }
 
 export function remotePosition(r: Remotes, id: string): THREE.Vector3 | null { return (r as any).map.get(id)?.model.g.position.clone().add(new THREE.Vector3(0, 1.2, 0)) ?? null; }

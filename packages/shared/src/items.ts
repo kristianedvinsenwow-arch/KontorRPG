@@ -13,7 +13,7 @@ export type Slot =
   | 'mainHand' | 'offHand' | 'ring' | 'neck' | 'pickaxe' | 'hatchet' | 'rod' | 'knife' | 'ammo' | 'mount';
 
 export type ItemKind = 'ore' | 'gem' | 'material' | 'bar' | 'log' | 'ammo' | 'fish' | 'meat' | 'food' | 'herb' | 'potion' | 'mount' | 'junk' | 'tool' | 'weapon' | 'armour' | 'bag' | 'coins' | 'trinket' | 'plans';
-export type WeaponClass = 'sword' | 'mace' | 'longsword' | 'battleaxe' | 'warhammer' | 'halberd' | 'spear' | 'bow' | 'staff' | 'fireStaff' | 'frostStaff';
+export type WeaponClass = 'sword' | 'mace' | 'longsword' | 'battleaxe' | 'warhammer' | 'halberd' | 'spear' | 'bow' | 'staff' | 'fireStaff' | 'frostStaff' | 'lifeStaff';
 export type ArmourType = 'cloth' | 'leather' | 'metal';
 export type ToolKind = 'pickaxe' | 'hatchet' | 'rod' | 'knife';
 /** Visual material for models and icons. */
@@ -315,6 +315,7 @@ for (const [wood, tier, dps] of [['birch', 1, 2.5], ['pine', 2, 3.5]] as const) 
   const W2 = wood[0].toUpperCase() + wood.slice(1);
   add({ id: `${wood}_staff`, name: `${W2} staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'staff', dps, interval: 1.8, range: 2.6, twoHanded: true, sellValue: tier * 2, blurb: 'A clumsy club until the Imbuer in Bjørkvik makes it magical.' });
   add({ id: `${wood}_fire_staff`, name: `${W2} fire staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'fireStaff', dps: tier === 1 ? 3 : 3.75, interval: 1.8, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Light firebolts that set a burn (stacks to 3, most of the damage is in the burn). Right click: Ignite — every burning enemy nearby takes 45% of a firebolt per burn stack (12 s).' });
+  add({ id: `${wood}_life_staff`, name: `${W2} life staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'lifeStaff', dps: tier === 1 ? 2.5 : 3.1, interval: 2.0, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'A healer’s staff. Click a player to heal them (or no one, to heal yourself); on monsters it only stings. Right click: Mending Circle — heal everyone within 8 m (14 s).' });
   add({ id: `${wood}_frost_staff`, name: `${W2} frost staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'frostStaff', dps: tier === 1 ? 5 : 6.25, interval: 2.6, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Slow, heavy frostbolts. Right click: Frost Nova — freeze everything within 6 m for 2.5 s (15 s).' });
 }
 

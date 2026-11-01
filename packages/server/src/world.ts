@@ -15,7 +15,7 @@ import {
 } from '@kontor/shared';
 import { STORAGE_SLOTS, type CharacterStore, type StoredCharacter, type WorldSnapshot } from './persistence.js';
 import { cast, gather, reel, stepFishing, stopFishing } from './gather.js';
-import { attack, createMobs, mobState, skin, stepMobs } from './combat.js';
+import { attack, createMobs, heal, mobState, skin, stepMobs } from './combat.js';
 import type { Client, Ground, Lease, Mob, NodeState, ServerPlayer } from './types.js';
 
 export type { Client } from './types.js';
@@ -196,6 +196,7 @@ export class World {
       case 'storage': return this.storageMove(p, msg.op, msg.index, msg.qty);
       case 'quest': return this.quest(p, msg.quest, msg.op);
       case 'imbue': return this.imbue(p, msg.index, msg.element);
+      case 'heal': return heal(this, p, msg.target);
       case 'travel': return this.travel(p, msg.portal);
       case 'respawn': return this.respawn(p);
       case 'skin': return skin(this, p, msg.target);
@@ -777,7 +778,7 @@ export class World {
     this.sendInv(p);
   }
 
-  private imbue(p: ServerPlayer, index: number, element: 'fire' | 'frost'): void {
+  private imbue(p: ServerPlayer, index: number, element: 'fire' | 'frost' | 'life'): void {
     const n = [...NPC_BY_ID.values()].find((x) => x.roles.includes('imbuer') && this.near(p, x, 1));
     if (!n) return this.notice(p, 'Bring your staff to Ragna the Imbuer in Bjørkvik.', 'error');
     const s = p.bag[index];
@@ -787,9 +788,9 @@ export class World {
     if (p.gold < rule.gold) return this.notice(p, `It costs ${rule.gold} gold.`, 'error');
     removeItem(p.bag, rule.gem, 1);
     p.gold -= rule.gold;
-    s.id = element === 'fire' ? rule.fire : rule.frost; // rarity and rolled effects carry over
+    s.id = rule[element]; // rarity and rolled effects carry over
     p.client.send({ t: 'gain', item: s.id, qty: 1, r: s.r, rare: true });
-    this.notice(p, `Ragna hums, and your staff crackles with ${element}.`, 'info');
+    this.notice(p, element === 'life' ? 'Ragna hums, and your staff hums back, warm and green.' : `Ragna hums, and your staff crackles with ${element}.`, 'info');
     p.dirty = true;
     this.sendInv(p);
   }

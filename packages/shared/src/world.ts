@@ -438,9 +438,9 @@ export const homeLabel = (h: Home) => (h.kind === 'room' ? `Lodge room ${h.id + 
 export const STABLE = { x: V.x - 20, z: V.z - 7, w: 6, d: 3.4 };
 
 /** Staffs the Imbuer can enchant: staff → gem + gold. */
-export const IMBUE: Record<string, { gem: string; gold: number; fire: string; frost: string }> = {
-  birch_staff: { gem: 'quartz', gold: 25, fire: 'birch_fire_staff', frost: 'birch_frost_staff' },
-  pine_staff: { gem: 'sapphire', gold: 75, fire: 'pine_fire_staff', frost: 'pine_frost_staff' },
+export const IMBUE: Record<string, { gem: string; gold: number; fire: string; frost: string; life: string }> = {
+  birch_staff: { gem: 'quartz', gold: 25, fire: 'birch_fire_staff', frost: 'birch_frost_staff', life: 'birch_life_staff' },
+  pine_staff: { gem: 'sapphire', gold: 75, fire: 'pine_fire_staff', frost: 'pine_frost_staff', life: 'pine_life_staff' },
 };
 
 // ------------------------------------------------------------------ recipes

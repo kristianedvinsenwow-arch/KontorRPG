@@ -180,14 +180,16 @@ function makeBow(look: string | undefined): THREE.Group {
   return g;
 }
 
-function makeStaff(look: string | undefined, element?: 'fire' | 'frost'): THREE.Group {
+function makeStaff(look: string | undefined, element?: 'fire' | 'frost' | 'life'): THREE.Group {
   const g = new THREE.Group();
   haft(g, 1.35, 0.022, lookMat(look));
   const knob = mesh(new THREE.DodecahedronGeometry(0.05, 0), lookMat(look), g);
   knob.position.y = 1.37;
   if (element) {
-    const glow = new THREE.MeshStandardMaterial({ color: element === 'fire' ? 0xff7a2a : 0x8fd8ff, emissive: element === 'fire' ? 0xff5a10 : 0x4fb8ff, emissiveIntensity: 2.4, roughness: 0.3 });
-    const orb = mesh(element === 'fire' ? new THREE.SphereGeometry(0.06, 12, 8) : new THREE.OctahedronGeometry(0.07, 0), glow, g, false);
+    const col = { fire: [0xff7a2a, 0xff5a10], frost: [0x8fd8ff, 0x4fb8ff], life: [0x9ff0a0, 0x3fd060] }[element];
+    const glow = new THREE.MeshStandardMaterial({ color: col[0], emissive: col[1], emissiveIntensity: 2.4, roughness: 0.3 });
+    const orb = mesh(element === 'frost' ? new THREE.OctahedronGeometry(0.07, 0) : new THREE.SphereGeometry(0.06, 12, 8), glow, g, false);
+    if (element === 'life') for (const sx of [-1, 1]) { const leaf = mesh(new THREE.SphereGeometry(0.05, 6, 4), new THREE.MeshStandardMaterial({ color: 0x5fae4a, roughness: 0.7 }), g); leaf.scale.set(0.35, 1, 0.15); leaf.position.set(sx * 0.05, 1.41, 0); leaf.rotation.z = -sx * 0.7; }
     orb.position.y = 1.47;
     if (element === 'frost') orb.scale.set(0.7, 1.4, 0.7);
   }
@@ -217,6 +219,7 @@ export function makeHeld(id: string | undefined): THREE.Group | null {
     case 'staff': return makeStaff(def.look);
     case 'fireStaff': return makeStaff(def.look, 'fire');
     case 'frostStaff': return makeStaff(def.look, 'frost');
+    case 'lifeStaff': return makeStaff(def.look, 'life');
   }
   return null;
 }

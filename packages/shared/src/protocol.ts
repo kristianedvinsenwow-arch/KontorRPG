@@ -80,7 +80,8 @@ export type ClientMsg =
   | { t: 'door'; home: number }
   | { t: 'storage'; op: 'put' | 'take'; index: number; qty: number }
   | { t: 'quest'; quest: string; op: 'accept' | 'turnin' | 'abandon' }
-  | { t: 'imbue'; index: number; element: 'fire' | 'frost' }
+  | { t: 'imbue'; index: number; element: 'fire' | 'frost' | 'life' }
+  | { t: 'heal'; target: string }
   | { t: 'travel'; portal: string }
   | { t: 'respawn' }
   | { t: 'skin'; target: string }
@@ -183,7 +184,8 @@ export function decodeClient(raw: string): ClientMsg | null {
     case 'door': return num(m.home) ? { t: 'door', home: int(m.home) } : null;
     case 'storage': return (m.op === 'put' || m.op === 'take') && num(m.index) && num(m.qty) ? { t: 'storage', op: m.op, index: int(m.index), qty: Math.max(1, int(m.qty)) } : null;
     case 'quest': return str(m.quest) && ['accept', 'turnin', 'abandon'].includes(m.op) ? { t: 'quest', quest: m.quest, op: m.op } : null;
-    case 'imbue': return num(m.index) && (m.element === 'fire' || m.element === 'frost') ? { t: 'imbue', index: int(m.index), element: m.element } : null;
+    case 'imbue': return num(m.index) && (m.element === 'fire' || m.element === 'frost' || m.element === 'life') ? { t: 'imbue', index: int(m.index), element: m.element } : null;
+    case 'heal': return str(m.target) ? { t: 'heal', target: m.target } : null;
     case 'travel': return typeof m.portal === 'string' && m.portal.length < 24 ? { t: 'travel', portal: m.portal } : null;
     case 'respawn': return { t: 'respawn' };
     case 'skin': return str(m.target) ? { t: 'skin', target: m.target } : null;

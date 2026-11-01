@@ -945,3 +945,21 @@ test('bosses: slams are telegraphed (step out to dodge), they enrage, the Mine K
   damageMob(world, king, 99999, p.state.id, world.now());
   assert.ok(guards.every((g) => g.dead && g.respawnAt === Infinity), 'and goes back to sleep with him');
 });
+
+test('life staff: heal another player (and yourself); Mending Circle heals everyone close; healing in a fight earns XP', () => {
+  const { world, c, p, advance } = game(() => 0.9);
+  const c2 = fakeClient(); world.connect(c2);
+  world.handle(c2, { t: 'hello', name: 'Tank', color: 1, proto: PROTOCOL_VERSION, build: defaultBuild() });
+  const tank = [...world.players.values()].find((x) => x !== p)!;
+  const put = (q: typeof p, x: number, z: number) => { const y = h(x, z); Object.assign(q.state, { x, y, z }); q.lastValid = { x, y, z, at: world.now() }; };
+  put(p, 3, 3); put(tank, 8, 3);
+  p.equip.mainHand = { id: 'birch_life_staff', qty: 1 }; world.recompute(p);
+  tank.hp = 5; tank.lastHurtAt = world.now();
+  world.handle(c, { t: 'heal', target: tank.state.id });
+  advance(1000); world.step();
+  assert.ok(tank.hp > 5, `healed (${tank.hp})`);
+  assert.ok((p.xp.combat ?? 0) > 0, 'healing in a fight gives XP');
+  p.hp = 3; tank.hp = 3;
+  world.handle(c, { t: 'attack', target: 'none', special: true });
+  assert.ok(p.hp > 3 && tank.hp > 3, 'Mending Circle');
+});

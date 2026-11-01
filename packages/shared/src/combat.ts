@@ -12,7 +12,7 @@ export interface Special {
   name: string;
   cd: number;
   mult: number;
-  kind: 'single' | 'spin' | 'shot' | 'ignite' | 'nova' | 'cone' | 'guard';
+  kind: 'single' | 'spin' | 'shot' | 'ignite' | 'nova' | 'cone' | 'guard' | 'mend';
   radius?: number;
   /** Stun the target(s) for this many seconds. */
   stun?: number;
@@ -37,6 +37,7 @@ export const SPECIALS: Record<WeaponClass | 'fists', Special> = {
   bow: { name: 'Power Shot', cd: 10, mult: 3, kind: 'shot', blurb: '3× damage arrow.' },
   staff: { name: 'Bonk', cd: 6, mult: 1.8, kind: 'single', blurb: 'A clumsy two-handed bonk.' },
   fireStaff: { name: 'Ignite', cd: 12, mult: 0.45, kind: 'ignite', radius: 22, blurb: 'Every burning enemy within 22 m takes 45% of a firebolt per burn stack (up to 135% at 3 stacks).' },
+  lifeStaff: { name: 'Mending Circle', cd: 14, mult: 1.6, kind: 'mend', radius: 8, blurb: 'Heal everyone within 8 m (you too) for 1.6× a heal.' },
   frostStaff: { name: 'Frost Nova', cd: 15, mult: 0.8, kind: 'nova', radius: 6, blurb: 'Freeze everything within 6 m for 2.5 s.' },
 };
 
@@ -52,6 +53,11 @@ export const SHIELD_THREAT_M = 3;
 /** Giantslayer damage by monster size (scale 1 = goblin-sized): ×0.75 on goblins up to ×1.6 on the biggest trolls. */
 export const giantslayerMult = (scale: number) => Math.max(0.6, Math.min(1.6, 0.15 + 0.6 * scale));
 
+/** A life staff's heal is this × its basic hit (with magic damage bonuses). */
+export const HEAL_MULT = 2.4;
+/** Life-staff bolts on monsters: weak. */
+export const LIFE_BOLT_MULT = 0.5;
+
 export const BURN = { maxStacks: 3, perStackPerSec: 0.16, sec: 4 };
 export const SLOW = { pct: 0.25, sec: 3 };
 export const FREEZE_SEC = 2.5;
@@ -64,7 +70,7 @@ export function weaponClass(main: Stack | undefined): WeaponClass | 'fists' {
 }
 
 export function styleOf(c: WeaponClass | 'fists'): Style {
-  return c === 'bow' ? 'ranged' : c === 'fireStaff' || c === 'frostStaff' ? 'magic' : 'melee';
+  return c === 'bow' ? 'ranged' : c === 'fireStaff' || c === 'frostStaff' || c === 'lifeStaff' ? 'magic' : 'melee';
 }
 
 export function attackRange(main: Stack | undefined): number {

@@ -5,7 +5,7 @@
  * flight time so the hit numbers match what players see.
  */
 import {
-  BURN, CORPSE_SEC, FREEZE_SEC, ITEMS, knifeBonus, knifeUses, levelOf, MOBS, PROJECTILE_SPEED, SLOW, SPAWNS, ST_ANGRY, ST_BURN, ST_DEAD, ST_FROZEN, ST_SLOW,
+  BURN, HEAL_MULT, LIFE_BOLT_MULT, CORPSE_SEC, FREEZE_SEC, ITEMS, knifeBonus, knifeUses, levelOf, MOBS, PROJECTILE_SPEED, SLOW, SPAWNS, ST_ANGRY, ST_BURN, ST_DEAD, ST_FROZEN, ST_SLOW,
   attackInterval, attackRange, groundAt, incoming, inCaveRegion, regionAt, mitigate, outgoing, r2, r3, rollCraftRarity, rollEffects,
   specialCooldown, specialFor, hasShield, giantslayerMult, GUARD_SEC, SHIELD_THREAT_M, styleOf, weaponClass, type Drop, type MobState, type Rarity, type Stack,
 } from '@kontor/shared';
@@ -16,7 +16,7 @@ import type { World } from './world.js';
 const GEAR_BY_TIER: Record<number, string[]> = {};
 for (const d of Object.values(ITEMS)) {
   if (!d.slot || d.fixedRarity || d.kind === 'ammo' || d.kind === 'bag' || !d.tier) continue;
-  if (d.weapon === 'fireStaff' || d.weapon === 'frostStaff') continue;
+  if (d.weapon === 'fireStaff' || d.weapon === 'frostStaff' || d.weapon === 'lifeStaff') continue;
   if (d.weapon === 'warhammer' || d.weapon === 'halberd' || d.weapon === 'spear') continue; // only from plans
   (GEAR_BY_TIER[d.tier] ??= []).push(d.id);
 }
@@ -239,6 +239,17 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
   const main = p.equip.mainHand, ammo = p.equip.ammo;
   const cls = weaponClass(main);
   const spDef = specialFor(main, p.equip.offHand);
+  // Mending Circle: heal everyone close by (no target needed).
+  if (special && spDef.kind === 'mend') {
+    if (now < p.nextSpecialAt) return;
+    p.nextSpecialAt = now + specialCooldown(spDef, p.stats.all) * 1000;
+    p.client.send({ t: 'cooldown', until: Date.now() + (p.nextSpecialAt - now) });
+    p.act = 'cast'; p.actUntil = now + 600;
+    w.broadcastNear(p.state, { t: 'fx', kind: 'mend', from: p.state.id });
+    const amount = outgoing(main, undefined, p.stats.all, HEAL_MULT * spDef.mult);
+    for (const q of w.players.values()) if (!q.dead && sameRegion(q.state, p.state) && Math.hypot(q.state.x - p.state.x, q.state.z - p.state.z) <= (spDef.radius ?? 8)) applyHeal(w, p, q, amount, now);
+    return;
+  }
   // Parry needs no target: raise the shield.
   if (special && spDef.kind === 'guard') {
     if (now < p.nextSpecialAt) return;
@@ -292,9 +303,9 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
   if (sp?.guard) p.guard = { until: now + GUARD_SEC * 1000, pct: sp.guard, riposte: sp.riposte ?? 0 };
   if (!sp || sp.kind === 'single' || sp.kind === 'shot') {
     // Frost power: longer freezes, and frostbolts hit harder (half the bonus).
-    const mult = (sp ? sp.mult : 1) * (cls === 'frostStaff' ? 1 + s.frostPower / 2 : 1);
+    const mult = (sp ? sp.mult : 1) * (cls === 'frostStaff' ? 1 + s.frostPower / 2 : 1) * (cls === 'lifeStaff' ? LIFE_BOLT_MULT : 1);
     if (style === 'melee') return strike(m, mult);
-    const kind = cls === 'bow' ? 'arrow' : cls === 'fireStaff' ? 'firebolt' : 'frostbolt';
+    const kind = cls === 'bow' ? 'arrow' : cls === 'fireStaff' ? 'firebolt' : cls === 'lifeStaff' ? 'heal' : 'frostbolt';
     w.broadcastNear(p.state, { t: 'fx', kind, from: p.state.id, to: m.id });
     w.later(now + flight(m), () => {
       if (m.dead) return;
@@ -329,6 +340,37 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
     w.broadcastNear(p.state, { t: 'fx', kind: 'ignite', from: p.state.id });
     for (const t of burning) strike(t, sp.mult * t.burn!.stacks * (1 + s.burnDmg));
   }
+}
+
+/** Heal another player (or yourself) with a life staff: a green bolt, healing on arrival. */
+export function heal(w: World, p: ServerPlayer, targetId: string): void {
+  if (p.dead) return;
+  const now = w.now();
+  const main = p.equip.mainHand;
+  if (weaponClass(main) !== 'lifeStaff') return;
+  if (now < p.nextAttackAt - 150) return;
+  const t = targetId === p.state.id || targetId === 'self' ? p : [...w.players.values()].find((q) => q.state.id === targetId);
+  if (!t || t.dead || !sameRegion(t.state, p.state)) return;
+  if (Math.hypot(t.state.x - p.state.x, t.state.z - p.state.z) > attackRange(main) + 1) return w.notice(p, 'Out of range.', 'error');
+  p.nextAttackAt = now + attackInterval(main) * 1000;
+  if (p.held !== 'mainHand') { p.held = 'mainHand'; w.refreshGear(p); }
+  p.act = 'cast'; p.actUntil = now + 600;
+  const amount = outgoing(main, undefined, p.stats.all, HEAL_MULT) * (w.rand() < p.stats.all.crit ? 1.5 : 1);
+  if (t === p) return applyHeal(w, p, p, amount, now);
+  w.broadcastNear(p.state, { t: 'fx', kind: 'heal', from: p.state.id, to: t.state.id });
+  const flight = (Math.hypot(t.state.x - p.state.x, t.state.z - p.state.z) / PROJECTILE_SPEED) * 1000;
+  w.later(now + flight, () => { if (!t.dead) applyHeal(w, p, t, amount, w.now()); });
+}
+
+function applyHeal(w: World, healer: ServerPlayer, t: ServerPlayer, amount: number, now: number): void {
+  const before = t.hp;
+  t.hp = Math.min(t.stats.maxHp, t.hp + amount);
+  const done = Math.round((t.hp - before) * 10) / 10;
+  healer.lastHealAt = now;
+  w.broadcastNear(t.state, { t: 'hit', to: t.state.id, dmg: Math.max(done, 0), kind: 'heal', from: healer.state.id });
+  w.sendHp(t);
+  // Healing someone who is actually fighting earns player-level XP (half a point per HP restored).
+  if (done > 0 && now - t.lastHurtAt < 15_000) w.addXp(healer, 'combat', Math.max(1, Math.round(done * 0.5)));
 }
 
 export function damageMob(w: World, m: Mob, dmg: number, by: string, now: number): void {

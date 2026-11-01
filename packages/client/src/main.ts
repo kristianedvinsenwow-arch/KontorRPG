@@ -332,8 +332,8 @@ net.on((msg) => {
     case 'fx': {
       const from = posOf(msg.from);
       if (!from) break;
-      sound.play(msg.kind === 'arrow' ? 'bow' : msg.kind === 'firebolt' ? 'fire' : msg.kind === 'frostbolt' ? 'frost' : msg.kind === 'magic' ? 'zap' : msg.kind === 'guard' ? 'block' : msg.kind, from);
-      if (msg.kind === 'arrow' || msg.kind === 'firebolt' || msg.kind === 'frostbolt' || msg.kind === 'magic') {
+      sound.play(msg.kind === 'arrow' ? 'bow' : msg.kind === 'firebolt' ? 'fire' : msg.kind === 'frostbolt' ? 'frost' : msg.kind === 'magic' ? 'zap' : msg.kind === 'guard' ? 'block' : msg.kind === 'mend' ? 'heal' : msg.kind, from);
+      if (msg.kind === 'arrow' || msg.kind === 'firebolt' || msg.kind === 'frostbolt' || msg.kind === 'magic' || msg.kind === 'heal') {
         const start = msg.from === myId && me ? new THREE.Vector3(me.x, me.y + eyeHeight - 0.2, me.z).add(new THREE.Vector3(-Math.sin(me.yaw), 0, -Math.cos(me.yaw)).multiplyScalar(0.6)) : from;
         const to = msg.to;
         fx.projectile(msg.kind, start, () => (to ? posOf(to) : null));
@@ -348,6 +348,7 @@ net.on((msg) => {
         if (gp) fx.warn(new THREE.Vector3(gp.x, groundAt(gp.x, gp.z), gp.z), r, 1.3);
         hud.toast(`${k ? MOBS[k].name : 'It'} raises its arms — get clear!`, 1300, 'error');
       }
+      else if (msg.kind === 'mend') fx.ring(from.clone().setY(from.y - 1), 8, 0x7fe08a, 0.8);
       else if (msg.kind === 'guard') fx.ring(from.clone().setY(from.y - 1), 1.2, 0xc8d8ff, 0.5);
       break;
     }
@@ -403,7 +404,7 @@ function setPrompt(html: string | null) {
 
 // ---------------------------------------------------------------- what you're pointing at / standing by
 type Near = { kind: 'npc'; id: string; name: string } | { kind: 'home' | 'door' | 'bed'; id: number; name: string } | { kind: 'station'; id: string; name: string } | { kind: 'loot'; id: number; name: string } | { kind: 'corpse'; id: string; name: string } | null;
-type Aim = { kind: 'mob'; m: MobState } | { kind: 'vein'; v: Vein } | { kind: 'plant'; p: Plant } | { kind: 'tree'; t: Tree } | { kind: 'water'; p: THREE.Vector3 } | null;
+type Aim = { kind: 'mob'; m: MobState } | { kind: 'ally'; id: string } | { kind: 'vein'; v: Vein } | { kind: 'plant'; p: Plant } | { kind: 'tree'; t: Tree } | { kind: 'water'; p: THREE.Vector3 } | null;
 let near: Near = null;
 let aimed: Aim = null;
 let nextSwingAt = 0, swingUntil = 0, nextAttackAt = 0, spinT = 0, travelAt = 0;
@@ -461,7 +462,7 @@ function special() {
     let bd = (sp.kind === 'ignite' ? 22 : sp.radius ?? 3) + 1;
     for (const m of mobs.all()) { if (m.st & 8) continue; const d = Math.hypot(m.x - me.x, m.z - me.z); if (d < bd) { bd = d; target = m; } }
   }
-  if (sp.kind === 'guard') {
+  if (sp.kind === 'guard' || sp.kind === 'mend') {
     // Raise the shield: no target needed.
     net.send({ t: 'attack', target: target?.id ?? 'none', special: true });
     viewmodel.swing();
@@ -533,8 +534,11 @@ function interact(now: number, playing: boolean) {
   const reach = attackRange(main);
   const ranged = reach > 6;
   aimed = null;
-  const m = mobs.pick(cam.position, fwd, ranged ? reach : reach + 0.6, ranged ? 0.1 : 0.25);
-  if (m) aimed = { kind: 'mob', m };
+  const healer = weaponClass(main) === 'lifeStaff';
+  const ally = healer ? remotes.pick(cam.position, fwd, reach) : null;
+  const m = ally ? null : mobs.pick(cam.position, fwd, ranged ? reach : reach + 0.6, ranged ? 0.1 : 0.25);
+  if (ally) aimed = { kind: 'ally', id: ally };
+  else if (m) aimed = { kind: 'mob', m };
   else {
     const v = veins.target(cam.position, fwd, MINE_RANGE + 0.6);
     const pl = v ? null : plants.target(cam.position, fwd, 2.6);
@@ -559,7 +563,15 @@ function interact(now: number, playing: boolean) {
 
   // Left click.
   if (playing && input.mouseDown && !fishing.active) {
-    if (aimed?.kind === 'mob') {
+    if (healer && (aimed?.kind === 'ally' || (!aimed && gameStore.get().hp < gameStore.get().maxHp))) {
+      // Life staff: heal whoever you aim at, or yourself.
+      if (now >= nextAttackAt) {
+        nextAttackAt = now + attackInterval(main) * 1000;
+        net.send({ t: 'heal', target: aimed?.kind === 'ally' ? aimed.id : 'self' });
+        viewmodel.swing();
+        swingUntil = now + SWING_SEC * 1000;
+      }
+    } else if (aimed?.kind === 'mob') {
       if (now >= nextAttackAt) {
         nextAttackAt = now + attackInterval(main) * 1000;
         net.send({ t: 'attack', target: aimed.m.id, special: false });
@@ -603,6 +615,7 @@ function interact(now: number, playing: boolean) {
   // Prompt under the crosshair.
   if (!playing || fishing.active) setPrompt(null);
   else if (castAt) setPrompt('Waiting for a bite… (walk away to stop)');
+  else if (aimed?.kind === 'ally') setPrompt(`<b>Click</b> heal · <b>Right click</b> Mending Circle`);
   else if (aimed?.kind === 'mob') setPrompt(`<b>Click</b> attack · <b>Right click</b> ${specialFor(main, gameStore.get().equip.offHand).name}`);
   else if (aimed?.kind === 'vein' || aimed?.kind === 'tree') {
     const name = aimed.kind === 'vein' ? VEIN_TYPES[aimed.v.type].name.toLowerCase() : TREE_TYPES[aimed.t.kind].name.toLowerCase();
