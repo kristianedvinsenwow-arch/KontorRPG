@@ -282,6 +282,9 @@ export function animateCharacter(c: Character, speed: number, pitch: number, swi
   const sw = Math.sin(c.ph) * amp;
   c.legs[0].hip.rotation.x = sw;
   c.legs[1].hip.rotation.x = -sw;
+  // Riding spreads the legs (seatRider); back on foot they come together again.
+  c.legs[0].hip.rotation.z = 0;
+  c.legs[1].hip.rotation.z = 0;
   // Knees bend backwards (shin swings back), so the rotation is negative.
   c.legs[0].knee.rotation.x = -Math.max(0, Math.sin(c.ph + 1.2)) * amp * 1.2;
   c.legs[1].knee.rotation.x = -Math.max(0, Math.sin(c.ph + 1.2 + Math.PI)) * amp * 1.2;
