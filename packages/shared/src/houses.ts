@@ -6,9 +6,9 @@
  * Local frame: origin at the house centre, −Z towards the door (the yard it faces), +X to the
  * right as you walk in... mirrored, but consistent everywhere via toWorld / toLocal.
  */
-import { GRUBEN, VILLAGE, heightAt } from './terrain.js';
+import { GRUBEN, VILLAGE, MANOR, LAKE, heightAt } from './terrain.js';
 
-export type HouseKind = 'cottage' | 'hut';
+export type HouseKind = 'cottage' | 'hut' | 'manor';
 export interface HouseFrame {
   id: number; kind: HouseKind; name: string;
   x: number; z: number; ry: number;
@@ -33,10 +33,13 @@ export function toLocal(f: Pick<HouseFrame, 'x' | 'z' | 'ry'>, x: number, z: num
 
 function frame(id: number, kind: HouseKind, name: string, x: number, z: number, faceX: number, faceZ: number): HouseFrame {
   const ry = Math.atan2(faceX - x, faceZ - z) + Math.PI;
-  const [w, d] = kind === 'cottage' ? [5, 4] : [4, 3.4];
+  const [w, d] = kind === 'manor' ? [16, 10] : kind === 'cottage' ? [5, 4] : [4, 3.4];
   const c = Math.cos(ry), s = Math.sin(ry);
   let floor = -Infinity;
   for (const lx of [-w / 2 - 0.2, 0, w / 2 + 0.2]) for (const lz of [-d / 2 - 0.2, 0, d / 2 + 0.2]) floor = Math.max(floor, heightAt(x + lx * c + lz * s, z - lx * s + lz * c));
+  // The manor's great hall: bed and chest on the left, a fireplace on the back wall, the long table
+  // in the middle, and the workshop stations round the walls (see world.ts).
+  if (kind === 'manor') return { id, kind, name, x, z, ry, w, d, floor, doorW: 1.8, bed: { x: -6.3, z: 3.2 }, chest: { x: -7.3, z: 0.6 }, hearth: { x: 0, z: d / 2 - 0.55 }, table: { x: 0, z: 0.3 } };
   return kind === 'cottage'
     ? { id, kind, name, x, z, ry, w, d, floor, doorW: 1.1, bed: { x: -w / 2 + 0.7, z: d / 2 - 1.1 }, chest: { x: -w / 2 + 0.7, z: d / 2 - 2.45 }, hearth: { x: w / 2 - 0.65, z: d / 2 - 0.55 }, table: { x: w / 2 - 1.5, z: -0.35 } }
     : { id, kind, name, x, z, ry, w, d, floor, doorW: 1.0, bed: { x: -w / 2 + 0.65, z: d / 2 - 1.1 }, chest: { x: w / 2 - 0.55, z: -0.2 }, hearth: { x: w / 2 - 0.6, z: d / 2 - 0.55 } };
@@ -49,12 +52,15 @@ export const HOUSES: HouseFrame[] = [
   frame(10, 'cottage', 'Lakeview cottage', V.x + 8, V.z + 17, V.x, V.z),
   frame(11, 'hut', 'East miners’ hut', G.x + 13, G.z + 59, G.x, G.z + 54),
   frame(12, 'hut', 'West miners’ hut', G.x - 12, G.z + 47, G.x, G.z + 54),
+  frame(13, 'manor', 'Lakeside Manor', MANOR.x, MANOR.z, LAKE.x + 6, LAKE.z),
 ];
+export const MANOR_ID = 13;
 
 /** The house whose inside (between its walls) contains (x, z), if any. */
 export function houseAt(x: number, z: number, margin = 0): HouseFrame | undefined {
   for (const h of HOUSES) {
-    if (Math.abs(x - h.x) > 6 || Math.abs(z - h.z) > 6) continue;
+    const reach = Math.max(h.w, h.d) / 2 + 1;
+    if (Math.abs(x - h.x) > reach || Math.abs(z - h.z) > reach) continue;
     const l = toLocal(h, x, z);
     if (Math.abs(l.x) < h.w / 2 + margin && Math.abs(l.z) < h.d / 2 + margin) return h;
   }

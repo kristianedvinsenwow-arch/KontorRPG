@@ -5,7 +5,7 @@
  */
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { CHUNK_SIZE, HOMES, INN, VEINS, inBounds, WATER_LEVEL, heightAt, mulberry32, keepClear, pathDist, treesInChunk } from '@kontor/shared';
+import { CHUNK_SIZE, HOUSES, houseAt, toLocal, INN, VEINS, inBounds, WATER_LEVEL, heightAt, mulberry32, keepClear, pathDist, treesInChunk } from '@kontor/shared';
 import { registerTrees } from './trees.js';
 import { canvasTex, TEX } from '../engine/procgen.js';
 
@@ -91,7 +91,11 @@ export function rockGeo(seed: number, flat: number): THREE.BufferGeometry {
 /** Inside a building (the lodge, cottages, huts), where nothing should grow. */
 function underRoof(x: number, z: number): boolean {
   if (Math.abs(x - INN.x) < INN.w / 2 + 0.4 && Math.abs(z - INN.z) < INN.d / 2 + 0.4) return true;
-  return HOMES.some((h) => h.house && Math.hypot(x - h.house.x, z - h.house.z) < 2.8);
+  if (houseAt(x, z, 0.6)) return true;
+  // The manor's towers and portico stand outside its hall walls.
+  const m = HOUSES.find((h) => h.kind === 'manor');
+  if (m && Math.abs(x - m.x) < 16 && Math.abs(z - m.z) < 16) { const l = toLocal(m, x, z); if (Math.abs(l.x) < m.w / 2 + 2.8 && l.z > -m.d / 2 - 3.6 && l.z < m.d / 2 + 1) return true; }
+  return false;
 }
 
 /** A tuft: three crossed quads textured with grass blades; uv.y drives the wind (tips move, roots don't). */

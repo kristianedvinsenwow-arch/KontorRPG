@@ -5,7 +5,7 @@
  * checks the same spots.
  */
 import * as THREE from 'three';
-import { stationHouse, STALL, STABLE, MARKET, TOWN_GATE, CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, FJORD_PIER, SHIPWRECK, fjordMid, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
+import { MANOR_PRICE, mulberry32, stationHouse, STALL, STABLE, MARKET, TOWN_GATE, CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, FJORD_PIER, SHIPWRECK, fjordMid, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
 import { mat, bx, mesh, canvasTex } from '../engine/procgen.js';
 import { makeCharacter, animateCharacter, type Character } from '../entities/character.js';
 import { applyGear } from '../entities/held.js';
@@ -79,6 +79,7 @@ export class Places {
     this.passGate(GRUBEN_PASS.x, GRUBEN_PASS.z, 70, 34, 'Pass to Gruben', 'Walk through · monsters level 13–22 · the Mine King');
     this.gruben();
     this.stable();
+    this.manor();
     this.fjord();
     this.rowboat(PIER, 'fjord', null, null); // labelled by the pier's own tag
   }
@@ -512,6 +513,286 @@ export class Places {
     for (let lz = -d / 2; lz <= d / 2 + 1e-6; lz += 0.35) for (const sx of [-1, 1]) push(sx * w / 2, lz, 0.18);
     push(f.bed.x, f.bed.z + 0.45, 0.5); push(f.bed.x, f.bed.z - 0.5, 0.5); push(f.chest.x, f.chest.z, 0.42); if (f.kind !== 'cottage') push(f.hearth.x, f.hearth.z, 0.5);
     this.doorTag(h, H + 1.2);
+  }
+
+  /**
+   * The Lakeside Manor: the grandest house in the game. A whitewashed, timber-framed hall on a
+   * stone terrace, two storeys under a steep slate roof with dormers and tall chimneys, round
+   * towers at the front corners, a columned portico, and a walled garden with a fountain, hedges,
+   * flowerbeds and lanterns, looking across the lake to Bjørkvik. Inside: one great hall with a
+   * fireplace, a four-poster bed, a long dining table under chandeliers, and every workshop.
+   */
+  private manor(): void {
+    const h = HOMES.find((x) => x.kind === 'manor');
+    const f = HOUSES.find((x) => x.kind === 'manor');
+    if (!h || !f) return;
+    const { w, d, doorW } = f;
+    const H = 4.4, TOP = 7.6, T = 0.3;
+    const g = new THREE.Group();
+    g.position.set(f.x, f.floor, f.z); g.rotation.y = f.ry;
+    this.group.add(g);
+    const plaster = mat(0xf0e9dc, null, { r: 0.92 }), trim = mat(0xf8f4ec, null, { r: 0.6 });
+    const slate = new THREE.MeshStandardMaterial({ color: 0x39424f, roughness: 0.65, metalness: 0.15 });
+    const brick = mat(0x8a4a36, 'rock', { r: 0.9 });
+    const gold = new THREE.MeshStandardMaterial({ color: 0xd8a838, metalness: 0.85, roughness: 0.3 });
+    const hedge = mat(0x2f5a2a, 'ground', { r: 1 }), gravel = mat(0xc8beac, 'rock', { r: 1 });
+    const red = mat(0x8a2228, 'cloth', { r: 1 }), win = new THREE.MeshStandardMaterial({ color: 0xc8d8e8, roughness: 0.15, metalness: 0.2, emissive: 0xffb060, emissiveIntensity: 0 });
+    this.windows.push(win);
+    const col = (lx: number, lz: number, r: number) => { const p = toWorld(f, lx, lz); this.colliders.push({ x: p.x, z: p.z, r }); };
+
+    // Terrace: a stone plinth under the whole house, down to the ground.
+    let lo = f.floor;
+    for (const lx of [-w / 2 - 3, 0, w / 2 + 3]) for (const lz of [-d / 2 - 4, 0, d / 2 + 1]) { const p = toWorld(f, lx, lz); lo = Math.min(lo, heightAt(p.x, p.z)); }
+    const plH = f.floor - lo + 0.5;
+    bx(g, w + 1.6, plH, d + 1.6, M.stone, 0, -plH / 2 + 0.02, 0);
+    bx(g, w + 1.8, 0.12, d + 1.8, trim, 0, 0.0, 0); // cornice round the plinth top
+    // Floor: polished boards with a long red runner.
+    bx(g, w, 0.08, d, M.plank, 0, 0.06, 0);
+    bx(g, 2.2, 0.02, d - 1.2, red, 0, 0.11, 0);
+    for (const sx of [-1, 1]) bx(g, 0.08, 0.025, d - 1.2, gold, sx * 1.08, 0.115, 0);
+
+    // Walls: two storeys outside (the upper one is the facade above the great hall's ceiling).
+    const wall = (x: number, z: number, ww: number, dd: number, y0: number, hh: number) => bx(g, ww, hh, dd, plaster, x, y0 + hh / 2, z);
+    wall(0, d / 2, w + T, T, 0, TOP);
+    for (const sx of [-1, 1]) wall(sx * w / 2, 0, T, d + T, 0, TOP);
+    const side = (w - doorW) / 2;
+    for (const sx of [-1, 1]) wall(sx * (doorW / 2 + side / 2), -d / 2, side + T / 2, T, 0, TOP);
+    const DOOR_H = 2.9;
+    wall(0, -d / 2, doorW, T, DOOR_H, TOP - DOOR_H);
+    // Timber framing on the outside faces: posts, the floor band, the eaves band, and braces.
+    const faces: [number, number, number, boolean][] = [[0, -d / 2 - T / 2 - 0.02, w, true], [0, d / 2 + T / 2 + 0.02, w, true], [-w / 2 - T / 2 - 0.02, 0, d, false], [w / 2 + T / 2 + 0.02, 0, d, false]];
+    for (const [cx, cz, len, alongX] of faces) {
+      for (const y of [0.25, H + 0.15, TOP - 0.15]) bx(g, alongX ? len + 0.3 : 0.1, 0.22, alongX ? 0.1 : len + 0.3, M.darkWood, cx, y, cz);
+      for (let u = -len / 2; u <= len / 2 + 1e-6; u += len / Math.round(len / 2)) {
+        if (alongX && cz < 0 && Math.abs(u) < doorW / 2 + 0.2) continue;
+        bx(g, alongX ? 0.18 : 0.1, TOP, alongX ? 0.1 : 0.18, M.darkWood, alongX ? cx + u : cx, TOP / 2, alongX ? cz : cz + u);
+      }
+    }
+    // Windows: tall ground-floor ones (both faces, so they glow inside too) and the upper row.
+    const windowAt = (alongX: boolean, sideSign: number, u: number, y: number, ww: number, hh: number, inside: boolean) => {
+      const fx = alongX ? u : sideSign * (w / 2 + T / 2 + 0.035), fz = alongX ? sideSign * (d / 2 + T / 2 + 0.035) : u;
+      const ix = alongX ? u : sideSign * (w / 2 - T / 2 - 0.035), iz = alongX ? sideSign * (d / 2 - T / 2 - 0.035) : u;
+      bx(g, alongX ? ww : 0.03, hh, alongX ? 0.03 : ww, win, fx, y, fz);
+      if (inside) bx(g, alongX ? ww : 0.03, hh, alongX ? 0.03 : ww, win, ix, y, iz);
+      // Frame, mullion and transom, and a stone sill.
+      const ox = alongX ? 0 : sideSign * 0.03, oz = alongX ? sideSign * 0.03 : 0;
+      for (const dy of [-hh / 2, hh / 2]) bx(g, alongX ? ww + 0.16 : 0.08, 0.08, alongX ? 0.08 : ww + 0.16, trim, fx + ox, y + dy, fz + oz);
+      for (const du of [-ww / 2, 0, ww / 2]) bx(g, alongX ? 0.07 : 0.07, hh, alongX ? 0.07 : 0.07, trim, fx + ox + (alongX ? du : 0), y, fz + oz + (alongX ? 0 : du));
+      bx(g, alongX ? ww : 0.06, 0.06, alongX ? 0.06 : ww, trim, fx + ox, y + hh * 0.15, fz + oz);
+      bx(g, alongX ? ww + 0.3 : 0.25, 0.1, alongX ? 0.25 : ww + 0.3, M.stone, fx + ox * 3, y - hh / 2 - 0.08, fz + oz * 3);
+    };
+    for (const u of [-6, -3.4, 3.4, 6]) { windowAt(true, -1, u, 2.0, 1.1, 1.9, true); windowAt(true, 1, u, 2.0, 1.1, 1.9, true); }
+    for (const u of [-6, -3.4, 0, 3.4, 6]) { windowAt(true, -1, u, 5.9, 0.95, 1.4, false); windowAt(true, 1, u, 5.9, 0.95, 1.4, false); }
+    for (const sx of [-1, 1]) for (const u of [-2.4, 2.4]) { windowAt(false, sx, u, 2.0, 1.1, 1.9, true); windowAt(false, sx, u, 5.9, 0.95, 1.4, false); }
+    // The great hall's ceiling, with dark beams across it.
+    bx(g, w - T, 0.12, d - T, M.darkWood, 0, H, 0);
+    for (let x = -w / 2 + 1.5; x < w / 2; x += 2.2) bx(g, 0.22, 0.26, d - T, M.darkWood, x, H - 0.18, 0);
+
+    // Roof: steep slate slabs on a ridge along the length, gable ends, three dormers, two chimneys.
+    const slope = 0.72, over = 0.6, run = d / 2 + over, half = run / Math.cos(slope), rise = Math.tan(slope) * run;
+    for (const sz of [-1, 1]) bx(g, w + 1.2, 0.2, half, slate, 0, TOP + rise / 2, sz * run / 2, sz * slope, 0, 0);
+    bx(g, w + 1.3, 0.16, 0.34, M.darkWood, 0, TOP + rise + 0.06, 0); // ridge
+    for (const sx of [-1, 1]) for (let i = 0, n = Math.ceil(rise / 0.3); i < n; i++) bx(g, 0.2, 0.3, (d + T) * (1 - (i + 0.5) / n), plaster, sx * (w / 2), TOP + 0.15 + i * 0.3, 0);
+    for (const u of [-4, 0, 4]) {
+      const dz = -run * 0.45, dy = TOP + rise * 0.55;
+      bx(g, 1.4, 1.3, 1.4, plaster, u, dy, dz);
+      bx(g, 0.8, 0.8, 0.04, win, u, dy - 0.05, dz - 0.71);
+      for (const sx of [-1, 1]) bx(g, 1.1, 0.12, 1.6, slate, u + sx * 0.42, dy + 0.85, dz, 0, 0, -sx * 0.75);
+    }
+    for (const sx of [-1, 1]) {
+      bx(g, 0.9, 3.4, 0.9, brick, sx * 5.2, TOP + rise - 0.2, d / 4);
+      bx(g, 1.05, 0.15, 1.05, M.stone, sx * 5.2, TOP + rise + 1.5, d / 4);
+    }
+
+    // Round towers at the front corners, with conical slate roofs, gold finials and pennants.
+    for (const sx of [-1, 1]) {
+      const tx = sx * (w / 2 + 0.6), tz = -d / 2 - 0.6, TH = TOP + 1.8;
+      mesh(new THREE.CylinderGeometry(1.75, 1.9, TH, 18).translate(0, TH / 2, 0), plaster, g).position.set(tx, 0, tz);
+      mesh(new THREE.CylinderGeometry(2.0, 2.0, 0.3, 18).translate(0, 0.15, 0), M.stone, g).position.set(tx, 0, tz);
+      mesh(new THREE.TorusGeometry(1.8, 0.09, 6, 22), M.darkWood, g).position.set(tx, TH, tz);
+      (g.children.at(-1) as THREE.Mesh).rotation.x = Math.PI / 2;
+      mesh(new THREE.ConeGeometry(2.25, 4.2, 18).translate(0, 2.1, 0), slate, g).position.set(tx, TH, tz);
+      mesh(new THREE.SphereGeometry(0.16, 10, 8), gold, g).position.set(tx, TH + 4.35, tz);
+      mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.2, 6).translate(0, 0.6, 0), gold, g).position.set(tx, TH + 4.4, tz);
+      const flag = bx(g, 0.7, 0.4, 0.02, red, tx + 0.36, TH + 5.3, tz); void flag;
+      for (const [a, y] of [[-0.5, 2.0], [0.5, 2.0], [-0.5, 5.9], [0.5, 5.9], [0, 8.2]] as const) {
+        const ang = -Math.PI / 2 + a * sx * 0 + (sx < 0 ? a : -a) - Math.PI / 2 * 0;
+        const wx = tx + Math.cos(ang - Math.PI / 2) * 1.77 * 0 + Math.sin(ang) * 1.79, wz = tz - Math.cos(ang) * 1.79;
+        const pane = bx(g, 0.5, y > 7 ? 0.7 : 1.2, 0.04, win, wx, y, wz); pane.rotation.y = -ang;
+      }
+      col(tx, tz, 1.95);
+    }
+
+    // The portico: steps up from the garden, four columns, an entablature and a pediment.
+    const pz = -d / 2 - 2.0;
+    for (let i = 0; i < 4; i++) bx(g, 6.4 - i * 0.2, 0.3, 1.0 + (3 - i) * 0.45, M.stone, 0, -0.15 - (3 - i) * 0.3 + 0.3 * 0, pz - 0.3 - (3 - i) * 0.22);
+    bx(g, 6.2, plH, 3.0, M.stone, 0, -plH / 2 + 0.02, pz + 0.5);
+    for (const x of [-2.6, -0.95, 0.95, 2.6]) {
+      mesh(new THREE.CylinderGeometry(0.2, 0.24, H + 0.3, 14).translate(0, (H + 0.3) / 2 + 0.05, 0), trim, g).position.set(x, 0, pz - 0.6);
+      bx(g, 0.6, 0.18, 0.6, trim, x, 0.14, pz - 0.6); bx(g, 0.6, 0.18, 0.6, trim, x, H + 0.35, pz - 0.6);
+      col(x, pz - 0.6, 0.3);
+    }
+    bx(g, 6.4, 0.5, 2.6, trim, 0, H + 0.68, pz + 0.3);
+    const ped = new THREE.Shape(); ped.moveTo(-3.3, 0); ped.lineTo(3.3, 0); ped.lineTo(0, 1.5); ped.closePath();
+    const pg = mesh(new THREE.ExtrudeGeometry(ped, { depth: 0.4, bevelEnabled: false }), trim, g); pg.position.set(0, H + 0.93, pz - 0.95);
+    for (const sx of [-1, 1]) bx(g, 3.7, 0.16, 2.9, slate, sx * 1.55, H + 1.7, pz + 0.3, 0, 0, -sx * 0.43);
+    mesh(new THREE.TorusGeometry(0.32, 0.06, 8, 18), gold, g).position.set(0, H + 1.45, pz - 0.98); // a gilded wreath
+    mesh(new THREE.SphereGeometry(0.12, 10, 8), gold, g).position.set(0, H + 1.45, pz - 0.98);
+    // Lanterns either side of the door.
+    for (const sx of [-1, 1]) {
+      const lg = new THREE.Group(); lg.position.set(sx * (doorW / 2 + 0.7), 2.4, -d / 2 - T / 2 - 0.2); g.add(lg);
+      bx(lg, 0.26, 0.38, 0.26, M.iron, 0, 0, 0);
+      const fm = this.fire(lg, 0, 2.5, 7);
+      bx(lg, 0.18, 0.28, 0.27, fm, 0, 0, 0);
+    }
+
+    // The door: a tall double-width oak door with gold furniture.
+    const hinge = new THREE.Group(); hinge.position.set(-doorW / 2, 0, -d / 2); g.add(hinge);
+    bx(hinge, doorW, DOOR_H - 0.05, 0.09, M.darkWood, doorW / 2, (DOOR_H - 0.05) / 2 + 0.05, 0);
+    for (const [px, py] of [[0.45, 0.9], [1.35, 0.9], [0.45, 2.0], [1.35, 2.0]]) bx(hinge, 0.7, 0.85, 0.11, M.wood, px * doorW / 1.8, py, 0);
+    for (const hy of [0.5, 2.4]) bx(hinge, doorW * 0.9, 0.07, 0.12, gold, doorW / 2, hy, 0);
+    const knob = mesh(new THREE.TorusGeometry(0.08, 0.02, 6, 12), gold, hinge); knob.position.set(doorW - 0.25, 1.3, -0.08);
+    bx(g, doorW + 0.5, 0.22, 0.4, trim, 0, DOOR_H + 0.1, -d / 2 - 0.05); // lintel
+    const dw = toWorld(f, 0, -d / 2);
+    const dcol: Collider = { x: dw.x, z: dw.z, r: 0.95 };
+    this.colliders.push(dcol);
+    this.roomDoors[h.id] = { hinge, open: false, angle: 0, col: dcol, home: { x: dw.x, z: dw.z }, outward: true };
+
+    // Inside: the fireplace on the back wall, with a painting above it.
+    const fp = new THREE.Group(); fp.position.set(f.hearth.x, 0.08, f.hearth.z); g.add(fp);
+    bx(fp, 2.6, 2.1, 0.7, M.stone, 0, 1.05, 0.05);
+    bx(fp, 3.0, 0.18, 0.9, trim, 0, 2.15, 0);
+    bx(fp, 1.4, 1.1, 0.4, M.dark, 0, 0.6, -0.18);
+    const ffm = this.fire(fp, 0.5, 3, 9);
+    (fp.children.at(-1) as THREE.Object3D).position.set(0, 0.5, -0.8);
+    const flames = mesh(new THREE.PlaneGeometry(1.0, 0.6), ffm, fp, false); flames.position.set(0, 0.45, -0.39); flames.rotation.y = Math.PI;
+    bx(fp, 1.6, 1.1, 0.06, mat(0x3a5a3a, null, { r: 0.8 }), 0, 3.2, 0.32); // a landscape: the lake and mountains
+    bx(fp, 1.75, 1.25, 0.05, gold, 0, 3.2, 0.34);
+    // Four-poster bed with a red canopy.
+    const bed = new THREE.Group(); bed.position.set(f.bed.x, 0.1, f.bed.z); g.add(bed);
+    bx(bed, 1.9, 0.4, 2.4, M.darkWood, 0, 0.3, 0);
+    bx(bed, 1.8, 0.2, 2.3, mat(0xf4efe4, 'cloth', { r: 0.95 }), 0, 0.6, 0);
+    bx(bed, 1.85, 0.08, 1.6, red, 0, 0.72, -0.35);
+    for (const sx of [-0.55, 0.55]) bx(bed, 0.6, 0.15, 0.35, mat(0xf4efe4, 'cloth', { r: 0.95 }), sx, 0.76, 0.85);
+    for (const sx of [-1, 1]) for (const sz of [-1, 1]) bx(bed, 0.1, 2.5, 0.1, M.darkWood, sx * 0.9, 1.25, sz * 1.15);
+    bx(bed, 2.0, 0.08, 2.5, red, 0, 2.5, 0);
+    for (const sx of [-1, 1]) bx(bed, 0.04, 0.5, 2.5, red, sx * 0.98, 2.25, 0);
+    bx(bed, 2.0, 1.2, 0.08, M.darkWood, 0, 1.0, 1.2);
+    col(f.bed.x, f.bed.z - 0.6, 0.85); col(f.bed.x, f.bed.z + 0.6, 0.85);
+    // The lord's chest: iron-bound and gilded.
+    const ch = new THREE.Group(); ch.position.set(f.chest.x, 0.1, f.chest.z); ch.rotation.y = Math.PI / 2; g.add(ch);
+    bx(ch, 1.2, 0.6, 0.65, M.darkWood, 0, 0.3, 0);
+    bx(ch, 1.25, 0.1, 0.7, gold, 0, 0.62, 0);
+    for (const sx of [-0.4, 0.4]) bx(ch, 0.08, 0.62, 0.7, gold, sx, 0.31, 0);
+    col(f.chest.x, f.chest.z, 0.6);
+    // The long table, chairs, candelabras, and two chandeliers above it.
+    const t = new THREE.Group(); t.position.set(f.table!.x, 0.1, f.table!.z); g.add(t);
+    bx(t, 5.0, 0.1, 1.3, M.darkWood, 0, 0.8, 0);
+    bx(t, 5.0, 0.02, 0.5, mat(0xf4efe4, 'cloth', { r: 0.95 }), 0, 0.86, 0);
+    for (const [px, pz2] of [[-2.3, -0.5], [2.3, -0.5], [-2.3, 0.5], [2.3, 0.5]]) bx(t, 0.12, 0.78, 0.12, M.darkWood, px, 0.39, pz2);
+    for (let i = 0; i < 4; i++) for (const sz of [-1, 1]) {
+      const c = new THREE.Group(); c.position.set(-1.8 + i * 1.2, 0, sz * 1.0); t.add(c);
+      bx(c, 0.5, 0.06, 0.5, M.wood, 0, 0.5, 0); bx(c, 0.5, 0.7, 0.06, M.wood, 0, 0.85, sz * 0.24);
+      for (const [lx, lz] of [[-0.2, -0.2], [0.2, -0.2], [-0.2, 0.2], [0.2, 0.2]]) bx(c, 0.05, 0.5, 0.05, M.wood, lx, 0.25, lz);
+    }
+    for (const x of [-1.4, 1.4]) {
+      mesh(new THREE.CylinderGeometry(0.03, 0.08, 0.35, 8).translate(0, 1.03, 0), gold, t).position.x = x;
+      for (const dx of [-0.12, 0, 0.12]) { const cnd = bx(t, 0.04, 0.16, 0.04, trim, x + dx, 1.28, 0); void cnd; }
+    }
+    for (let lx = -2.3; lx <= 2.3; lx += 0.9) for (const lz of [-0.6, 0.6]) col(f.table!.x + lx, f.table!.z + lz, 0.45);
+    for (const x of [-1.6, 1.6]) {
+      const ch2 = new THREE.Group(); ch2.position.set(x, H - 1.0, f.table!.z); g.add(ch2);
+      mesh(new THREE.CylinderGeometry(0.015, 0.015, 0.85, 4).translate(0, 0.45, 0), M.iron, ch2);
+      const ring = mesh(new THREE.TorusGeometry(0.55, 0.04, 6, 18), gold, ch2); ring.rotation.x = Math.PI / 2;
+      const cm = this.fire(ch2, 0.1, 1.6, 8);
+      for (let k = 0; k < 8; k++) { const a = (k / 8) * Math.PI * 2; bx(ch2, 0.05, 0.14, 0.05, cm, Math.cos(a) * 0.55, 0.1, Math.sin(a) * 0.55); }
+    }
+    // Banners and a pair of tall bookcases on the side walls.
+    for (const sx of [-1, 1]) {
+      const bn = bx(g, 0.04, 2.0, 0.9, red, sx * (w / 2 - T / 2 - 0.04), 2.9, -1.0); void bn;
+      bx(g, 0.05, 0.1, 1.0, gold, sx * (w / 2 - T / 2 - 0.05), 3.9, -1.0);
+    }
+    const shelf = (lx: number, lz: number) => {
+      const s = new THREE.Group(); s.position.set(lx, 0.1, lz); s.rotation.y = Math.PI / 2; g.add(s);
+      bx(s, 1.6, 2.6, 0.45, M.darkWood, 0, 1.3, 0);
+      const cols = [0x8a2a24, 0x2a4a7a, 0x3a6a3a, 0x8a6a2a, 0x5a3a6a];
+      for (let r = 0; r < 4; r++) for (let k = 0; k < 9; k++) bx(s, 0.13, 0.42, 0.3, mat(cols[(r * 3 + k) % 5], null, { r: 0.8 }), -0.65 + k * 0.165, 0.45 + r * 0.6, -0.07);
+      col(f.x + 0, f.z + 0, 0); // placeholder (no-op)
+    };
+    shelf(-w / 2 + 0.4, 1.9 - 3.3 - 0.4); col(-w / 2 + 0.4, -1.8, 0.6);
+
+    // Colliders: the walls (leaving the doorway).
+    for (let lx = -w / 2; lx <= w / 2 + 1e-6; lx += 0.45) { col(lx, d / 2, 0.24); if (Math.abs(lx) > doorW / 2 + 0.2) col(lx, -d / 2, 0.24); }
+    for (let lz = -d / 2; lz <= d / 2 + 1e-6; lz += 0.45) for (const sx of [-1, 1]) col(sx * w / 2, lz, 0.24);
+
+    // The garden in front: a gravel walk from the gate to the steps around a fountain, hedges and
+    // flowerbeds, topiary, lanterns, and a low wall with gate piers.
+    const gz0 = pz - 2.0, gz1 = -d / 2 - 15;
+    const walk = (lx: number, lz: number, ww: number, dd: number) => bx(g, ww, 0.06, dd, gravel, lx, 0.03 - (f.floor - heightAt(...Object.values(toWorld(f, lx, lz)) as [number, number])) * 0, lz);
+    void walk;
+    const gy = (lx: number, lz: number) => { const p = toWorld(f, lx, lz); return heightAt(p.x, p.z) - f.floor; };
+    for (let lz = gz0; lz > gz1; lz -= 1) bx(g, 2.4, 0.08, 1.05, gravel, 0, gy(0, lz) + 0.04, lz);
+    // Fountain halfway down the walk, with a circle of gravel round it.
+    const fzc = (gz0 + gz1) / 2, fy = gy(0, fzc);
+    mesh(new THREE.CylinderGeometry(3.0, 3.0, 0.07, 28), gravel, g).position.set(0, fy + 0.045, fzc);
+    mesh(new THREE.CylinderGeometry(1.9, 2.0, 0.55, 26, 1, true).translate(0, 0.275, 0), M.stone, g).position.set(0, fy, fzc);
+    mesh(new THREE.TorusGeometry(1.95, 0.12, 6, 26), trim, g).position.set(0, fy + 0.56, fzc);
+    (g.children.at(-1) as THREE.Mesh).rotation.x = Math.PI / 2;
+    const water = new THREE.MeshStandardMaterial({ color: 0x3a7aa0, roughness: 0.08, metalness: 0.3, transparent: true, opacity: 0.85 });
+    mesh(new THREE.CircleGeometry(1.9, 26), water, g).position.set(0, fy + 0.42, fzc);
+    (g.children.at(-1) as THREE.Mesh).rotation.x = -Math.PI / 2;
+    mesh(new THREE.CylinderGeometry(0.22, 0.3, 1.5, 12).translate(0, 0.75, 0), trim, g).position.set(0, fy, fzc);
+    mesh(new THREE.CylinderGeometry(0.75, 0.25, 0.25, 16).translate(0, 1.6, 0), trim, g).position.set(0, fy, fzc);
+    mesh(new THREE.CircleGeometry(0.7, 16), water, g).position.set(0, fy + 1.73, fzc);
+    (g.children.at(-1) as THREE.Mesh).rotation.x = -Math.PI / 2;
+    mesh(new THREE.SphereGeometry(0.16, 10, 8), gold, g).position.set(0, fy + 1.95, fzc);
+    const spray = new THREE.MeshStandardMaterial({ color: 0xcfe8f8, transparent: true, opacity: 0.45, roughness: 0.1 });
+    mesh(new THREE.ConeGeometry(0.5, 1.2, 12, 1, true), spray, g).position.set(0, fy + 1.15, fzc);
+    col(0, fzc, 2.1);
+    // Hedges along the walk (gaps for the fountain circle), flowerbeds behind them, topiary cones.
+    const flowers = [0xd84a5a, 0xf2c84a, 0x9a6ad8, 0xf4f0ec, 0xe87a3a];
+    for (const sx of [-1, 1]) for (const [a, b] of [[gz0, fzc + 3.3], [fzc - 3.3, gz1 + 1]] as const) {
+      const len = Math.abs(a - b), mz = (a + b) / 2;
+      bx(g, 0.6, 0.7, len, hedge, sx * 1.75, gy(sx * 1.75, mz) + 0.35, mz);
+      for (let k = 0; k < len; k += 1) col(sx * 1.75, b + k + 0.5, 0.35);
+      bx(g, 2.2, 0.15, len - 0.4, mat(0x4a3424, 'ground', { r: 1 }), sx * 3.3, gy(sx * 3.3, mz) + 0.08, mz);
+      const rng = mulberry32(Math.round(mz * 13 + sx * 7));
+      for (let k = 0; k < len * 4; k++) {
+        const fx2 = sx * (2.4 + rng() * 1.8), fz2 = Math.min(a, b) + 0.3 + rng() * (len - 0.6);
+        const fl = mesh(new THREE.SphereGeometry(0.09, 6, 4), mat(flowers[Math.floor(rng() * flowers.length)], null, { r: 0.7 }), g, false);
+        fl.position.set(fx2, gy(fx2, fz2) + 0.26, fz2);
+      }
+      for (const tz of [a - 0.5 * Math.sign(a - b), b + 0.5 * Math.sign(a - b)]) {
+        const cone = mesh(new THREE.ConeGeometry(0.55, 1.9, 10).translate(0, 1.25, 0), hedge, g); cone.position.set(sx * 4.8, gy(sx * 4.8, tz), tz);
+        mesh(new THREE.CylinderGeometry(0.35, 0.4, 0.4, 10).translate(0, 0.2, 0), M.stone, g).position.set(sx * 4.8, gy(sx * 4.8, tz), tz);
+        col(sx * 4.8, tz, 0.55);
+      }
+    }
+    // Lantern posts at the gate and by the fountain.
+    for (const [lx, lz] of [[-1.6, gz1 + 0.6], [1.6, gz1 + 0.6], [-2.6, fzc], [2.6, fzc]] as const) {
+      const lp = new THREE.Group(); lp.position.set(lx, gy(lx, lz), lz); g.add(lp);
+      mesh(new THREE.CylinderGeometry(0.06, 0.09, 2.4, 8).translate(0, 1.2, 0), M.iron, lp);
+      bx(lp, 0.3, 0.4, 0.3, M.iron, 0, 2.55, 0);
+      const lm = this.fire(lp, 2.55, 2, 7);
+      bx(lp, 0.22, 0.3, 0.31, lm, 0, 2.55, 0);
+      col(lx, lz, 0.2);
+    }
+    // A low garden wall across the front with stone gate piers topped by balls (the gate stands open).
+    for (const sx of [-1, 1]) {
+      for (let u = 1.6; u < 11; u += 1) bx(g, 1.02, 0.9, 0.4, M.stone, sx * (u + 0.5), gy(sx * (u + 0.5), gz1) + 0.45, gz1);
+      for (let lz = gz1 + 0.5; lz < pz; lz += 1) bx(g, 0.4, 0.9, 1.02, M.stone, sx * 11, gy(sx * 11, lz) + 0.45, lz);
+      for (let u = 1.6; u < 11; u += 0.6) col(sx * u, gz1, 0.25);
+      for (let lz = gz1; lz < pz; lz += 0.6) col(sx * 11, lz, 0.25);
+      const py = gy(sx * 1.4, gz1);
+      bx(g, 0.7, 2.0, 0.7, M.stone, sx * 1.4, py + 1.0, gz1);
+      mesh(new THREE.SphereGeometry(0.3, 12, 8), trim, g).position.set(sx * 1.4, py + 2.3, gz1);
+      const gate = new THREE.Group(); gate.position.set(sx * 1.05, py, gz1); gate.rotation.y = sx * 1.9; g.add(gate);
+      for (let k = 0; k < 6; k++) bx(gate, 0.04, 1.5, 0.04, M.iron, -sx * (0.1 + k * 0.16), 0.75, 0);
+      for (const y of [0.3, 1.35]) bx(gate, 0.95, 0.05, 0.05, M.iron, -sx * 0.5, y, 0);
+    }
+    this.doorTag(h, DOOR_H + 0.8);
+    const sign = toWorld(f, 0, gz1 - 1.5);
+    tag('Lakeside Manor', `${MANOR_PRICE} g a week · the Lord’s seat · every workshop (+10% speed, +5 luck) · ${h.storage}-slot chest`, 'place', new THREE.Vector3(sign.x, heightAt(sign.x, sign.z) + TOP + 3, sign.z), 70);
   }
 
   /** A couple of turf-roofed cottages and a well around the green. */

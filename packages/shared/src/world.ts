@@ -4,10 +4,10 @@
  * and the server can validate requests by id.
  */
 import { CHUNK_SIZE, SPIKE_CHUNKS, WATER_LEVEL, WORLD_HALF } from './constants.js';
-import { heightAt, mulberry32, VILLAGE, MARKET, STALL, LAKE, PIER, GRUBEN, GRUBEN_SPOTS, inGruben, FJORD, FJORD_SPOTS, inFjord, SHIPWRECK, FORD_Z, fjordMid } from './terrain.js';
+import { heightAt, mulberry32, VILLAGE, MARKET, STALL, LAKE_ROAD, MANOR, LAKE, PIER, GRUBEN, GRUBEN_SPOTS, inGruben, FJORD, FJORD_SPOTS, inFjord, SHIPWRECK, FORD_Z, fjordMid } from './terrain.js';
 import { CAVE, CAVE_ENTRANCE, CHUNK_RANGES, GRUBEN_PASS, caveClearance, caveFloor, caveRoomCentre, inBounds } from './cave.js';
 import { ARMOUR_PIECES, CLOTHS, ITEMS, JEWELS } from './items.js';
-import { HOUSES, houseAt, toWorld, type HouseFrame } from './houses.js';
+import { HOUSES, MANOR_ID, houseAt, toWorld, type HouseFrame } from './houses.js';
 import type { SkillId } from './skills.js';
 
 // ------------------------------------------------------------------ resource nodes
@@ -67,6 +67,8 @@ export const PATHS: [number, number][][] = [
   [[FJ.x + 34, FJ.z + 4], [FJ.x + 37, FJ.z - 16], [FJ.x + 30, FJ.z - 40], [FJ.x + 22, FJ.z + FORD_Z]],
   [[FJ.x + 22, FJ.z + FORD_Z], [FJ.x + fjordMid(FORD_Z), FJ.z + FORD_Z], [FJ.x - 44, FJ.z + FORD_Z], [FJ.x - 50, FJ.z - 30], [FJ.x - 44, FJ.z], [SHIPWRECK.plankFrom - 4, SHIPWRECK.z]],
   [[FJ.x + 34, FJ.z + 14], [FJ.x + 34, FJ.z + 34], [FJ.x + 38, FJ.z + 52]],
+  // Round the lake to the manor.
+  LAKE_ROAD,
   // Over the wolf meadows to the Gruben pass.
   [[66, 33], [84, 42], [96, 48]],
   // Gruben: from the arrival camp up the valley to the miners' village and the pit.
@@ -98,6 +100,7 @@ export function keepClear(x: number, z: number): boolean {
       || (Math.abs(x - SHIPWRECK.x) < 12 && Math.abs(z - SHIPWRECK.z) < SHIPWRECK.length / 2 + 4);
   }
   if (Math.hypot(x - GRUBEN_PASS.x, z - GRUBEN_PASS.z) < 7) return true;
+  if (Math.hypot(x - MANOR.x, z - MANOR.z) < MANOR.r + 3) return true; // the manor and its garden
   if (Math.hypot(x, z) < 18 || Math.hypot(x - VILLAGE.x, z - VILLAGE.z) < VILLAGE.r + 7 || Math.hypot(x - CAVE_ENTRANCE.x, z - CAVE_ENTRANCE.z) < 8) return true;
   // The pier and a strip of shore around it.
   const px = x - PIER.x, pz = z - PIER.z, along = px * PIER.ux + pz * PIER.uz, side = -px * PIER.uz + pz * PIER.ux;
@@ -416,10 +419,22 @@ export const STATIONS: Station[] = [
   { id: 'gruben_anvil', kind: 'anvil', name: 'Anvil', x: G.x + 8, z: G.z + 53, r: 0.8 },
   { id: 'gruben_tanning', kind: 'tanning', name: 'Tanning rack', x: G.x - 9, z: G.z + 57, r: 1 },
 ];
+// The manor's great hall has every workshop, set round its walls (local coordinates in the hall).
+{
+  const f = HOUSES.find((h) => h.id === MANOR_ID)!;
+  const put: [StationKind, string, number, number, number][] = [
+    ['furnace', 'Furnace', 6.4, 3.4, 1.2], ['anvil', 'Anvil', 4.3, 3.9, 0.8], ['workbench', 'Workbench', 7.2, -0.6, 1],
+    ['tanning', 'Tanning rack', 7.2, -3.2, 1], ['loom', 'Loom', -7.1, -3.1, 1], ['alchemy', 'Alchemy table', -3.4, 4.4, 1],
+    ['stove', 'Stove', 2.4, 4.3, 0.7],
+  ];
+  for (const [kind, name, lx, lz, r] of put) { const p = toWorld(f, lx, lz); STATIONS.push({ id: `manor_${kind}`, kind, name, x: p.x, z: p.z, r }); }
+}
+/** Working at the manor's own stations: a little faster, and a little luckier. */
+export const MANOR_CRAFT = { speed: 0.1, luck: 5 };
 // A cast-iron stove in each cottage (the better houses), in place of the open hearth.
 for (const f of HOUSES) if (f.kind === 'cottage') { const p = toWorld(f, f.w / 2 - 0.85, f.d / 2 - 0.65); STATIONS.push({ id: `stove_${f.id}`, kind: 'stove', name: 'Stove', x: p.x, z: p.z, r: 0.7 }); }
 /** The house a station stands inside, if any (cottage stoves). */
-export const stationHouse = (s: Station) => (s.id.startsWith('stove_') ? HOUSES.find((f) => `stove_${f.id}` === s.id) : undefined);
+export const stationHouse = (s: Station) => (s.id.startsWith('stove_') ? HOUSES.find((f) => `stove_${f.id}` === s.id) : s.id.startsWith('manor_') ? HOUSES.find((f) => f.id === MANOR_ID) : undefined);
 /** Cooking on a stove: 15% faster, and less burnt food (see burnChance). */
 export const STOVE_SPEED = 0.15;
 export const STATION_BY_ID: Map<string, Station> = new Map(STATIONS.map((s) => [s.id, s]));
@@ -495,7 +510,7 @@ export function innRoomAt(x: number, z: number): number {
  * huts at Gruben's camp. One home at a time; your chest (character storage) moves with you, but
  * how much of it you can fill depends on the home. Rest at your door for a "Rested" XP buff.
  */
-export type HomeKind = 'room' | 'cottage' | 'hut';
+export type HomeKind = 'room' | 'cottage' | 'hut' | 'manor';
 export interface Home {
   id: number; kind: HomeKind; name: string;
   /** Where its door is (stand here to use the chest or rest). */
@@ -506,8 +521,11 @@ export interface Home {
   /** Where the storage chest is (inside lodge rooms; by the door for houses). */
   chest: { x: number; z: number };
 }
-export const STORAGE_MAX = 48;
-const ROOM_REST = { xp: 0.05, regen: 1 }, HOUSE_REST = { xp: 0.1, regen: 2 };
+export const STORAGE_MAX = 96;
+const ROOM_REST = { xp: 0.05, regen: 1 }, HOUSE_REST = { xp: 0.1, regen: 2 }, MANOR_REST = { xp: 0.15, regen: 3 };
+/** The manor: 600 g a week, the biggest chest, and its tenant is styled “Lord”. */
+export const MANOR_PRICE = 600;
+export const LORD_TITLE = 'Lord';
 function houseHome(f: HouseFrame, price: number, storage: number): Home {
   return {
     id: f.id, kind: f.kind, name: f.name, door: toWorld(f, 0, -f.d / 2 - 0.6), chest: toWorld(f, f.chest.x, f.chest.z),
@@ -516,7 +534,7 @@ function houseHome(f: HouseFrame, price: number, storage: number): Home {
 }
 export const HOMES: Home[] = [
   ...Array.from({ length: INN.rooms }, (_, n): Home => ({ id: n, kind: 'room', name: `Room ${n + 1}`, door: innDoor(n), chest: innRoom(n).chest, price: INN.pricePerWeek, storage: 24, rest: ROOM_REST })),
-  ...HOUSES.map((f) => (f.kind === 'cottage' ? houseHome(f, 60, 48) : houseHome(f, 40, 36))),
+  ...HOUSES.map((f) => (f.kind === 'manor' ? { ...houseHome(f, MANOR_PRICE, 96), rest: MANOR_REST } : f.kind === 'cottage' ? houseHome(f, 60, 48) : houseHome(f, 40, 36))),
 ];
 /** Who rents which home, as the server sends it: one name (or null) per home. */
 export const homeLabel = (h: Home) => (h.kind === 'room' ? `Lodge room ${h.id + 1}` : h.name);

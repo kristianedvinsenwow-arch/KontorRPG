@@ -62,6 +62,22 @@ export const STALL = (() => {
  */
 export const ULVEDAL = { x: -80, z: -14, r: 15, h: 3.5 };
 
+/** The lakeside manor: across the lake from Bjørkvik, on a levelled terrace under the mountains. */
+export const MANOR = { x: -78, z: 102, r: 17, h: 4.2 };
+/** The road round the lake's east and south shore from Bjørkvik to the manor gate. Where it crosses
+ *  the low, wet ground it runs on a raised causeway. */
+export const LAKE_ROAD: [number, number][] = [[-30, 62], [-30, 72], [-32, 82], [-38, 89], [-48, 93], [-57, 91], [-64, 87.5], [-68.8, 84.6]];
+const ROAD_BOX = { x0: -76, x1: -24, z0: 56, z1: 96 };
+function roadDist(x: number, z: number): number {
+  let best = Infinity;
+  for (let i = 0; i < LAKE_ROAD.length - 1; i++) {
+    const [ax, az] = LAKE_ROAD[i], [bx, bz] = LAKE_ROAD[i + 1], dx = bx - ax, dz = bz - az;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz)));
+    best = Math.min(best, Math.hypot(x - ax - dx * t, z - az - dz * t));
+  }
+  return best;
+}
+
 /** Where the spike's lake sits (south-west of spawn). */
 export const LAKE = { x: -62, z: 58, r: 34, depth: 7 };
 
@@ -139,6 +155,7 @@ export function heightAt(x: number, z: number): number {
   const dVillage = Math.hypot(x - VILLAGE.x, z - VILLAGE.z);
   h = h + (VILLAGE.h - h) * (1 - smooth(VILLAGE.r, VILLAGE.r + 12, dVillage));
 
+
   // Lake basin.
   const dLake = Math.hypot(x - LAKE.x, z - LAKE.z);
   h -= LAKE.depth * (1 - smooth(LAKE.r * 0.35, LAKE.r, dLake));
@@ -154,6 +171,16 @@ export function heightAt(x: number, z: number): number {
   // Mountains rise at the edge of the spike area so nobody walks off the world.
   const edge = Math.max(Math.abs(x), Math.abs(z));
   h += smooth(WORLD_HALF - 40, WORLD_HALF - 4, edge) * 26;
+
+  // The causeway: the lake road never dips below 1.4 m (a gentle bank either side).
+  if (x > ROAD_BOX.x0 && x < ROAD_BOX.x1 && z > ROAD_BOX.z0 && z < ROAD_BOX.z1) {
+    const lift = 1 - smooth(2.2, 6, roadDist(x, z));
+    if (lift > 0) h = Math.max(h, h + (1.4 - h) * lift);
+  }
+
+  // The manor's terrace and garden, levelled out of the foot of the mountains.
+  const dManor = Math.hypot(x - MANOR.x, z - MANOR.z);
+  h = h + (MANOR.h - h) * (1 - smooth(MANOR.r, MANOR.r + 14, dManor));
 
   return h;
 }

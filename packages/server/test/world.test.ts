@@ -1074,3 +1074,20 @@ test('talents: Kindling burns to 5 stacks; Frost Nova lands around the target; B
   frost.world.handle(frost.c, { t: 'attack', target: w2.id, special: true });
   assert.ok(w2.frozenUntil > frost.world.now() && (w2.brittleUntil ?? 0) > frost.world.now(), 'frozen and brittle from 10 m');
 });
+
+test('the Lakeside Manor: 600 g a week, Lord while you rent it, every workshop inside', () => {
+  const { world, c, p, place, advance } = game();
+  const manor = HOMES.find((h) => h.kind === 'manor')!;
+  assert.equal(manor.price, 600);
+  assert.ok(HOMES.every((h) => h.storage <= manor.storage), 'the biggest chest');
+  for (const k of ['furnace', 'anvil', 'workbench', 'tanning', 'loom', 'alchemy', 'stove']) assert.ok(STATIONS.some((s) => s.id === `manor_${k}`), k);
+  p.gold = 1300;
+  place(manor.door.x, manor.door.z);
+  world.handle(c, { t: 'rent', weeks: 2, home: manor.id });
+  assert.equal(p.lease?.room, manor.id);
+  assert.equal(p.gold, 100);
+  world.step();
+  assert.equal(p.state.title, 'Lord');
+  advance(15 * 24 * 3600 * 1000); world.step();
+  assert.notEqual(p.state.title, 'Lord', 'title goes when the lease runs out');
+});

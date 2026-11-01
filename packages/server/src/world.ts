@@ -9,7 +9,7 @@ import {
   NPC_BY_ID, PLAYER_COLORS, PROTOCOL_VERSION, QUEST_BY_ID, RECIPE_BY_ID, START_GOLD, START_TOOLS, STATION_BY_ID, TICK_HZ, USE_RANGE,
   EAT_LOCK_MS, POTION_CD_MS, addStack, burnChance, knifeRepair, knifeUses, STATIONS, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
   questAvailable, r2, r3, recipeAt, removeItem, resizeBag, respecCost, rollCraftRarity, canCraftEpic, sellEach, rollEffects, rollsRarity,
-  validateBuild, xpMult, COMBAT_TREES, TALENT_TREE, SPAWN_POINT, VILLAGE, STOVE_SPEED, skillLevel,
+  validateBuild, xpMult, COMBAT_TREES, TALENT_TREE, SPAWN_POINT, VILLAGE, STOVE_SPEED, skillLevel, MANOR_CRAFT, MANOR_ID, LORD_TITLE,
   type Buff, type ClientMsg, type HoldSlot, type MobKind, type PlayerState, type ServerMsg, type SkillId, type Slot,
   type Stack, type TreeId,
 } from '@kontor/shared';
@@ -528,7 +528,7 @@ export class World {
     if (lvl < r.level) return this.notice(p, `Needs ${r.skill[0].toUpperCase()}${r.skill.slice(1)} ${r.level} (you have ${lvl}).`, 'error');
     if (r.plans && !p.achievements.c[`plans:${r.plans}`]) return this.notice(p, `You need ${r.plans} plans first — they’re found on monsters.`, 'error');
     if (!r.inputs.every((i) => countItem(p.bag, i.item) >= i.qty)) return this.notice(p, 'You don’t have the materials.', 'error');
-    const speed = 1 + Math.max(0, (p.stats.scoped as any)[r.skill]?.craftSpeed ?? 0) + (st.kind === 'stove' ? STOVE_SPEED : 0);
+    const speed = 1 + Math.max(0, (p.stats.scoped as any)[r.skill]?.craftSpeed ?? 0) + (st.kind === 'stove' ? STOVE_SPEED : 0) + (st.id.startsWith('manor_') ? MANOR_CRAFT.speed : 0);
     const seconds = r.seconds / speed;
     p.job = { recipe: r.id, station: st.id, total: count, done: 0, nextAt: this.now() + seconds * 1000, seconds };
     stopFishing(this, p, 'cancel');
@@ -549,7 +549,7 @@ export class World {
     let out: Stack = { id: r.output.item, qty: r.output.qty };
     if (r.burns && this.rand() < burnChance(skillLevel(p.xp, 'cooking', p.stats.all.skillLvl), r.level, st.kind === 'stove', sc.burnChance)) out = { id: 'burnt_fish', qty: 1 };
     else if (rollsRarity(r)) {
-      const rar = rollCraftRarity(sc.luck, () => this.rand(), canCraftEpic(p.talents, r.skill));
+      const rar = rollCraftRarity(sc.luck + (st.id.startsWith('manor_') ? MANOR_CRAFT.luck : 0), () => this.rand(), canCraftEpic(p.talents, r.skill));
       if (rar) { out.r = rar; out.fx = rollEffects(ITEMS[out.id], rar, () => this.rand()); }
     }
     if (ITEMS[out.id]?.knife) out.d = knifeUses(out);
@@ -877,6 +877,11 @@ export class World {
   // ---------------------------------------------------------------- the inn
 
   private roomKey(p: ServerPlayer): string { return p.userId ?? `guest:${p.state.id}`; }
+  private isLord(p: ServerPlayer, now: number): boolean {
+    const r = this.rooms[MANOR_ID];
+    return !!r && r.until > now && r.key === this.roomKey(p);
+  }
+
   /** A door left open swings shut once nobody rents the place (lease ran out, moved out, reset). */
   private closeVacantDoors(now: number): void {
     let shut = false;
@@ -1035,6 +1040,9 @@ export class World {
     this.closeVacantDoors(now);
     const list = [...this.players.values()];
     for (const p of list) {
+      // Whoever rents the manor is styled Lord (back to their own title once it's vacant).
+      const title = this.isLord(p, now) ? LORD_TITLE : titleOf(p.achievements.title);
+      if (p.state.title !== title) p.state.title = title;
       if (now - p.lastValid.at > 400) p.state.spd = r2(p.state.spd * 0.5);
       this.stepCraft(p, now);
       stepFishing(this, p, now);

@@ -5,7 +5,7 @@
  */
 import {
   CAVE, CAVE_ENTRANCE, CAVE_ROOMS, CAVE_TUNNELS, MINING_SPOTS, MOB_AREAS, MOBS, NPCS, VILLAGE, WATER_LEVEL, WORLD_HALF,
-  ZONES, ZONE_LINKS, type ZonePlan, FLAX_FIELDS, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, PORTAL_BY_ID, SHIPWRECK, FORD_Z, fjordMid, HOMES, VEINS, STONE_QUARRIES, caveClearance, heightAt, inCaveRegion, regionAt, type Region,
+  ZONES, ZONE_LINKS, type ZonePlan, FLAX_FIELDS, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, PORTAL_BY_ID, SHIPWRECK, FORD_Z, fjordMid, HOMES, VEINS, STONE_QUARRIES, MANOR, caveClearance, heightAt, inCaveRegion, regionAt, type Region,
 } from '@kontor/shared';
 
 export const mapInfo: { me: { x: number; z: number; yaw: number } | null; others: { x: number; z: number; name: string; color: string }[] } = { me: null, others: [] };
@@ -166,6 +166,7 @@ function drawZone(region: Region): HTMLElement {
     const here = (x: number, z: number) => regionAt(x, z) === r;
     if (r === 'valley') {
       mark(VILLAGE.x, VILLAGE.z, 'Bjørkvik', '#f2a23a', 7);
+      mark(MANOR.x, MANOR.z, 'Lakeside Manor', '#e8c46a', 6);
       for (const s of MINING_SPOTS) mark(s.x, s.z, `⛏ ${s.name} (iron, coal)`, '#b0b4bc');
       for (const q of STONE_QUARRIES) mark(q.x, q.z, '⛏ Stone (mountain quarry)', '#d8d8d0');
       mark(CAVE_ENTRANCE.x, CAVE_ENTRANCE.z, 'The Old Mine (lv 5–12)', '#b77be8', 6);

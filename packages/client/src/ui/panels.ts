@@ -408,8 +408,8 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     const sizes = h ? `${h.storage}-slot chest · resting gives +${Math.round(h.rest.xp * 100)}% XP for 30 min` : `24-slot chest · resting gives +5% XP for 30 min`;
     let text: string;
     if (here) text = `${target ? homeLabel(target) : 'It'} is yours until ${until}. Pay up to ${INN.maxWeeks} weeks ahead.`;
-    else if (holder && h) text = `${holder} lives here.`;
-    else if (h) text = `Vacant · ${price} g a week · ${sizes}.${mine ? ` Renting here moves you out of the ${homeLabel(mine).toLowerCase()}; your chest comes with you.` : ''}`;
+    else if (holder && h) text = h.kind === 'manor' ? `Lord ${holder} lives here.` : `${holder} lives here.`;
+    else if (h) text = `Vacant · ${price} g a week · ${sizes}.${h.kind === 'manor' ? ' Whoever lives here is styled “Lord”, and has every workshop at home (10% faster, +5 luck).' : ''}${mine ? ` Renting here moves you out of the ${homeLabel(mine).toLowerCase()}; your chest comes with you.` : ''}`;
     else text = `${HOMES.filter((x) => x.kind === 'room' && !g.rooms[x.id]).length} of ${INN.rooms} rooms vacant · ${price} g a week · ${sizes}. One home at a time${mine ? ` — you live in the ${homeLabel(mine).toLowerCase()} now` : ''}. Cottages (Bjørkvik) and miners’ huts (Gruben) are rented at their doors.`;
     box.append(el('p', 'note', text));
     if (!(holder && h && !here) && !(!h && mine && mine.kind !== 'room')) {
@@ -446,7 +446,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     const h = HOMES[id];
     const body = el('div', 'pbody');
     body.append(homeBox(g, h));
-    return [header(homeLabel(h), h.kind === 'room' ? 'Bjørkvik Lodge' : h.kind === 'cottage' ? 'A cottage on Bjørkvik’s green' : 'A miners’ hut at Gruben camp', 'Esc'), body];
+    return [header(homeLabel(h), h.kind === 'room' ? 'Bjørkvik Lodge' : h.kind === 'cottage' ? 'A cottage on Bjørkvik’s green' : h.kind === 'manor' ? 'Across the lake from Bjørkvik' : 'A miners’ hut at Gruben camp', 'Esc'), body];
   }
 
   function npc(g: GameState, id: string): HTMLElement[] {
