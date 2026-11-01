@@ -60,6 +60,8 @@ export interface ItemDef {
   mount?: { mult: number; coat: number; mane: number; board?: boolean; gator?: boolean };
   /** Only ever exists at this rarity (boss uniques). */
   fixedRarity?: Rarity;
+  /** Runed plate (rare boss drops): no spell-power penalty and no extra magic damage taken. */
+  runed?: boolean;
   /** Extra move-speed penalty on heavy plate (monster-dropped uniques that hit harder in return). */
   heavy?: number;
   /** Plans: reading them teaches this weapon's recipes for good. */
@@ -377,7 +379,7 @@ for (const p of ARMOUR_PIECES) {
   METALS.forEach((t, i) => add({
     id: `${t}_${p.piece}`, name: `${metalName(t)} ${p.name.metal}`, kind: 'armour', stack: 1, tier: i + 1, look: t as Look,
     slot: p.slot, armourType: 'metal', armour: Math.round(p.metal * ARMOUR_MULT[i]), ward: t === 'silversteel' ? Math.max(1, Math.round(p.metal * 0.6)) : 0, sellValue: Math.ceil(p.bars / 6) * [1, 2, 4, 8][i],
-    blurb: (p.slot === 'offHand' ? 'A sturdy shield for blocking blows. Goes with one-handed weapons.' : 'Heavy plate that blades struggle through. Slows you a touch, and spells bite a little harder.')
+    blurb: (p.slot === 'offHand' ? 'A sturdy shield for blocking blows. Goes with one-handed weapons.' : 'Heavy plate that blades struggle through. Slows you a touch, spells bite a little harder — and it smothers your own magic and healing.')
       + (t === 'silversteel' ? ' The silver worked into it turns some magic, too.' : ''),
   }));
   if (p.slot === 'offHand') continue;
@@ -420,6 +422,11 @@ add({ id: 'dovre_stallion', name: 'Dovre stallion', kind: 'mount', stack: 1, slo
 add({ id: 'knuts_bellyplate', name: 'Old Knut’s belly plate', kind: 'armour', stack: 1, tier: 2, look: 'iron', slot: 'chest', armourType: 'metal', armour: 9, fixedRarity: 3, heavy: 0.04, mods: { maxHp: 15, thorns: 4 }, sellValue: 40, blurb: 'A cauldron lid Knut beat into a breastplate. Heavy as sin. Anything that hits you gets hurt back.' });
 add({ id: 'barrow_helm', name: 'Barrow-king’s helm', kind: 'armour', stack: 1, tier: 3, look: 'steel', slot: 'head', armourType: 'metal', armour: 5, ward: 2, fixedRarity: 3, heavy: 0.02, mods: { maxHp: 8, physRed: 0.04 }, sellValue: 45, blurb: 'Dug up with a draug still inside. Cold, heavy, and very hard to dent.' });
 add({ id: 'trolliron_greaves', name: 'Troll-iron greaves', kind: 'armour', stack: 1, tier: 3, look: 'steel', slot: 'legs', armourType: 'metal', armour: 8, fixedRarity: 3, heavy: 0.03, mods: { meleeDmg: 0.08, maxHp: 10 }, sellValue: 50, blurb: 'Hammered by hill trolls for hill trolls. You plod — but you kick like one.' });
+// Runed plate: rare boss drops that a caster can wear — no spell penalty, and spell power on top.
+add({ id: 'trollshaman_helm', name: 'Troll-shaman’s helm', kind: 'armour', stack: 1, tier: 2, look: 'iron', slot: 'head', armourType: 'metal', armour: 3, ward: 2, fixedRarity: 3, runed: true, mods: { spellPower: 0.05, maxHp: 6 }, sellValue: 40, blurb: 'Runed: iron that doesn’t get in the way of your spells. Knut kept it from a shaman he sat on.' });
+add({ id: 'chaplains_breastplate', name: 'Drowned chaplain’s breastplate', kind: 'armour', stack: 1, tier: 2, look: 'iron', slot: 'chest', armourType: 'metal', armour: 6, ward: 3, fixedRarity: 3, runed: true, mods: { spellPower: 0.06, regen: 1 }, sellValue: 45, blurb: 'Runed: iron that doesn’t get in the way of your spells. Prayers are scratched into every rivet — a healer’s plate.' });
+add({ id: 'wisplit_greaves', name: 'Wisp-lit greaves', kind: 'armour', stack: 1, tier: 3, look: 'steel', slot: 'legs', armourType: 'metal', armour: 6, ward: 3, fixedRarity: 3, runed: true, mods: { magicDmg: 0.05, spellPower: 0.03 }, sellValue: 50, blurb: 'Runed: steel that doesn’t get in the way of your spells. A little blue light still flickers in the joints.' });
+add({ id: 'mine_kings_runegauntlets', name: 'Mine King’s rune-gauntlets', kind: 'armour', stack: 1, tier: 4, look: 'silversteel', slot: 'hands', armourType: 'metal', armour: 3, ward: 2, fixedRarity: 4, runed: true, mods: { spellPower: 0.08, cdr: 0.05 }, sellValue: 90, blurb: 'Runed: silversteel that doesn’t get in the way of your spells. The King wrote his runes into the knuckles; they hum when you cast.' });
 add({ id: 'mine_kings_pauldrons', name: 'Mine King’s pauldrons', kind: 'armour', stack: 1, tier: 4, look: 'silversteel', slot: 'shoulders', armourType: 'metal', armour: 7, ward: 3, fixedRarity: 4, heavy: 0.03, mods: { allDmg: 0.06, physRed: 0.05 }, sellValue: 90, blurb: 'Silversteel the size of cart wheels. They weigh you down, and nothing much gets through.' });
 add({ id: 'mine_kings_ring', name: 'Mine King’s signet', kind: 'trinket', stack: 1, slot: 'ring', fixedRarity: 4, mods: { maxHp: 8, allDmg: 0.06, miningSpeed: 0.1, gemChance: 0.3 }, sellValue: 90, blurb: 'Heavy, cold silver. The Mine King wore it for three hundred years.' });
 add({ id: 'trolltooth_necklace', name: 'Trolltooth necklace', kind: 'trinket', stack: 1, slot: 'neck', fixedRarity: 4, mods: { maxHp: 10, meleeDmg: 0.06, luck: 5 }, sellValue: 60, blurb: 'Old Knut’s own. Rarely, he drops it.' });
@@ -571,6 +578,9 @@ export function sanitiseEquipment(raw: unknown): Equipment {
 // ------------------------------------------------------------------ item stats
 
 /** Everything one item adds: base armour/ward × rarity, armour-type side effects, fixed mods, rolled effects. */
+/** Spell power lost per plate piece. Gauntlets are the worst: you can't shape a spell in iron fingers. */
+export const PLATE_SPELL_PENALTY: Partial<Record<Slot, number>> = { head: 0.04, shoulders: 0.04, chest: 0.08, legs: 0.06, hands: 0.08, feet: 0.04 };
+
 export function itemStats(s: Stack): Partial<Stats> {
   const d = ITEMS[s.id];
   if (!d) return {};
@@ -579,7 +589,11 @@ export function itemStats(s: Stack): Partial<Stats> {
   if (d.armour) out.armour += Math.round(d.armour * m * 10) / 10;
   if (d.ward) out.ward += Math.round(d.ward * m * 10) / 10;
   // Plate barely slows you (−0.5% a piece); heavy uniques slow you more but give a lot more back.
-  if (d.armourType === 'metal' && d.slot !== 'offHand') { out.moveSpeed -= 0.005 + (d.heavy ?? 0); out.magicTaken += 0.03; }
+  if (d.armourType === 'metal' && d.slot !== 'offHand') {
+    out.moveSpeed -= 0.005 + (d.heavy ?? 0);
+    // Plate and spellcasting don't mix: every piece dulls your spells and heals (full set ≈ −34%).
+    if (!d.runed) { out.magicTaken += 0.03; out.spellPower -= PLATE_SPELL_PENALTY[d.slot!] ?? 0.04; }
+  }
   if (d.armourType === 'leather') out.moveSpeed += 0.01;
   if (d.slot === 'offHand' && d.armourType === 'metal') out.block += 0.2;
   addStats(out, d.mods);

@@ -54,7 +54,7 @@ export const MOBS: Record<MobKind, MobDef> = {
   cave_shaman: { kind: 'cave_shaman', name: 'Goblin shaman', level: 8, hp: 60, dmg: 5, interval: 2.2, range: 14, speed: 3.4, aggro: 14, armour: 3, ward: 8, magic: true, xp: 85, gold: [1, 4],
     drops: [{ item: 'quartz', chance: 0.1, qty: [1, 1] }, { gear: 2, chance: 0.05 }, { item: 'spear_plans', chance: 0.02, qty: [1, 1] }], respawnSec: [150, 240], scale: 1 },
   troll: { kind: 'troll', name: 'Old Knut', level: 12, hp: 500, dmg: 12, interval: 2.6, range: 3.6, speed: 3.2, aggro: 12, armour: 15, ward: 5, xp: 800, gold: [15, 30],
-    drops: [{ item: 'troll_tooth', chance: 1, qty: [1, 2] }, { gear: 2, chance: 0.6, legendary: 0.04 }, { item: 'trolltooth_necklace', chance: 0.03, qty: [1, 1] }, { item: 'knuts_bellyplate', chance: 0.04, qty: [1, 1] }, { item: 'warhammer_plans', chance: 0.2, qty: [1, 1] }, { item: 'jotunbane', chance: 0.015, qty: [1, 1] }, { item: 'garnet', chance: 0.25, qty: [1, 1] }],
+    drops: [{ item: 'troll_tooth', chance: 1, qty: [1, 2] }, { gear: 2, chance: 0.6, legendary: 0.04 }, { item: 'trolltooth_necklace', chance: 0.03, qty: [1, 1] }, { item: 'knuts_bellyplate', chance: 0.04, qty: [1, 1] }, { item: 'trollshaman_helm', chance: 0.05, qty: [1, 1] }, { item: 'warhammer_plans', chance: 0.2, qty: [1, 1] }, { item: 'jotunbane', chance: 0.015, qty: [1, 1] }, { item: 'garnet', chance: 0.25, qty: [1, 1] }],
     respawnSec: [90 * 60, 150 * 60], boss: true, slam: { every: 11, r: 5, mult: 1.8 }, enrage: 0.25, scale: 2.3 },
   // Saltfjorden (levels 8–14)
   naga: { kind: 'naga', name: 'Naga warrior', level: 10, hp: 92, dmg: 5.5, interval: 1.9, range: 2.2, speed: 3.8, aggro: 11, armour: 8, ward: 5, xp: 95, gold: [1, 3],
@@ -66,7 +66,7 @@ export const MOBS: Record<MobKind, MobDef> = {
   drowned: { kind: 'drowned', name: 'Drowned sailor', level: 12, hp: 110, dmg: 6.5, interval: 2, range: 2, speed: 3.3, aggro: 10, armour: 10, ward: 4, xp: 120, gold: [2, 5],
     drops: [{ item: 'grave_dust', chance: 0.3, qty: [1, 2] }, { item: 'pearl', chance: 0.03, qty: [1, 1] }, { gear: 2, chance: 0.06 }, { item: 'halberd_plans', chance: 0.006, qty: [1, 1] }], respawnSec: [150, 240], scale: 1 },
   drowned_captain: { kind: 'drowned_captain', name: 'The Drowned Captain', level: 15, hp: 650, dmg: 11, interval: 2.4, range: 2.8, speed: 3.3, aggro: 12, armour: 14, ward: 8, xp: 1000, gold: [20, 40],
-    drops: [{ item: 'pearl', chance: 0.6, qty: [1, 2] }, { gear: 2, chance: 0.5, legendary: 0.03 }, { gear: 3, chance: 0.2 }, { item: 'captains_cutlass', chance: 0.05, qty: [1, 1] }, { item: 'captains_hat', chance: 0.06, qty: [1, 1] }, { item: 'spear_plans', chance: 0.12, qty: [1, 1] }],
+    drops: [{ item: 'pearl', chance: 0.6, qty: [1, 2] }, { gear: 2, chance: 0.5, legendary: 0.03 }, { gear: 3, chance: 0.2 }, { item: 'captains_cutlass', chance: 0.05, qty: [1, 1] }, { item: 'captains_hat', chance: 0.06, qty: [1, 1] }, { item: 'chaplains_breastplate', chance: 0.05, qty: [1, 1] }, { item: 'spear_plans', chance: 0.12, qty: [1, 1] }],
     respawnSec: [60 * 60, 100 * 60], boss: true, slam: { every: 11, r: 4.5, mult: 1.7 }, enrage: 0.25, adds: 0.5, scale: 1.25 },
   // Gruben (levels 13–22)
   lynx: { kind: 'lynx', name: 'Lynx', level: 13, hp: 95, dmg: 6.5, interval: 1.5, range: 1.8, speed: 5, aggro: 9, armour: 8, ward: 6, xp: 130, gold: [0, 0],
@@ -74,12 +74,12 @@ export const MOBS: Record<MobKind, MobDef> = {
   draug: { kind: 'draug', name: 'Draug miner', level: 15, hp: 130, dmg: 8.5, interval: 2, range: 2, speed: 3.4, aggro: 11, armour: 16, ward: 6, xp: 180, gold: [2, 5],
     drops: [{ item: 'grave_dust', chance: 0.6, qty: [1, 3] }, { item: 'coal', chance: 0.3, qty: [1, 3] }, { gear: 2, chance: 0.06 }, { gear: 3, chance: 0.04 }, { item: 'barrow_helm', chance: 0.012, qty: [1, 1] }, { item: 'halberd_plans', chance: 0.01, qty: [1, 1] }], respawnSec: [120, 200], scale: 1.05 },
   wisp: { kind: 'wisp', name: 'Lyktemann', level: 14, hp: 75, dmg: 8, interval: 2.4, range: 15, speed: 3.8, aggro: 15, armour: 2, ward: 14, magic: true, xp: 150, gold: [0, 0],
-    drops: [{ item: 'wisp_essence', chance: 0.5, qty: [1, 1] }, { item: 'sapphire', chance: 0.05, qty: [1, 1] }], respawnSec: [120, 200], scale: 1, flying: true },
+    drops: [{ item: 'wisp_essence', chance: 0.5, qty: [1, 1] }, { item: 'sapphire', chance: 0.05, qty: [1, 1] }, { item: 'wisplit_greaves', chance: 0.008, qty: [1, 1] }], respawnSec: [120, 200], scale: 1, flying: true },
   hill_troll: { kind: 'hill_troll', name: 'Scree troll', level: 18, hp: 320, dmg: 12.5, interval: 2.8, range: 3, speed: 3, aggro: 10, armour: 20, ward: 6, xp: 420, gold: [4, 9],
     drops: [{ item: 'silver_ore', chance: 0.5, qty: [2, 4] }, { item: 'coal', chance: 0.5, qty: [2, 5] }, { item: 'garnet', chance: 0.1, qty: [1, 1] }, { gear: 3, chance: 0.12 }, { item: 'trolliron_greaves', chance: 0.03, qty: [1, 1] }, { item: 'halberd_plans', chance: 0.05, qty: [1, 1] }],
     respawnSec: [240, 360], slam: { every: 12, r: 4, mult: 1.6 }, scale: 1.7 },
   mine_king: { kind: 'mine_king', name: 'The Mine King', level: 22, hp: 1200, dmg: 19, interval: 2.4, range: 3.4, speed: 3.4, aggro: 14, armour: 26, ward: 14, xp: 2500, gold: [40, 80],
-    drops: [{ item: 'kings_crown', chance: 1, qty: [1, 1] }, { gear: 3, chance: 0.6, legendary: 0.05 }, { gear: 4, chance: 0.25, legendary: 0.05 }, { item: 'mine_kings_ring', chance: 0.04, qty: [1, 1] }, { item: 'mine_kings_pauldrons', chance: 0.08, qty: [1, 1] }, { item: 'jotunbane', chance: 0.04, qty: [1, 1] }, { item: 'dovre_stallion', chance: 0.02, qty: [1, 1] }, { item: 'garnet', chance: 0.4, qty: [1, 2] }],
+    drops: [{ item: 'kings_crown', chance: 1, qty: [1, 1] }, { gear: 3, chance: 0.6, legendary: 0.05 }, { gear: 4, chance: 0.25, legendary: 0.05 }, { item: 'mine_kings_ring', chance: 0.04, qty: [1, 1] }, { item: 'mine_kings_pauldrons', chance: 0.08, qty: [1, 1] }, { item: 'mine_kings_runegauntlets', chance: 0.06, qty: [1, 1] }, { item: 'jotunbane', chance: 0.04, qty: [1, 1] }, { item: 'dovre_stallion', chance: 0.02, qty: [1, 1] }, { item: 'garnet', chance: 0.4, qty: [1, 2] }],
     respawnSec: [120 * 60, 180 * 60], boss: true, slam: { every: 10, r: 5.5, mult: 2 }, enrage: 0.25, adds: 0.5, scale: 1.6 },
 };
 

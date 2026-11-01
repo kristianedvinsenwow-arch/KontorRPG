@@ -22,6 +22,7 @@ export interface Stats {
   meleeDmg: number;
   rangedDmg: number;
   magicDmg: number;
+  spellPower: number;     // multiplies magic damage AND healing; plate gives a penalty (negative)
   allDmg: number;
   crit: number;           // crit chance fraction
   cdr: number;            // right-click cooldown reduction
@@ -55,7 +56,7 @@ export type StatKey = keyof Stats;
 export function emptyStats(): Stats {
   return {
     moveSpeed: 0, maxHp: 0, hpPct: 0, regen: 0, armour: 0, ward: 0, physRed: 0, magicRed: 0, magicTaken: 0, dodge: 0, block: 0, thorns: 0,
-    meleeDmg: 0, rangedDmg: 0, magicDmg: 0, allDmg: 0, crit: 0, cdr: 0, specialDmg: 0, burnDmg: 0, frostPower: 0, arrowSave: 0,
+    meleeDmg: 0, rangedDmg: 0, magicDmg: 0, spellPower: 0, allDmg: 0, crit: 0, cdr: 0, specialDmg: 0, burnDmg: 0, frostPower: 0, arrowSave: 0,
     miningSpeed: 0, woodSpeed: 0, fishSpeed: 0, luck: 0, gemChance: 0, doubleYield: 0, rareFish: 0, fishEase: 0, burnChance: 0, craftSpeed: 0, nodeSave: 0, potionPower: 0, potionTime: 0,
     xp: 0, skillXp: 0, sell: 0, bagSlots: 0,
   };
@@ -76,7 +77,7 @@ export const STAT_LABEL: Record<StatKey, [string, 'pct' | 'flat' | 'pts']> = {
   armour: ['armour', 'flat'], ward: ['ward (magic armour)', 'flat'], physRed: ['physical damage reduction', 'pct'],
   magicRed: ['magic damage reduction', 'pct'], magicTaken: ['magic damage taken', 'pct'], dodge: ['dodge chance', 'pct'],
   block: ['block chance', 'pct'], thorns: ['thorns damage', 'flat'],
-  meleeDmg: ['melee damage', 'pct'], rangedDmg: ['ranged damage', 'pct'], magicDmg: ['magic damage', 'pct'], allDmg: ['all damage', 'pct'],
+  meleeDmg: ['melee damage', 'pct'], rangedDmg: ['ranged damage', 'pct'], magicDmg: ['magic damage', 'pct'], spellPower: ['spell power (magic damage and healing)', 'pct'], allDmg: ['all damage', 'pct'],
   crit: ['critical chance', 'pct'], cdr: ['right-click cooldown reduction', 'pct'], specialDmg: ['right-click damage', 'pct'],
   burnDmg: ['burn and Ignite damage', 'pct'], frostPower: ['freeze duration (and half as much frostbolt damage)', 'pct'], arrowSave: ['chance to save an arrow', 'pct'],
   miningSpeed: ['mining speed', 'pct'], woodSpeed: ['woodcutting speed', 'pct'], fishSpeed: ['bite speed', 'pct'],

@@ -267,3 +267,22 @@ test('non-stacking sellable items are worth at least a coin each', () => {
   assert.ok(cheap.some((d) => d.sellValue * SELL_RATE < 1), 'there are cheap one-slot items to cover');
   for (const d of cheap) assert.ok(sellEach({ id: d.id }) >= 1, d.id);
 });
+
+import { outgoing as outgoing2, addStats as addStats2, emptyStats as emptyStats3, MOBS as MOBS_P } from '../src/index.js';
+test('plate dulls spells and healing; runed boss plate does not', () => {
+  const staff = { id: 'birch_life_staff', qty: 1 }, sword = { id: 'iron_sword', qty: 1 };
+  const wear = (ids: string[]) => { const s = emptyStats3(); for (const id of ids) addStats2(s, itemStats({ id, qty: 1 })); return s; };
+  const plate = wear(['iron_helm', 'iron_pauldrons', 'iron_breastplate', 'iron_greaves', 'iron_gauntlets', 'iron_boots']);
+  const bare = emptyStats3();
+  const heal = (s: typeof bare) => outgoing2(staff, undefined, s, 2.4);
+  assert.ok(Math.abs(plate.spellPower + 0.34) < 1e-9, `full plate −34% (${plate.spellPower})`);
+  assert.ok(heal(plate) < heal(bare) * 0.7, 'heals far weaker in full plate');
+  assert.equal(outgoing2(sword, undefined, plate, 1), outgoing2(sword, undefined, bare, 1), 'melee untouched');
+  // Swap helm and chest for runed pieces: those slots stop hurting and start helping.
+  const mixed = wear(['trollshaman_helm', 'iron_pauldrons', 'chaplains_breastplate', 'iron_greaves', 'iron_gauntlets', 'iron_boots']);
+  assert.ok(mixed.spellPower > plate.spellPower + 0.12 + 0.1, `runed pieces lift spell power (${mixed.spellPower})`);
+  assert.ok(!itemStats({ id: 'mine_kings_runegauntlets', qty: 1 }).magicTaken);
+  // Every runed piece drops from something.
+  for (const id of Object.keys(ITEMS).filter((k) => ITEMS[k].runed))
+    assert.ok(Object.values(MOBS_P).some((m) => m.drops.some((d) => 'item' in d && d.item === id)), `${id} drops`);
+});

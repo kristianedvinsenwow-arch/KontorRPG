@@ -96,7 +96,9 @@ export function outgoing(main: Stack | undefined, ammo: Stack | undefined, s: St
   let base = weaponHit(main);
   if (c === 'bow') base += ammo ? ITEMS[ammo.id]?.ammoDmg ?? 0 : 0;
   const bonus = 1 + s.allDmg + (style === 'melee' ? s.meleeDmg : style === 'ranged' ? s.rangedDmg : s.magicDmg) + (special > 1 ? s.specialDmg : 0);
-  return base * Math.max(0.1, bonus) * special;
+  // Spell power scales magic and healing on top: plate (negative) can halve a caster at most.
+  const spell = style === 'magic' ? 1 + Math.max(-0.5, s.spellPower) : 1;
+  return base * Math.max(0.1, bonus) * spell * special;
 }
 
 /** After the target's armour (physical) or ward (magic). */

@@ -31,7 +31,7 @@ export function itemTip(s: Stack, sellMult = 1): HTMLElement[] {
   const name = row(s.qty > 1 ? `${d.name} ×${s.qty}` : d.name, 'tname');
   name.style.color = RARITY[r].color;
   out.push(name);
-  const type = [r ? RARITY[r].name : '', d.armourType ? `${d.armourType[0].toUpperCase()}${d.armourType.slice(1)}` : '', KIND_LABEL[d.kind], d.slot ? `· ${SLOT_LABEL[d.slot] ?? d.slot}` : '', d.tier ? `· tier ${d.tier}` : ''].filter(Boolean).join(' ');
+  const type = [r ? RARITY[r].name : '', d.armourType ? `${d.runed ? 'Runed metal' : d.armourType[0].toUpperCase() + d.armourType.slice(1)}` : '', KIND_LABEL[d.kind], d.slot ? `· ${SLOT_LABEL[d.slot] ?? d.slot}` : '', d.tier ? `· tier ${d.tier}` : ''].filter(Boolean).join(' ');
   out.push(row(type, 'ttype'));
   if (d.weapon) {
     const hit = weaponHit(s);
