@@ -432,7 +432,14 @@ export const START_GOLD = 6;
 export const START_TOOLS = ['stone_pickaxe', 'stone_hatchet', 'basic_rod', 'stone_skinning_knife'];
 /** Traders pay half an item's value (more for rarer copies). Fractions add up when you sell a stack. */
 export const SELL_RATE = 0.5;
-export const sellEach = (s: Pick<Stack, 'id' | 'r'>, sellMult = 1) => { const d = ITEMS[s.id]; return d && d.sellValue > 0 ? d.sellValue * SELL_RATE * (1 + (s.r ?? 0) * 0.5) * sellMult : 0; };
+/** What the trader pays for one. Items that don't stack are always worth at least a coin, since
+ *  they can't be bundled up to reach one. */
+export const sellEach = (s: Pick<Stack, 'id' | 'r'>, sellMult = 1) => {
+  const d = ITEMS[s.id];
+  if (!d || d.sellValue <= 0) return 0;
+  const v = d.sellValue * SELL_RATE * (1 + (s.r ?? 0) * 0.5) * sellMult;
+  return d.stack === 1 ? Math.max(1, v) : v;
+};
 
 /** Order and labels for the character sheet. */
 export const EQUIP_SLOTS: { slot: Slot; label: string }[] = [

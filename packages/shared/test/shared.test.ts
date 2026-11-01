@@ -260,3 +260,10 @@ test('sky: the sun is high at noon and down at night in Oslo; weather is the sam
   }
   assert.equal(weatherAt2('cave', 0).rain, 0);
 });
+
+import { sellEach, SELL_RATE } from '../src/index.js';
+test('non-stacking sellable items are worth at least a coin each', () => {
+  const cheap = Object.values(ITEMS).filter((d) => d.stack === 1 && d.sellValue > 0);
+  assert.ok(cheap.some((d) => d.sellValue * SELL_RATE < 1), 'there are cheap one-slot items to cover');
+  for (const d of cheap) assert.ok(sellEach({ id: d.id }) >= 1, d.id);
+});
