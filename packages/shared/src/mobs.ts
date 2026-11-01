@@ -73,6 +73,7 @@ export const MOB_AREAS = [
   { name: 'Wolf pack', x: 74, z: 36, kind: 'wolf' as MobKind, n: 4, r: 10 },
   { name: 'Northern wolves', x: -6, z: 96, kind: 'wolf' as MobKind, n: 3, r: 9 },
   { name: 'Goblin camp', x: -62, z: -60, kind: 'goblin' as MobKind, n: 5, r: 10 },
+  { name: 'Ulvedalen pack', x: -86, z: -8, kind: 'wolf' as MobKind, n: 4, r: 9 },
   // Gruben
   { name: 'Lynx slopes', x: GRUBEN.x - 46, z: GRUBEN.z + 30, kind: 'lynx' as MobKind, n: 4, r: 12 },
   { name: 'Lynx hollow', x: GRUBEN.x - 34, z: GRUBEN.z - 14, kind: 'lynx' as MobKind, n: 3, r: 10 },

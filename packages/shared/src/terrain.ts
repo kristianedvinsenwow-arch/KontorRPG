@@ -44,6 +44,12 @@ function fbm(x: number, z: number, octaves = 4): number {
 /** Bjørkvik, the first settlement: inn, campfire, workbench, a few villagers. */
 export const VILLAGE = { x: -28, z: 38, r: 21, h: 2.0 };
 
+/**
+ * Ulvedalen ("wolf valley"): a small sheltered hollow in the west, ringed by hills and open to
+ * the east, with a few veins and a wolf pack. A second place to mine close to home.
+ */
+export const ULVEDAL = { x: -80, z: -14, r: 15, h: 3.5 };
+
 /** Where the spike's lake sits (south-west of spawn). */
 export const LAKE = { x: -62, z: 58, r: 34, depth: 7 };
 
@@ -92,6 +98,14 @@ export function heightAt(x: number, z: number): number {
   // Lake basin.
   const dLake = Math.hypot(x - LAKE.x, z - LAKE.z);
   h -= LAKE.depth * (1 - smooth(LAKE.r * 0.35, LAKE.r, dLake));
+
+  // Ulvedalen: hills ringing a flat floor, with the mouth of the valley facing east.
+  const ux = x - ULVEDAL.x, uz = z - ULVEDAL.z, dU = Math.hypot(ux, uz);
+  if (dU < ULVEDAL.r + 22) {
+    const mouth = smooth(0.45, 0.85, dU > 0.01 ? ux / dU : 0); // 1 = facing east
+    h += 8 * smooth(ULVEDAL.r - 3, ULVEDAL.r + 4, dU) * (1 - smooth(ULVEDAL.r + 6, ULVEDAL.r + 20, dU)) * (1 - mouth * 0.9);
+    h = h + (ULVEDAL.h - h) * (1 - smooth(ULVEDAL.r - 4, ULVEDAL.r + 2, dU));
+  }
 
   // Mountains rise at the edge of the spike area so nobody walks off the world.
   const edge = Math.max(Math.abs(x), Math.abs(z));

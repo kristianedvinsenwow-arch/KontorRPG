@@ -29,10 +29,11 @@ export interface NodeTypeDef {
 }
 
 export const VEIN_TYPES: Record<VeinType, NodeTypeDef> = {
-  stone: { name: 'Stone vein', item: 'stone', skill: 'mining', level: 1, power: 1, xp: 8, respawnSec: [45 * 60, 120 * 60], hits: [4, 7], gem: { item: 'quartz', chance: 1 / 150 } },
-  iron: { name: 'Iron vein', item: 'iron_ore', skill: 'mining', level: 8, power: 1, xp: 20, respawnSec: [45 * 60, 120 * 60], hits: [3, 6], gem: { item: 'sapphire', chance: 1 / 200 } },
-  coal: { name: 'Coal seam', item: 'coal', skill: 'mining', level: 14, power: 2, xp: 30, respawnSec: [45 * 60, 120 * 60], hits: [4, 7] },
-  silver: { name: 'Silver vein', item: 'silver_ore', skill: 'mining', level: 18, power: 2, xp: 45, respawnSec: [45 * 60, 120 * 60], hits: [3, 5], gem: { item: 'garnet', chance: 1 / 150 } },
+  // Each hit gives one ore; a vein gives `hits` before it's worked out, then regrows in `respawnSec`.
+  stone: { name: 'Stone vein', item: 'stone', skill: 'mining', level: 1, power: 1, xp: 8, respawnSec: [10 * 60, 20 * 60], hits: [6, 10], gem: { item: 'quartz', chance: 1 / 150 } },
+  iron: { name: 'Iron vein', item: 'iron_ore', skill: 'mining', level: 8, power: 1, xp: 20, respawnSec: [12 * 60, 25 * 60], hits: [5, 8], gem: { item: 'sapphire', chance: 1 / 200 } },
+  coal: { name: 'Coal seam', item: 'coal', skill: 'mining', level: 14, power: 2, xp: 30, respawnSec: [15 * 60, 30 * 60], hits: [5, 9] },
+  silver: { name: 'Silver vein', item: 'silver_ore', skill: 'mining', level: 18, power: 2, xp: 45, respawnSec: [20 * 60, 40 * 60], hits: [4, 7], gem: { item: 'garnet', chance: 1 / 150 } },
 };
 
 export interface Vein { id: string; type: VeinType; x: number; y: number; z: number; r: number }
@@ -57,6 +58,8 @@ export const PATHS: [number, number][][] = [
   [[6, 4], [22, 22], [30, 44], [28, 70], [30, 90]],
   [[22, 22], [46, 30], [66, 33]],
   [[-40, 26], [-44, 8], [-50, -20], [-58, -48]],
+  // Into Ulvedalen.
+  [[-46, -4], [-58, -9], [-70, -13]],
   // Over the wolf meadows to the Gruben pass.
   [[66, 33], [84, 42], [96, 48]],
   // Gruben: from the arrival camp up the valley to the miners' village and the pit.
@@ -95,6 +98,7 @@ export const MINING_SPOTS = [
   { name: 'Grey Ridge', x: 86, z: -14 },
   { name: 'Hollow Hill', x: -84, z: -78 },
   { name: 'North Scree', x: 30, z: 94 },
+  { name: 'Ulvedalen', x: -81, z: -15 },
 ];
 
 function generateVeins(): Vein[] {
