@@ -67,6 +67,32 @@ export class World {
   rand(): number { return this.random(); }
 
   /** Load who rents which inn room (offline players keep theirs). */
+  /** True once the database answered at startup (leases and world state loaded). */
+  private loaded = false;
+  private ready: Promise<void> = Promise.resolve();
+  /**
+   * Connect to the database before anyone plays: load leases and the world, retrying until it
+   * answers. Logins wait for this, and the world isn't saved over until it has been loaded.
+   */
+  start(): Promise<void> {
+    if (!this.opts.store) { this.loaded = true; return this.ready; }
+    this.ready = (async () => {
+      for (let i = 0; ; i++) {
+        try {
+          await this.loadLeases();
+          await this.loadWorld();
+          this.loaded = true;
+          this.log('database connected');
+          return;
+        } catch (e) {
+          this.log('database not answering yet, retrying', e);
+          await new Promise((ok) => setTimeout(ok, Math.min(20_000, 1000 * 2 ** i)));
+        }
+      }
+    })();
+    return this.ready;
+  }
+
   async loadLeases(): Promise<void> {
     if (!this.opts.store) return;
     for (const l of await this.opts.store.leases()) if (l.lease.until > this.now()) this.rooms[l.lease.room] = { key: l.userId, name: l.name, until: l.lease.until };
@@ -100,7 +126,7 @@ export class World {
   }
 
   async saveWorld(): Promise<void> {
-    if (!this.opts.store) return;
+    if (!this.opts.store || !this.loaded) return; // never save over a world we haven't loaded
     try { await this.opts.store.saveWorld(this.snapshot()); } catch (e) { this.log('world save failed', e); }
   }
 
@@ -201,6 +227,7 @@ export class World {
       return;
     }
     return (async () => {
+      await this.ready; // the database must be up before we look anyone up
       const userId = msg.token ? await store.verify(msg.token) : null;
       if (!userId) return reject('login_required');
       let saved = await store.load(userId);

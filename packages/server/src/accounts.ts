@@ -16,6 +16,8 @@ export interface Account { id: string; username: string; pinHash: string }
 /** Where accounts live (Supabase table or memory). */
 export interface AccountStore {
   findAccount(usernameLower: string): Promise<Account | null>;
+  /** Username for an account id (to resume a saved login). */
+  accountName(id: string): Promise<string | null>;
   createAccount(username: string, pinHash: string): Promise<Account | null>; // null = name taken
 }
 

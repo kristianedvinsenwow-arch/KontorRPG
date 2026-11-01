@@ -49,7 +49,8 @@ export function initAccount(auth: Auth): void {
     if (!auth.loggedIn) {
       renderSummary(null);
       setCreatorLocked(null);
-      setEnterBlocked(auth.config.requireLogin ? 'Log in to play' : null);
+      // Someone who has an account here shouldn't wander in as a guest by accident (and "lose" everything).
+      setEnterBlocked(auth.config.requireLogin || auth.remembered ? 'Log in to play' : null);
       const remembered = auth.remembered;
       const intro = el('p', 'note', mode === 'create'
         ? 'Pick a username and a 4–6 digit PIN. No email needed — but there’s no way to recover a forgotten PIN.'
@@ -73,6 +74,10 @@ export function initAccount(auth: Auth): void {
       for (const i of [user, pin]) i.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') go.click(); });
       // When the name is remembered, show it as text with a "not you?" link instead of a field.
       if (mode === 'login' && remembered) {
+        // The username, hidden but present, so the browser's password manager pairs the PIN with it
+        // (instead of guessing some other text box — like the chat — and filling your name in there).
+        const hiddenUser = el('input'); hiddenUser.type = 'text'; hiddenUser.autocomplete = 'username'; hiddenUser.value = remembered; hiddenUser.readOnly = true; hiddenUser.hidden = true;
+        row.append(hiddenUser);
         const who = el('p', 'note');
         const notMe = el('button', 'linkbtn', 'Not you?');
         notMe.onclick = () => { auth.forget(); mode = 'login'; msg = ''; render(); };

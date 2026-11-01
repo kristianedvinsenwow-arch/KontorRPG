@@ -53,7 +53,8 @@ export class NetClient {
       } else if (msg.t === 'pong') {
         netStore.set({ pingMs: Math.round(performance.now() - msg.at) });
       } else if (msg.t === 'reject') {
-        netStore.set({ status: 'rejected' });
+        // The database didn't answer (e.g. the server is still starting): the close handler retries.
+        if (msg.reason !== 'server_error') netStore.set({ status: 'rejected' });
         if (msg.reason === 'outdated_client') this.reload('Your game is out of date — reloading…');
         if (msg.reason === 'login_required') for (const h of this.handlers) h({ t: 'system', text: 'Your login expired — log in again from the start screen.' });
       }
@@ -82,6 +83,8 @@ export class NetClient {
     if (this.reloadScheduled) return;
     this.reloadScheduled = true;
     for (const h of this.handlers) h({ t: 'system', text });
+    // Back into the world on its own after the reload (if we were playing).
+    try { if (netStore.get().status === 'online' || this.hello) sessionStorage.setItem('kontorrpg.autoEnter', '1'); } catch { /* ignore */ }
     setTimeout(() => location.reload(), 3000);
   }
 }

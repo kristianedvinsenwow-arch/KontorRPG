@@ -565,9 +565,10 @@ test('world state survives a restart: depleted nodes, boss timers, ground items'
   const knut = world.mobs.get('knut')!;
   damageMob(world, knut, 99999, p.state.id, world.now());
   world.spawnGround({ id: 'stone', qty: 3 }, 1, 2, 300);
+  await world.start(); // connected to the database (nothing saved yet)
   await world.saveWorld();
   const fresh = new World({ build: 'test', store, now: () => world.now() + 1000 });
-  await fresh.loadWorld();
+  await fresh.start();
   assert.equal(fresh.nodes.get('camp-0')?.left, 0);
   assert.ok(fresh.mobs.get('knut')!.dead);
   assert.equal(fresh.mobs.get('knut')!.respawnAt, knut.respawnAt);
@@ -908,4 +909,14 @@ test('fishing: the catch is decided at the cast; treasure fights harder than a p
   advance(3000);
   world.handle(c, { t: 'reel', ok: true });
   assert.ok(countItem(p.bag, 'quartz') === 1);
+});
+
+test('the world is never saved over before it has been loaded from the database', async () => {
+  const store = new MemoryStore();
+  store.world = { v: 1, nodes: [['camp-0', 0, 5, Date.now() + 3_600_000]], mobs: [], ground: [] } as any;
+  const w = new World({ build: 'test', store });
+  await w.saveWorld(); // not started yet: must not overwrite
+  assert.equal(store.world!.nodes.length, 1);
+  await w.start();
+  assert.equal(w.nodes.get('camp-0')?.left, 0);
 });

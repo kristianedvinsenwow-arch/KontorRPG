@@ -144,6 +144,12 @@ export class SupabaseStore implements CharacterStore {
     return row ? { id: row.id, username: row.username, pinHash: row.pin_hash } : null;
   }
 
+  async accountName(id: string): Promise<string | null> {
+    const r = await fetch(`${this.url}/rest/v1/accounts?id=eq.${encodeURIComponent(id)}&select=username`, { headers: this.headers() });
+    if (!r.ok) throw new Error(`account name: ${r.status} ${await r.text()}`);
+    return ((await r.json()) as { username: string }[])[0]?.username ?? null;
+  }
+
   async createAccount(username: string, pinHash: string): Promise<Account | null> {
     const r = await fetch(`${this.url}/rest/v1/accounts`, {
       method: 'POST', headers: this.headers({ Prefer: 'return=representation' }),
@@ -226,6 +232,7 @@ export class MemoryStore implements CharacterStore {
   private accounts = new Map<string, Account>();
   async verify(token: string) { return token.startsWith('dev:') ? token.slice(4) : this.auth?.verify(token) ?? null; }
   async findAccount(k: string) { return this.accounts.get(k) ?? null; }
+  async accountName(id: string) { for (const a of this.accounts.values()) if (a.id === id) return a.username; return null; }
   async createAccount(username: string, pinHash: string) {
     const k = username.toLowerCase();
     if (this.accounts.has(k)) return null;

@@ -105,7 +105,9 @@ function useCharacter(name: string, color: number, build: CharacterBuild) {
   recomputeStats();
 }
 initCreator(
-  (name, color, build) => {
+  (name0, color, build) => {
+    // No name typed: use the account's username rather than "Adventurer".
+    const name = name0.trim() || auth.username || name0;
     useCharacter(name, color, build);
     net.connect(name, color, build, () => auth.token);
     uiStore.set({ panel: 'none' });
@@ -113,7 +115,14 @@ initCreator(
   },
   syncCreatorPreview,
 );
-void auth.init().then(() => initAccount(auth));
+void auth.init().then(() => {
+  initAccount(auth);
+  // Reloaded for a new version while playing: go straight back in.
+  let again = false;
+  try { again = sessionStorage.getItem('kontorrpg.autoEnter') === '1'; sessionStorage.removeItem('kontorrpg.autoEnter'); } catch { /* ignore */ }
+  const enter = document.getElementById('enter') as HTMLButtonElement;
+  if (again && (auth.character || !auth.enabled) && !enter.disabled) enter.click();
+});
 syncCreatorPreview();
 initPause(() => { uiStore.set({ panel: 'none' }); input.lock(); });
 initBossKey(() => input.unlock());

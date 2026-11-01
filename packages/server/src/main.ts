@@ -36,8 +36,7 @@ if (mem) mem.auth = accounts;
 /** Guests are allowed unless REQUIRE_LOGIN=true (recommended once everyone has an account). */
 const requireLogin = !!store && process.env.REQUIRE_LOGIN === 'true';
 const world = new World({ build: BUILD, log, store, requireLogin });
-void world.loadLeases().catch((e) => log('could not load inn leases', e));
-void world.loadWorld().catch((e) => log('could not load world state', e));
+void world.start();
 const statics = serveStatic(CLIENT_DIST);
 
 const server = createServer((req, res) => {
@@ -60,6 +59,7 @@ const server = createServer((req, res) => {
   }
   if (path === '/api/login' && req.method === 'POST') { void login(req, res); return; }
   if (path === '/api/reset' && req.method === 'POST') { void reset(req, res); return; }
+  if (path === '/api/me' && req.method === 'POST') { void me(req, res); return; }
   if (statics(req, res)) return;
   res.writeHead(404, { 'content-type': 'text/plain' });
   res.end('Not found');
@@ -83,6 +83,26 @@ async function login(req: import('node:http').IncomingMessage, res: import('node
   } catch (e) {
     log('login failed', e);
     reply(500, { error: 'Something went wrong. Try again.' });
+  }
+}
+
+/** POST /api/me {token}: resume a saved login (after a reload) — the username and saved character. */
+async function me(req: import('node:http').IncomingMessage, res: import('node:http').ServerResponse): Promise<void> {
+  const reply = (code: number, body: unknown) => { res.writeHead(code, { 'content-type': 'application/json', 'cache-control': 'no-store' }); res.end(JSON.stringify(body)); };
+  if (!accounts || !store) return reply(404, { error: 'Accounts are off on this server.' });
+  let raw = '';
+  for await (const chunk of req) { raw += chunk; if (raw.length > 2000) return reply(413, { error: 'Too long.' }); }
+  let b: { token?: unknown };
+  try { b = JSON.parse(raw); } catch { return reply(400, { error: 'Bad request.' }); }
+  const id = accounts.verify(String(b.token ?? ''));
+  if (!id) return reply(401, { error: 'Log in again.' });
+  try {
+    const [username, c] = await Promise.all([store.accountName(id), store.load(id)]);
+    if (!username) return reply(401, { error: 'Log in again.' });
+    reply(200, { username, character: c ? { name: c.name, color: c.color, build: c.build, gold: c.gold, equip: c.equip, xp: c.xp, title: c.achievements?.title ?? null } : null });
+  } catch (e) {
+    log('resume failed', e);
+    reply(503, { error: 'The database is not answering. Try again in a moment.' });
   }
 }
 
