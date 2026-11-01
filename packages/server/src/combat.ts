@@ -254,6 +254,8 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
   const main = p.equip.mainHand, ammo = p.equip.ammo;
   const cls = weaponClass(main);
   const spDef = specialFor(main, p.equip.offHand);
+  // Gear and talents: area attacks reach further (+50% at most) and hit harder.
+  const aoeR = 1 + Math.min(0.5, Math.max(0, p.stats.all.aoeRadius)), aoeD = 1 + Math.max(0, p.stats.all.aoeDmg);
   // Mending Circle: heal everyone close by (no target needed).
   if (special && spDef.kind === 'mend') {
     if (now < p.nextSpecialAt) return;
@@ -264,12 +266,12 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
     const s0 = p.stats.all;
     const amount = outgoing(main, undefined, s0, HEAL_MULT * spDef.mult) * (1 + s0.healPower) * (w.rand() < s0.crit ? 1.5 + s0.healCrit : 1);
     for (const q of w.players.values()) {
-      if (q.dead || !sameRegion(q.state, p.state) || Math.hypot(q.state.x - p.state.x, q.state.z - p.state.z) > (spDef.radius ?? 8)) continue;
+      if (q.dead || !sameRegion(q.state, p.state) || Math.hypot(q.state.x - p.state.x, q.state.z - p.state.z) > (spDef.radius ?? 8) * aoeR) continue;
       applyHeal(w, p, q, amount, now);
       // Radiance: the light burns enemies standing next to each friend it heals.
       if (s0.holySplash > 0) for (const t of w.mobs.values()) {
-        if (t.dead || !sameRegion(t, q.state) || Math.hypot(t.x - q.state.x, t.z - q.state.z) > 3 + mobRadius(t)) continue;
-        const hit = Math.max(0.5, Math.round(mitigate(amount * s0.holySplash, true, t.def.armour, t.def.ward) * 10) / 10);
+        if (t.dead || !sameRegion(t, q.state) || Math.hypot(t.x - q.state.x, t.z - q.state.z) > 3 * aoeR + mobRadius(t)) continue;
+        const hit = Math.max(0.5, Math.round(mitigate(amount * s0.holySplash * aoeD, true, t.def.armour, t.def.ward) * 10) / 10);
         w.broadcastNear(t, { t: 'hit', to: t.id, dmg: hit, crit: false, kind: 'magic', from: p.state.id });
         damageMob(w, t, hit, p.state.id, now);
       }
@@ -337,8 +339,8 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
       strike(m, mult);
       // Cleave: a two-handed hit splashes onto enemies right beside the target.
       if (s.cleave > 0 && main && ITEMS[main.id]?.twoHanded) for (const o of [...w.mobs.values()]) {
-        if (o === m || o.dead || !sameRegion(o, m) || Math.hypot(o.x - m.x, o.z - m.z) > 2.5 + mobRadius(o)) continue;
-        strike(o, mult * s.cleave);
+        if (o === m || o.dead || !sameRegion(o, m) || Math.hypot(o.x - m.x, o.z - m.z) > 2.5 * aoeR + mobRadius(o)) continue;
+        strike(o, mult * s.cleave * aoeD);
       }
       return;
     }
@@ -377,20 +379,20 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
   const near = (r: number) => [...w.mobs.values()].filter((x) => !x.dead && sameRegion(x, p.state) && Math.hypot(x.x - p.state.x, x.z - p.state.z) <= r + mobRadius(x));
   if (sp.kind === 'spin') {
     w.broadcastNear(p.state, { t: 'fx', kind: 'spin', from: p.state.id });
-    for (const t of near(sp.radius ?? 3.5)) strike(t, sp.mult);
+    for (const t of near((sp.radius ?? 3.5) * aoeR)) strike(t, sp.mult * aoeD);
   } else if (sp.kind === 'cone') {
     // Everything within reach in front of you (±60° around the aimed target).
     w.broadcastNear(p.state, { t: 'fx', kind: 'spin', from: p.state.id });
     const ax = m.x - p.state.x, az = m.z - p.state.z, al = Math.hypot(ax, az) || 1;
-    for (const t of near(sp.radius ?? 4.5)) {
+    for (const t of near((sp.radius ?? 4.5) * aoeR)) {
       const bx = t.x - p.state.x, bz = t.z - p.state.z, bl = Math.hypot(bx, bz) || 1;
-      if (t === m || (ax * bx + az * bz) / (al * bl) > 0.5) strike(t, sp.mult);
+      if (t === m || (ax * bx + az * bz) / (al * bl) > 0.5) strike(t, sp.mult * aoeD);
     }
   } else if (sp.kind === 'nova') {
     // Frost Nova bursts around the target: freeze everything within its radius of it.
     w.broadcastNear(p.state, { t: 'fx', kind: 'nova', from: p.state.id, to: m.id });
-    const around = [...w.mobs.values()].filter((x) => !x.dead && sameRegion(x, m) && Math.hypot(x.x - m.x, x.z - m.z) <= (sp.radius ?? 5) + mobRadius(x));
-    for (const t of around) strike(t, sp.mult, (x) => {
+    const around = [...w.mobs.values()].filter((x) => !x.dead && sameRegion(x, m) && Math.hypot(x.x - m.x, x.z - m.z) <= (sp.radius ?? 5) * aoeR + mobRadius(x));
+    for (const t of around) strike(t, sp.mult * aoeD, (x) => {
       x.frozenUntil = w.now() + FREEZE_SEC * 1000 * (1 + s.frostPower);
       if (s.brittle > 0) x.brittleUntil = x.frozenUntil;
     });
@@ -399,7 +401,7 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
     if (!burning.length) { p.nextSpecialAt = now + 1000; p.client.send({ t: 'cooldown', until: Date.now() + 1000 }); return w.notice(p, 'Nothing is burning — hit them with firebolts first.', 'error'); }
     w.broadcastNear(p.state, { t: 'fx', kind: 'ignite', from: p.state.id });
     // Brittle Frost: a frozen, brittle target counts as at least 3 stacks.
-    for (const t of burning) strike(t, sp.mult * ((t.brittleUntil ?? 0) > now && t.frozenUntil > now ? Math.max(3, t.burn!.stacks) : t.burn!.stacks) * (1 + s.burnDmg));
+    for (const t of burning) strike(t, sp.mult * ((t.brittleUntil ?? 0) > now && t.frozenUntil > now ? Math.max(3, t.burn!.stacks) : t.burn!.stacks) * (1 + s.burnDmg) * aoeD);
   }
 }
 

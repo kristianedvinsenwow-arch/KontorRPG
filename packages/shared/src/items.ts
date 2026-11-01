@@ -114,6 +114,8 @@ export const EFFECTS: { key: StatKey; groups: EffectGroup[]; min: number; max: n
   { key: 'maxHp', groups: ['general'], min: 1, max: 5, flat: true },
   { key: 'regen', groups: ['general'], min: 1, max: 3, flat: true },
   { key: 'crit', groups: ['general'], min: 0.01, max: 0.03 },
+  { key: 'aoeRadius', groups: ['general'], min: 0.04, max: 0.1 },
+  { key: 'aoeDmg', groups: ['general'], min: 0.03, max: 0.08 },
   // cloth
   { key: 'magicDmg', groups: ['cloth'], min: 0.03, max: 0.08 },
   { key: 'burnDmg', groups: ['cloth'], min: 0.05, max: 0.15 },
