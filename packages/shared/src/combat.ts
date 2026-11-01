@@ -38,7 +38,7 @@ export const SPECIALS: Record<WeaponClass | 'fists', Special> = {
   staff: { name: 'Bonk', cd: 6, mult: 1.8, kind: 'single', blurb: 'A clumsy two-handed bonk.' },
   fireStaff: { name: 'Ignite', cd: 12, mult: 0.45, kind: 'ignite', radius: 22, blurb: 'Every burning enemy within 22 m takes 45% of a firebolt per burn stack (up to 135% at 3 stacks).' },
   lifeStaff: { name: 'Mending Circle', cd: 14, mult: 1.6, kind: 'mend', radius: 8, blurb: 'Heal everyone within 8 m (you too) for 1.6× a heal.' },
-  frostStaff: { name: 'Frost Nova', cd: 15, mult: 0.8, kind: 'nova', radius: 6, blurb: 'Freeze everything within 6 m for 2.5 s.' },
+  frostStaff: { name: 'Frost Nova', cd: 15, mult: 0.8, kind: 'nova', radius: 5, blurb: 'Burst of frost around your target: freeze everything within 5 m of it for 2.5 s.' },
 };
 
 /** Burn: per stack, per second, as a share of one firebolt. 3 stacks ≈ as much damage as the bolts themselves. */

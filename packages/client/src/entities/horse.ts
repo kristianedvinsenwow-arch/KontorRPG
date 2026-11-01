@@ -3,7 +3,7 @@
  * −Z like the characters. `animateHorse` swings the legs and bobs the body with speed.
  */
 import * as THREE from 'three';
-import { ITEMS } from '@kontor/shared';
+import { ITEMS, RACES, type Race } from '@kontor/shared';
 import { mat, mesh, ball, limb, v3, bx } from '../engine/procgen.js';
 
 export interface Horse { g: THREE.Group; body: THREE.Group; legs: THREE.Object3D[]; neck: THREE.Group; ph: number; board?: boolean; gator?: boolean; tail?: THREE.Object3D }
@@ -13,6 +13,21 @@ export const SADDLE_Y = 1.55;
 
 /** How far a mount lifts its rider's hips (horse: into the saddle; skateboard: onto the deck). */
 export const rideLift = (itemId: string | null | undefined) => (itemId && ITEMS[itemId]?.mount?.board ? 0.13 : itemId && ITEMS[itemId]?.mount?.gator ? GATOR_Y - 0.88 : SADDLE_Y - 0.88);
+/** A race's real hip height (the figure is scaled, so the unscaled leg length isn't enough). */
+export const hipHeight = (race: Race) => (0.81 * RACES[race].legs + 0.12) * RACES[race].scale;
+/**
+ * How far the first-person camera rises when you ride, for your race: your hips go to the seat, and
+ * your eyes are as far above them as they are standing. On a horse a small rider still gets a view
+ * over its head (never lower than 2.3 m), so a gnome isn't staring into the back of its neck.
+ */
+export function riderEyeLift(itemId: string | null | undefined, race: Race): number {
+  if (!itemId) return 0;
+  const m = ITEMS[itemId]?.mount;
+  if (m?.board) return 0.13;
+  const eye = RACES[race].eye, seat = (m?.gator ? GATOR_Y : SADDLE_Y) + 0.05;
+  const seated = seat - hipHeight(race) + eye;
+  return (m?.gator ? seated : Math.max(seated, 2.3)) - eye;
+}
 /** Where you sit on the alligator's back. */
 export const GATOR_Y = 0.95;
 
@@ -133,7 +148,7 @@ export function animateHorse(h: Horse, speed: number, dt: number): void {
 /** Pose a character astride: hips at the saddle, thighs forward and apart, shins down. */
 export function seatRider(c: import('./character.js').Character, board = false, gator = false): void {
   if (gator) {
-    c.g.position.y += GATOR_Y - c.hipY + 0.05;
+    c.g.position.y += GATOR_Y - hipHeight(c.race) + 0.05;
     for (const [i, l] of c.legs.entries()) { l.hip.rotation.x = 0.9; l.hip.rotation.z = (i === 0 ? 1 : -1) * 0.6; l.knee.rotation.x = -1.1; }
     return;
   }
@@ -144,7 +159,7 @@ export function seatRider(c: import('./character.js').Character, board = false, 
     for (const l of c.legs) { l.hip.rotation.x = 0.15; l.knee.rotation.x = -0.3; }
     return;
   }
-  c.g.position.y += SADDLE_Y - c.hipY + 0.05;
+  c.g.position.y += SADDLE_Y - hipHeight(c.race) + 0.05;
   for (const [i, l] of c.legs.entries()) {
     l.hip.rotation.x = 1.25;
     l.hip.rotation.z = (i === 0 ? 1 : -1) * 0.35;

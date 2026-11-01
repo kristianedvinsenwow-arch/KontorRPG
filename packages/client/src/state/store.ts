@@ -88,7 +88,7 @@ export function saveSettings(s: Settings): void {
 }
 
 export const netStore = createStore<NetState>({ status: 'offline', myId: null, build: null, pingMs: null, online: [] });
-export const uiStore = createStore<UiState>({ panel: 'menu', station: 'camp_anvil', npc: 'ingrid', charTab: 'sheet', home: 0, chatOpen: false, bossKey: false });
+export const uiStore = createStore<UiState>({ panel: 'menu', station: 'village_anvil', npc: 'ingrid', charTab: 'sheet', home: 0, chatOpen: false, bossKey: false });
 
 /** What the server says you own and know. Only changed by server messages. */
 export interface GameState {

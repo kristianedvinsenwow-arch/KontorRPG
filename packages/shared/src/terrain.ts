@@ -42,7 +42,19 @@ function fbm(x: number, z: number, octaves = 4): number {
 }
 
 /** Bjørkvik, the first settlement: inn, campfire, workbench, a few villagers. */
-export const VILLAGE = { x: -28, z: 38, r: 21, h: 2.0 };
+export const VILLAGE = { x: -28, z: 38, r: 30, h: 2.0 };
+/** Bjørkvik's gate, where the road from the crossroads comes in; and where you arrive (and wake). */
+export const TOWN_GATE = { x: -7.4, z: 14.2 };
+export const SPAWN_POINT = { x: -11, z: 18.5 };
+/** The market and smithy behind the lodge: Ingrid's stall, the furnace and the anvil. */
+export const MARKET = { x: -21, z: 18 };
+/** Ingrid's stall: just inside the gate, on your right as you walk in, close to the fence and turned
+ *  towards you as you come through. */
+export const STALL = (() => {
+  const dx = VILLAGE.x - TOWN_GATE.x, dz = VILLAGE.z - TOWN_GATE.z, l = Math.hypot(dx, dz), fx = dx / l, fz = dz / l;
+  const rx = -fz, rz = fx; // your right-hand side walking in
+  return { x: TOWN_GATE.x + fx * 3 + rx * 4.6, z: TOWN_GATE.z + fz * 3 + rz * 4.6, faceX: TOWN_GATE.x + fx * 1.2, faceZ: TOWN_GATE.z + fz * 1.2 };
+})();
 
 /**
  * Ulvedalen ("wolf valley"): a small sheltered hollow in the west, ringed by hills and open to
@@ -100,7 +112,7 @@ function fjordHeight(x: number, z: number): number {
   const lx = x - FJORD.x, lz = z - FJORD.z;
   // Distance from the channel; the channel widens towards the open sea in the south.
   const d = Math.abs(lx - fjordMid(lz)) * (1 - 0.45 * smooth(20, 90, lz));
-  let h = -9 + smooth(15, 32, d) * 14 + (fbm(x / 30, z / 30) - 0.5) * 4;
+  let h = -9 + smooth(13, 35, d) * 14 // a gentle bank: you can climb back out + (fbm(x / 30, z / 30) - 0.5) * 4;
   h += Math.max(0, d - 40) * 0.4 + (fbm(x / 14 + 3, z / 14, 3) - 0.5) * 2 * smooth(30, 45, d);
   for (const p of Object.values(FJORD_SPOTS)) h = h + (p.h - h) * (1 - smooth(p.r, p.r + 10, Math.hypot(lx - p.x, lz - p.z)));
   // The ford: a gravel bar across the fjord's head, so you can walk to the west shore.

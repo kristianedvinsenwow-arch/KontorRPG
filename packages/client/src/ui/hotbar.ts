@@ -3,7 +3,7 @@
  * the right-click cooldown sweeps over the weapon), food (5), healing potion (6), health, buffs, tracked quests, and
  * the "knocked out" screen.
  */
-import { EAT_LOCK_MS, POTION_CD_MS, ITEMS, QUEST_BY_ID, SPECIALS, specialFor, countItem, formatStat, weaponClass, type HoldSlot, type StatKey } from '@kontor/shared';
+import { EAT_LOCK_MS, POTION_CD_MS, ITEMS, MOBS, NPC_BY_ID, QUEST_BY_ID, SPECIALS, specialFor, countItem, formatStat, weaponClass, type HoldSlot, type StatKey } from '@kontor/shared';
 import { gameStore, type GameState } from '../state/store.js';
 import { icon, el } from './panels.js';
 import { attachTip, itemTip } from './tooltip.js';
@@ -29,8 +29,8 @@ export function initHotbar(onHold: (s: HoldSlot) => void, onEat: (index: number)
   const tracker = el('div'); tracker.id = 'tracker';
   const dead = el('div'); dead.id = 'dead'; dead.hidden = true;
   const deadCard = el('div', 'card');
-  deadCard.append(el('h2', '', 'Knocked out'), el('p', 'note', 'You keep everything you carry. You’ll wake at camp, weakened for 2 minutes.'));
-  const wake = el('button', 'btn big', 'Wake up at camp'); wake.type = 'button'; wake.onclick = onRespawn;
+  deadCard.append(el('h2', '', 'Knocked out'), el('p', 'note', 'You keep everything you carry. You’ll wake at Bjørkvik’s gate, weakened for 2 minutes.'));
+  const wake = el('button', 'btn big', 'Wake up in Bjørkvik'); wake.type = 'button'; wake.onclick = onRespawn;
   deadCard.append(wake);
   dead.append(deadCard);
   const hud = document.getElementById('hud')!;
@@ -92,8 +92,11 @@ export function initHotbar(onHold: (s: HoldSlot) => void, onEat: (index: number)
       const q = QUEST_BY_ID.get(id);
       if (!q) return el('div');
       const have = 'item' in q.need ? countItem(g.bag, q.need.item) : s.progress ?? 0;
-      const d = el('div', have >= q.need.qty ? 'tq done' : 'tq');
-      d.append(el('b', '', q.name), el('span', '', `${'item' in q.need ? ITEMS[q.need.item].name : `Defeat ${q.need.kill.replace('_', ' ')}s`}: ${Math.min(have, q.need.qty)}/${q.need.qty}`));
+      const done = have >= q.need.qty;
+      const d = el('div', done ? 'tq done' : 'tq');
+      d.append(el('b', '', q.name), el('span', '', `${'item' in q.need ? ITEMS[q.need.item].name : `Defeat: ${MOBS[q.need.kill]?.name ?? q.need.kill}`}: ${Math.min(have, q.need.qty)}/${q.need.qty}`));
+      // Finished: say who to hand it in to, so you know where to walk.
+      if (done) { const n = NPC_BY_ID.get(q.npc); d.append(el('span', 'turnin', `✓ Turn in to ${n ? `${n.name} (${n.title})` : q.npc}`)); }
       return d;
     }));
     dead.hidden = !g.dead;

@@ -5,7 +5,7 @@
  */
 import {
   ACHIEVEMENTS, titleOf, COMING_SKILLS, EQUIP_SLOTS, HOMES, IMBUE, INN, ITEMS, homeLabel, type Home, NPC_BY_ID, QUESTS, RECIPES, SKILLS, STATION_BY_ID, TALENT_TREE, TREES,
-  canLearn, computeStats, xpMult, MAX_LEVEL, countItem, knifeRepair, knifeUses, recipeGroup, formatStat, levelFromXp, levelProgress, pointsLeft, questAvailable, recipeAt, respecCost, xpForLevel,
+  canLearn, computeStats, xpMult, MAX_LEVEL, countItem, knifeRepair, knifeUses, recipeGroup, formatStat, levelFromXp, skillLevel, levelProgress, pointsLeft, questAvailable, recipeAt, respecCost, xpForLevel,
   type ClientMsg, type Stack, type StatKey, type TreeId,
 } from '@kontor/shared';
 import { gameStore, settingsStore, uiStore, type GameState } from '../state/store.js';
@@ -52,16 +52,30 @@ function contextMenu(e: MouseEvent, items: [string, () => void][]) {
 
 type BagMode = { kind: 'bag' } | { kind: 'shop'; npc: string } | { kind: 'storage' };
 
-export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, sellMult: () => number) {
+export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, sellMult: () => number, boost: () => number = () => 0) {
   const root = $('gamePanel');
   const card = $('gameCard');
 
   function bagGrid(g: GameState, mode: BagMode): HTMLElement {
     const grid = el('div', 'bag');
+    // Drag an item onto another slot to move it there (swapping with what's in it).
+    const dropTarget = (cell: HTMLElement, i: number) => {
+      cell.ondragover = (e) => { if (e.dataTransfer?.types.includes('kontor/slot')) { e.preventDefault(); cell.classList.add('over'); } };
+      cell.ondragleave = () => cell.classList.remove('over');
+      cell.ondrop = (e) => {
+        e.preventDefault(); cell.classList.remove('over');
+        const from = Number(e.dataTransfer?.getData('kontor/slot'));
+        if (Number.isInteger(from) && from !== i) send({ t: 'moveItem', from, to: i });
+      };
+    };
     g.bag.forEach((s, i) => {
+      if (!s) { const empty = el('div', 'cell empty'); dropTarget(empty, i); grid.append(empty); return; }
       const cell = el('button', 'cell');
       cell.type = 'button';
-      if (!s) { cell.disabled = true; grid.append(cell); return; }
+      cell.draggable = true;
+      cell.ondragstart = (e) => { hideTip(); e.dataTransfer?.setData('kontor/slot', String(i)); if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'; cell.classList.add('dragging'); };
+      cell.ondragend = () => cell.classList.remove('dragging');
+      dropTarget(cell, i);
       const d = ITEMS[s.id];
       cell.append(icon(s));
       attachTip(cell, () => itemTip(s, sellMult()));
@@ -128,16 +142,16 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
   function skillList(g: GameState): HTMLElement[] {
     const list = el('div', 'skills compact');
     for (const s of SKILLS) {
-      const xp = g.xp[s.id] ?? 0, lvl = levelFromXp(xp);
+      const xp = g.xp[s.id] ?? 0, lvl = levelFromXp(xp, s.id);
       const row = el('div', 'skill');
       const top = el('div', 'srow');
       top.append(el('b', '', s.name), el('span', 'lvl', `${lvl}`));
       const bar = el('div', 'bar');
       const fill = el('i');
-      fill.style.width = `${Math.round(levelProgress(xp) * 100)}%`;
+      fill.style.width = `${Math.round(levelProgress(xp, s.id) * 100)}%`;
       bar.append(fill);
       row.append(top, bar);
-      attachTip(row, () => [el('div', 'tname', `${s.name} · level ${lvl}`), el('div', 'tdim', `${xp.toLocaleString('en')} XP · ${(xpForLevel(lvl + 1) - xp).toLocaleString('en')} to level ${lvl + 1}`), el('div', '', s.blurb)]);
+      attachTip(row, () => [el('div', 'tname', `${s.name} · level ${lvl}`), el('div', 'tdim', `${xp.toLocaleString('en')} XP · ${(xpForLevel(lvl + 1, s.id) - xp).toLocaleString('en')} to level ${lvl + 1}`), el('div', '', s.blurb)]);
       list.append(row);
     }
     return [el('div', 'eyebrow', 'Skills'), list, el('p', 'note', `Every level gives a talent point (T). Coming later: ${COMING_SKILLS.join(', ')}.`)];
@@ -146,15 +160,15 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
   function skills(g: GameState): HTMLElement[] {
     const list = el('div', 'skills');
     for (const s of SKILLS) {
-      const xp = g.xp[s.id] ?? 0, lvl = levelFromXp(xp);
+      const xp = g.xp[s.id] ?? 0, lvl = levelFromXp(xp, s.id);
       const row = el('div', 'skill');
       const top = el('div', 'srow');
       top.append(el('b', '', s.name), el('span', 'lvl', `Level ${lvl}`));
       const bar = el('div', 'bar');
       const fill = el('i');
-      fill.style.width = `${Math.round(levelProgress(xp) * 100)}%`;
+      fill.style.width = `${Math.round(levelProgress(xp, s.id) * 100)}%`;
       bar.append(fill);
-      row.append(top, bar, el('p', 'note', `${xp.toLocaleString('en')} XP · ${(xpForLevel(lvl + 1) - xp).toLocaleString('en')} to level ${lvl + 1}. ${s.blurb}`));
+      row.append(top, bar, el('p', 'note', `${xp.toLocaleString('en')} XP · ${(xpForLevel(lvl + 1, s.id) - xp).toLocaleString('en')} to level ${lvl + 1}. ${s.blurb}`));
       list.append(row);
     }
     list.append(el('p', 'note', `Coming later: ${COMING_SKILLS.join(', ')}.`));
@@ -207,7 +221,8 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     const T = TALENT_TREE[tree];
     const left = pointsLeft(g.talents, g.xp, tree);
     const alloc = g.talents[tree] ?? {};
-    const W = 560, H = 470, cx = (x: number) => W / 2 + x * 120, cy = (y: number) => 50 + y * 100;
+    const rows = Math.max(...T.nodes.map((x) => x.y)) + 1;
+    const W = 560, H = 20 + rows * 92, cx = (x: number) => W / 2 + x * 120, cy = (y: number) => 50 + y * 92;
     const board = el('div', 'tree');
     board.style.width = `${W}px`; board.style.height = `${H}px`;
     const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -248,6 +263,8 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
   // ---------------------------------------------------------------- crafting
 
   const want = new Map<string, number>();
+  /** What you made lately (newest first), shown in the crafting panel's side column. */
+  const made: { item: string; qty: number; r?: number; xp?: number; skill?: string; at: number }[] = [];
   // The tab you last picked at each kind of station, remembered in this browser.
   const TAB_KEY = 'kontorrpg.craftTabs';
   const craftTab = new Map<string, string>((() => { try { return Object.entries(JSON.parse(localStorage.getItem(TAB_KEY) ?? '{}')) as [string, string][]; } catch { return []; } })());
@@ -259,36 +276,36 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     const here = RECIPES.filter((x) => recipeAt(x, st.kind));
     const groups = [...new Set(here.map(recipeGroup))];
     const tab = groups.includes(craftTab.get(st.kind) ?? '') ? craftTab.get(st.kind)! : groups[0];
-    const tabs = el('div', 'tabs');
+    const tabs = el('div', 'tabs ctabs');
     if (groups.length > 1) for (const gname of groups) {
-      const n = here.filter((r) => recipeGroup(r) === gname && levelFromXp(g.xp[r.skill] ?? 0) >= r.level && r.inputs.every((i) => countItem(g.bag, i.item) >= i.qty)).length;
+      const n = here.filter((r) => recipeGroup(r) === gname && skillLevel(g.xp, r.skill, boost()) >= r.level && r.inputs.every((i) => countItem(g.bag, i.item) >= i.qty)).length;
       tabs.append(btn(n ? `${gname} (${n})` : gname, gname === tab ? 'tab on' : 'tab', () => { craftTab.set(st.kind, gname); saveTabs(); render(); }));
     }
     // Skill progress at the top: where you are in the level, and how far to the next.
     const ps = computeStats(settingsStore.get().build, g.equip, g.talents, g.xp, g.buffs);
     const prog = el('div', 'craftskills');
     for (const sk of [...new Set(here.map((r) => r.skill))]) {
-      const xp = g.xp[sk] ?? 0, lvl = levelFromXp(xp);
+      const xp = g.xp[sk] ?? 0, lvl = levelFromXp(xp, sk);
       const name = sk[0].toUpperCase() + sk.slice(1);
       const row = el('div', 'skill');
       const top = el('div', 'srow');
       const max = lvl >= MAX_LEVEL;
-      const a = xpForLevel(lvl), b = xpForLevel(lvl + 1);
+      const a = xpForLevel(lvl, sk), b = xpForLevel(lvl + 1, sk);
       top.append(el('b', '', `${name} ${lvl}`), el('span', 'note', max ? 'Max level' : `${(xp - a).toLocaleString('en')} / ${(b - a).toLocaleString('en')} XP · ${(b - xp).toLocaleString('en')} to level ${lvl + 1}`));
-      const bar = el('div', 'bar'); const fill = el('i'); fill.style.width = `${Math.round(levelProgress(xp) * 100)}%`; bar.append(fill);
+      const bar = el('div', 'bar'); const fill = el('i'); fill.style.width = `${Math.round(levelProgress(xp, sk) * 100)}%`; bar.append(fill);
       row.append(top, bar);
       prog.append(row);
     }
     /** How many more of this recipe to the next level (with your XP bonuses). */
     const moreFor = (r: (typeof here)[number]) => {
-      const xp = g.xp[r.skill] ?? 0, lvl = levelFromXp(xp);
+      const xp = g.xp[r.skill] ?? 0, lvl = levelFromXp(xp, r.skill);
       if (lvl >= MAX_LEVEL) return '';
       const per = Math.max(1, Math.round(r.xp * xpMult(ps, r.skill)));
-      const n = Math.ceil((xpForLevel(lvl + 1) - xp) / per);
+      const n = Math.ceil((xpForLevel(lvl + 1, r.skill) - xp) / per);
       return ` · ${n} more for level ${lvl + 1}`;
     };
     for (const r of here.filter((x) => recipeGroup(x) === tab)) {
-      const lvl = levelFromXp(g.xp[r.skill] ?? 0);
+      const lvl = skillLevel(g.xp, r.skill, boost());
       const can = Math.min(...r.inputs.map((i) => Math.floor(countItem(g.bag, i.item) / i.qty)));
       const noPlans = !!r.plans && !g.ach.c[`plans:${r.plans}`];
       const locked = lvl < r.level || noPlans;
@@ -308,7 +325,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
       const act = el('div', 'ract');
       const n = el('input');
       n.type = 'number'; n.min = '1'; n.max = '100';
-      n.value = String(Math.max(1, Math.min(want.get(r.id) ?? Math.max(1, can), 100)));
+      n.value = String(Math.max(1, Math.min(want.get(r.id) ?? 1, 100))); // starts at 1; 'All' doesn't change it
       n.oninput = () => want.set(r.id, Number(n.value) || 1);
       n.onkeydown = (e) => e.stopPropagation();
       const go = btn(noPlans ? 'Need plans' : locked ? `Level ${r.level}` : 'Make', 'btn', () => send({ t: 'craft', recipe: r.id, station: st.id, count: Math.max(1, Math.min(100, Number(n.value) || 1)) }));
@@ -322,6 +339,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
       list.append(row);
     }
     const body = el('div', 'pbody');
+    const side = el('div', 'cside');
     if (g.job) {
       const j = g.job;
       const q = el('div', 'queue');
@@ -329,7 +347,7 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
       q.append(el('span', '', `Making ${ITEMS[rr.output.item].name} — ${j.done} of ${j.total}`));
       const bar = el('div', 'bar'); const fill = el('i'); fill.id = 'craftFill'; bar.append(fill);
       q.append(bar, btn('Stop', 'btn ghost', () => send({ t: 'cancelCraft' })));
-      body.append(q);
+      side.append(q);
     }
     // Repairs at the anvil: worn skinning knives (equipped or in the bag).
     if (st.kind === 'anvil') {
@@ -350,9 +368,24 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
         list.prepend(row);
       }
     }
-    body.prepend(prog);
-    if (groups.length > 1) body.append(tabs);
-    body.append(list, goldLine(g));
+    // Two columns: on the left your level, the tabs, what's being made and what came out; on the
+    // right the recipes, which scroll on their own (and keep their place while you craft).
+    side.prepend(prog);
+    if (groups.length > 1) side.insertBefore(tabs, side.children[1] ?? null);
+    const log = el('div', 'clog');
+    const fresh = made.filter((m) => Date.now() - m.at < 10 * 60_000).slice(0, 8);
+    log.append(el('div', 'clog-h', fresh.length ? 'Made lately' : 'What you make shows up here'));
+    for (const m of fresh) {
+      const line = el('div', 'clog-row');
+      const nm = el('span', '', `${m.qty > 1 ? `${m.qty} × ` : ''}${ITEMS[m.item]?.name ?? m.item}`);
+      if (m.r) nm.style.color = rarityColor({ id: m.item, r: m.r as 0 });
+      line.append(icon({ id: m.item, qty: 1, r: m.r as 0 }), nm, el('span', 'note', m.xp ? `+${m.xp} XP` : ''));
+      log.append(line);
+    }
+    side.append(log, goldLine(g));
+    list.classList.add('cscroll');
+    body.classList.add('craft2');
+    body.append(side, list);
     return [header(st.name, { furnace: 'Smelt ore into bars', anvil: 'Shape stone, smith weapons and metal armour', workbench: 'Carpentry: shafts, arrows, bows, staffs, rods', campfire: 'Cook your catch', stove: 'Cook your catch (burns less)', tanning: 'Leatherworking: tan hides, make leather armour', loom: 'Tailoring: spin, weave, make cloth armour', alchemy: 'Alchemy: brew potions and elixirs (vials from Ragna)' }[st.kind] ?? '', 'E'), body];
   }
 
@@ -565,13 +598,14 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
 
   function render() {
     const u = uiStore.get(), g = gameStore.get();
+    const keep = card.querySelector('.cscroll')?.scrollTop ?? 0; // the recipe list keeps its place
     if (u.panel === 'character') renderCharacter(u.charTab, g);
     const open = ['skills', 'craft', 'npc', 'home', 'talents', 'map', 'achievements'].includes(u.panel);
     root.hidden = !open;
     if (!open) return;
     card.className = `pcard ${u.panel}`;
     if (u.panel === 'skills') card.replaceChildren(...skills(g));
-    else if (u.panel === 'craft') card.replaceChildren(...craft(g, u.station));
+    else if (u.panel === 'craft') { card.replaceChildren(...craft(g, u.station)); const l = card.querySelector('.cscroll'); if (l) l.scrollTop = keep; }
     else if (u.panel === 'npc') card.replaceChildren(...npc(g, u.npc));
     else if (u.panel === 'home') card.replaceChildren(...homePanel(g, u.home));
     else if (u.panel === 'talents') card.replaceChildren(...talents(g));
@@ -597,8 +631,16 @@ export function initPanels(send: (m: ClientMsg) => void, onClose: () => void, se
     queueMicrotask(() => { pending = false; if (uiStore.get().panel !== 'map') render(); });
   });
 
+  /** A crafting result came in: remember it for the panel's log. */
+  const noteMade = (item: string, qty: number, r?: number, xp?: number, skill?: string) => {
+    made.unshift({ item, qty, r, xp, skill, at: Date.now() });
+    made.length = Math.min(made.length, 20);
+    if (uiStore.get().panel === 'craft') render();
+  };
+
   return {
     render,
+    noteMade,
     frame() {
       const j = gameStore.get().job;
       const f = document.getElementById('craftFill');

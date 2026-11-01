@@ -243,7 +243,7 @@ export function applyGear(c: Character, gear: Gear): void {
   if (held !== c.heldId) setHeld(c, makeHeld(held), held);
   setShoulders(c, gear?.s ? ((ITEMS[gear.s]?.look ?? 'iron') as keyof typeof GEAR_COLORS) : null);
   c.pack.visible = !!gear?.b;
-  c.pack.scale.setScalar(gear?.b === 'leather_backpack' ? 1.22 : 1);
+  c.pack.scale.setScalar(gear?.b ? 1 + Math.min(0.5, ((ITEMS[gear.b]?.bagSlots ?? 4) - 4) * 0.028) : 1); // bigger bag, bigger pack
   const show = (g: THREE.Object3D, id: string | undefined) => { g.visible = !!id; if (id) tint(g, ITEMS[id]?.look); };
   show(c.armour.helm, gear?.hd);
   show(c.armour.chest, gear?.c);

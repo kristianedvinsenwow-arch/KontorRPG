@@ -213,10 +213,10 @@ const FISH: [string, string, number, number, number, ItemDef['food']][] = [
   ['wolffish', 'Wolffish', 4, 8, 4, { heal: 32, buff: { name: 'Well fed (wolffish)', stats: { physRed: 0.05, maxHp: 6 }, sec: 600 } }],
 ];
 for (const [id, name, raw, cooked, tier, food] of FISH) {
-  add({ id: `raw_${id}`, name: `Raw ${name.toLowerCase()}`, kind: 'fish', stack: 10, tier, sellValue: raw, blurb: 'Cook it at a campfire or the inn’s stove.' });
+  add({ id: `raw_${id}`, name: `Raw ${name.toLowerCase()}`, kind: 'fish', stack: 10, tier, sellValue: raw, blurb: 'Cook it at a campfire or a cottage stove.' });
   add({ id: `cooked_${id}`, name: `Cooked ${name.toLowerCase()}`, kind: 'food', stack: 10, tier, food, sellValue: cooked, blurb: `Eat it (hotbar) to heal ${food!.heal} HP${food!.buff ? ' and get a 10-minute buff' : ''}.` });
 }
-add({ id: 'raw_wolf_meat', name: 'Raw wolf meat', kind: 'meat', stack: 10, tier: 1, sellValue: 1, blurb: 'Tough and gamey. Cook it at a campfire or the inn’s stove.' });
+add({ id: 'raw_wolf_meat', name: 'Raw wolf meat', kind: 'meat', stack: 10, tier: 1, sellValue: 1, blurb: 'Tough and gamey. Cook it at a campfire or a cottage stove.' });
 add({ id: 'cooked_wolf_meat', name: 'Wolf steak', kind: 'food', stack: 10, tier: 1, food: { heal: 12, buff: { name: 'Well fed (wolf)', stats: { meleeDmg: 0.05, maxHp: 4 }, sec: 600 } }, sellValue: 2, blurb: 'Eat it (hotbar) to heal 12 HP and get a 10-minute buff. Not mid-fight.' });
 // Salted and cured food (cooking with sea salt): buffs fresh food doesn't give, and they last 20 min.
 const CURED: [string, string, number, NonNullable<ItemDef['food']>['buff'] & object, string][] = [
@@ -228,6 +228,15 @@ const CURED: [string, string, number, NonNullable<ItemDef['food']>['buff'] & obj
   ['salt_halibut', 'Salt-baked halibut', 26, { name: 'Well fed (salt-baked halibut)', stats: { crit: 0.04, specialDmg: 0.1 }, sec: 1200 }, 'Crits and right clicks hit harder.'],
 ];
 for (const [id, name, heal, buff, blurb] of CURED) add({ id, name, kind: 'food', stack: 10, tier: 2, food: { heal, buff }, sellValue: 4, blurb: `Eat it (hotbar) to heal ${heal} HP. 20-minute buff: ${blurb}` });
+/** Salted provisions that sharpen your hands: for 20 minutes, extra levels in every gathering and
+ *  crafting skill (so you can work a vein or a recipe a little above you). No talent points. */
+export const SKILL_FOODS: [string, string, number, number, string][] = [
+  ['salt_jerky', 'Salt jerky', 10, 2, 'Strips of salted wolf meat. Chewy, keeps you sharp.'],
+  ['pickled_mackerel', 'Pickled mackerel', 14, 4, 'Mackerel in salt and vinegar. Wakes you right up.'],
+  ['klippfisk', 'Klippfisk', 18, 6, 'Salted, dried cod, hard as a board. A craftsman’s lunch.'],
+  ['cured_wolffish', 'Cured wolffish', 22, 8, 'Salt-cured wolffish. The old masters swear by it.'],
+];
+for (const [id, name, heal, lv, blurb] of SKILL_FOODS) add({ id, name, kind: 'food', stack: 10, tier: 2, food: { heal, buff: { name: `Well fed (${name.toLowerCase()})`, stats: { skillLvl: lv }, sec: 1200 } }, sellValue: 2 + lv, blurb: `Eat it (hotbar) to heal ${heal} HP. 20-minute buff: +${lv} levels in every gathering and crafting skill — mine, fell, fish or craft above your level (no talent points). ${blurb}` });
 add({ id: 'burnt_fish', name: 'Burnt food', kind: 'junk', stack: 10, sellValue: 0, blurb: 'Charcoal. Drop it.' });
 add({ id: 'old_boot', name: 'Old boot', kind: 'junk', stack: 5, sellValue: 0, blurb: 'Someone lost this in the lake. Smells like it.' });
 add({ id: 'seaweed', name: 'Seaweed', kind: 'junk', stack: 10, sellValue: 0, blurb: 'Slimy. Even the gulls won’t touch it.' });
@@ -353,7 +362,7 @@ for (const [wood, tier, dps] of [['birch', 1, 2.5], ['pine', 2, 3.5]] as const) 
   add({ id: `${wood}_staff`, name: `${W2} staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'staff', dps, interval: 1.8, range: 2.6, twoHanded: true, sellValue: tier * 2, blurb: 'A clumsy club until the Imbuer in Bjørkvik makes it magical.' });
   add({ id: `${wood}_fire_staff`, name: `${W2} fire staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'fireStaff', dps: tier === 1 ? 3 : 3.75, interval: 1.8, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Light firebolts that set a burn (stacks to 3, most of the damage is in the burn). Right click: Ignite — every burning enemy nearby takes 45% of a firebolt per burn stack (12 s).' });
   add({ id: `${wood}_life_staff`, name: `${W2} life staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'lifeStaff', dps: tier === 1 ? 2.5 : 3.1, interval: 2.0, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'A healer’s staff. Click a player to heal them (or no one, to heal yourself); on monsters it only stings. Right click: Mending Circle — heal everyone within 8 m (14 s).' });
-  add({ id: `${wood}_frost_staff`, name: `${W2} frost staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'frostStaff', dps: tier === 1 ? 5 : 6.25, interval: 2.6, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Slow, heavy frostbolts. Right click: Frost Nova — freeze everything within 6 m for 2.5 s (15 s).' });
+  add({ id: `${wood}_frost_staff`, name: `${W2} frost staff`, kind: 'weapon', stack: 1, tier, look: wood, slot: 'mainHand', weapon: 'frostStaff', dps: tier === 1 ? 5 : 6.25, interval: 2.6, range: 26, twoHanded: true, sellValue: tier * 8, blurb: 'Slow, heavy frostbolts. Right click: Frost Nova — freeze your target and everything within 5 m of it for 2.5 s (15 s).' });
 }
 
 // armour. Metal is smithed (stone uses shaped stone, iron uses bars); leather and cloth are sold for now.
@@ -375,6 +384,9 @@ export const CLOTHS: { prefix: string; name: string; look: Look; cloth: string; 
   { prefix: 'bamboo', name: 'Bamboo', look: 'bamboo', cloth: 'bamboo_cloth', tier: 3, step: 24, armour: 1.8, ward: 2.6, minWard: 2, sell: 10, blurb: 'Silky bamboo cloth, cool and tough. Made at a loom.' },
   { prefix: 'silk', name: 'Spirit-silk', look: 'silk', cloth: 'spirit_silk', tier: 3, step: 30, armour: 2, ward: 3.2, minWard: 2, sell: 14, mods: { magicDmg: 0.03 }, blurb: 'Woven with wisp essence; it drinks in spells. Made at a loom.' },
 ];
+/** Leather is the damage dealer's armour: less protection than plate, but every piece sharpens
+ *  your blows (crit chance and melee damage, by tier) — for when someone else is the tank. */
+const leatherMods = (crit: number, melee: number): Partial<Stats> => ({ crit, meleeDmg: melee });
 for (const p of ARMOUR_PIECES) {
   METALS.forEach((t, i) => add({
     id: `${t}_${p.piece}`, name: `${metalName(t)} ${p.name.metal}`, kind: 'armour', stack: 1, tier: i + 1, look: t as Look,
@@ -383,10 +395,10 @@ for (const p of ARMOUR_PIECES) {
       + (t === 'silversteel' ? ' The silver worked into it turns some magic, too.' : ''),
   }));
   if (p.slot === 'offHand') continue;
-  add({ id: `leather_${p.piece}`, name: `Leather ${p.name.leather}`, kind: 'armour', stack: 1, tier: 1, look: 'leather', slot: p.slot, armourType: 'leather', armour: p.leather[0], ward: p.leather[1], sellValue: 2, blurb: 'Supple wolf leather. Fair against blades and spells alike, and light on the feet.' });
-  add({ id: `goblinhide_${p.piece}`, name: `Goblinhide ${p.name.leather}`, kind: 'armour', stack: 1, tier: 2, look: 'goblin', slot: p.slot, armourType: 'leather', armour: Math.max(1, Math.round(p.leather[0] * 1.8)), ward: Math.round(p.leather[1] * 1.8), sellValue: 5, blurb: 'Tough goblin hide, tanned and stitched. Sturdier than wolf leather.' });
-  add({ id: `nagahide_${p.piece}`, name: `Nagahide ${p.name.leather}`, kind: 'armour', stack: 1, tier: 2, look: 'naga', slot: p.slot, armourType: 'leather', armour: Math.max(1, Math.round(p.leather[0] * 2.2)), ward: Math.round(p.leather[1] * 2.2), sellValue: 7, blurb: 'Scaled naga hide, stitched in overlapping rows. Better than goblinhide, light on the feet.' });
-  add({ id: `lynxhide_${p.piece}`, name: `Lynxhide ${p.name.leather}`, kind: 'armour', stack: 1, tier: 3, look: 'lynx', slot: p.slot, armourType: 'leather', armour: Math.max(1, Math.round(p.leather[0] * 2.6)), ward: Math.round(p.leather[1] * 2.6), sellValue: 10, blurb: 'Soft, spotted lynx hide. The finest leather this side of the mountains.' });
+  add({ id: `leather_${p.piece}`, name: `Leather ${p.name.leather}`, kind: 'armour', stack: 1, tier: 1, look: 'leather', slot: p.slot, armourType: 'leather', armour: p.leather[0], ward: p.leather[1], mods: leatherMods(0.01, 0.01), sellValue: 2, blurb: 'Supple wolf leather. Fair against blades and spells, light on the feet — and you hit harder and crit more in it.' });
+  add({ id: `goblinhide_${p.piece}`, name: `Goblinhide ${p.name.leather}`, kind: 'armour', stack: 1, tier: 2, look: 'goblin', slot: p.slot, armourType: 'leather', armour: Math.max(1, Math.round(p.leather[0] * 1.8)), ward: Math.round(p.leather[1] * 1.8), mods: leatherMods(0.012, 0.015), sellValue: 5, blurb: 'Tough goblin hide, tanned and stitched. Sturdier than wolf leather.' });
+  add({ id: `nagahide_${p.piece}`, name: `Nagahide ${p.name.leather}`, kind: 'armour', stack: 1, tier: 2, look: 'naga', slot: p.slot, armourType: 'leather', armour: Math.max(1, Math.round(p.leather[0] * 2.2)), ward: Math.round(p.leather[1] * 2.2), mods: leatherMods(0.014, 0.018), sellValue: 7, blurb: 'Scaled naga hide, stitched in overlapping rows. Better than goblinhide, light on the feet.' });
+  add({ id: `lynxhide_${p.piece}`, name: `Lynxhide ${p.name.leather}`, kind: 'armour', stack: 1, tier: 3, look: 'lynx', slot: p.slot, armourType: 'leather', armour: Math.max(1, Math.round(p.leather[0] * 2.6)), ward: Math.round(p.leather[1] * 2.6), mods: leatherMods(0.016, 0.02), sellValue: 10, blurb: 'Soft, spotted lynx hide. The finest leather this side of the mountains.' });
   // Cloth (tailoring), weakest to best: linen (ids kept as cloth_*), jute, ramie, cotton, bamboo, spirit silk.
   for (const c of CLOTHS) add({
     id: `${c.prefix}_${p.piece}`, name: `${c.name} ${p.name.cloth}`, kind: 'armour', stack: 1, tier: c.tier, look: c.look, slot: p.slot, armourType: 'cloth',
@@ -412,6 +424,11 @@ for (const j of JEWELS) {
 // bags and boss uniques
 add({ id: 'small_rucksack', name: 'Small rucksack', kind: 'bag', stack: 1, slot: 'back', bagSlots: 4, sellValue: 10, buyPrice: 40, blurb: '+4 bag slots.' });
 add({ id: 'leather_backpack', name: 'Leather backpack', kind: 'bag', stack: 1, slot: 'back', bagSlots: 8, sellValue: 30, buyPrice: 120, blurb: '+8 bag slots.' });
+// Bigger bags are made, not bought: lots of leather at a tanning rack, and Ingrid's pricey straps.
+add({ id: 'bag_strap', name: 'Bag strap', kind: 'material', stack: 5, tier: 2, sellValue: 40, buyPrice: 200, blurb: 'A riveted, waxed carrying strap and buckles — the one part of a big pack you can’t make yourself. Ingrid sells them. Used to make bags at a tanning rack.' });
+add({ id: 'travellers_pack', name: 'Traveller’s pack', kind: 'bag', stack: 1, slot: 'back', bagSlots: 12, sellValue: 90, blurb: '+12 bag slots. Made by leatherworkers.' });
+add({ id: 'naga_haversack', name: 'Naga-scale haversack', kind: 'bag', stack: 1, slot: 'back', bagSlots: 16, sellValue: 160, blurb: '+16 bag slots. Scaled naga leather that sheds the rain. Made by leatherworkers.' });
+add({ id: 'lynx_expedition_pack', name: 'Lynx expedition pack', kind: 'bag', stack: 1, slot: 'back', bagSlots: 20, sellValue: 260, blurb: '+20 bag slots. The biggest pack there is. Made by leatherworkers.' });
 // mounts (wear one in the mount slot, press R to ride)
 add({ id: 'skateboard', name: 'Skateboard', kind: 'mount', stack: 1, slot: 'mount', mount: { mult: 1.3, coat: 0xd8a040, mane: 0xe8e4da, board: true }, sellValue: 15, buyPrice: 60, blurb: 'Four wheels and a plank. Roll at 130% speed — gravel paths and all. Not in the mine or indoors.' });
 add({ id: 'fjord_alligator', name: 'Fjord alligator', kind: 'mount', stack: 1, slot: 'mount', fixedRarity: 4, mount: { mult: 1.75, coat: 0x4a5a32, mane: 0xd8d0a0, gator: true }, sellValue: 250, blurb: 'Nobody knows how it got into the fjord. It bit through three lines before you landed it. Ride at 175% speed.' });

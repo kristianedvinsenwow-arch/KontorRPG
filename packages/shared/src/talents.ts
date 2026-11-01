@@ -15,8 +15,8 @@ export type TreeId = 'mining' | 'woodcutting' | 'fishing' | 'smithing' | 'carpen
 export interface TalentNode {
   id: string;
   name: string;
-  ranks: 1 | 3;
-  /** Grid position for the UI: column −2..2, row 0..4. */
+  ranks: 1 | 2 | 3;
+  /** Grid position for the UI: column −2..2, row 0..5. */
   x: number;
   y: number;
   /** Unlocks when any of these is fully ranked. Empty = the root. */
@@ -27,7 +27,7 @@ export interface TalentNode {
 
 export interface TalentTree { id: TreeId; name: string; skill: SkillId; nodes: TalentNode[] }
 
-const n = (id: string, name: string, ranks: 1 | 3, x: number, y: number, req: string[], fx: Partial<Stats>): TalentNode => ({ id, name, ranks, x, y, req, fx });
+const n = (id: string, name: string, ranks: 1 | 2 | 3, x: number, y: number, req: string[], fx: Partial<Stats>): TalentNode => ({ id, name, ranks, x, y, req, fx });
 
 export const TREES: TalentTree[] = [
   { id: 'mining', name: 'Mining', skill: 'mining', nodes: [
@@ -129,6 +129,11 @@ export const TREES: TalentTree[] = [
     n('bloodlust', 'Bloodlust', 1, -1, 2, ['weapon_master'], { crit: 0.05 }),
     n('battle_rhythm', 'Battle Rhythm', 1, 1, 2, ['heavy_blows'], { cdr: 0.12 }),
     n('warlord', 'Warlord', 1, 0, 3, ['bloodlust', 'battle_rhythm'], { meleeDmg: 0.1, specialDmg: 0.1 }),
+    n('executioner', 'Executioner', 2, -2, 3, ['bloodlust'], { execute: 0.15 }),
+    n('cleave', 'Cleave', 2, 2, 3, ['battle_rhythm'], { cleave: 0.2 }),
+    n('rend', 'Rend', 2, -1.5, 4, ['executioner'], { bleed: 0.25 }),
+    n('sweeping_strikes', 'Sweeping Strikes', 2, 1.5, 4, ['cleave'], { specialDmg: 0.08, meleeDmg: 0.03 }),
+    n('reaper', 'Reaper', 1, 0, 5, ['rend', 'sweeping_strikes'], { execute: 0.15, crit: 0.03 }),
   ] },
   { id: 'ranged', name: 'Ranged', skill: 'combat', nodes: [
     n('marksman', 'Marksman', 3, 0, 0, [], { rangedDmg: 0.03 }),
@@ -137,14 +142,29 @@ export const TREES: TalentTree[] = [
     n('power_draw', 'Power Draw', 1, -1, 2, ['eagle_eye'], { specialDmg: 0.15 }),
     n('light_feet', 'Light Feet', 1, 1, 2, ['quiver'], { moveSpeed: 0.04, dodge: 0.03 }),
     n('deadeye', 'Deadeye', 1, 0, 3, ['power_draw', 'light_feet'], { rangedDmg: 0.1, crit: 0.03 }),
+    n('piercing_shot', 'Piercing Shot', 1, -2, 3, ['power_draw'], { pierce: 0.7 }),
+    n('multishot', 'Multishot', 2, 2, 3, ['light_feet'], { multishot: 0.12 }),
+    n('steady_aim', 'Steady Aim', 2, -1.5, 4, ['piercing_shot'], { rangedDmg: 0.05, crit: 0.02 }),
+    n('quick_nock', 'Quick Nock', 2, 1.5, 4, ['multishot'], { multishot: 0.06, arrowSave: 0.05 }),
+    n('hawkeye', 'Hawkeye', 1, 0, 5, ['steady_aim', 'quick_nock'], { rangedDmg: 0.08, multishot: 0.1 }),
   ] },
   { id: 'magic', name: 'Magic', skill: 'combat', nodes: [
+    // Three paths from Adept: fire (raw damage), frost (control and support), and healing.
     n('adept', 'Adept', 3, 0, 0, [], { magicDmg: 0.03 }),
-    n('pyromancer', 'Pyromancer', 3, -1, 1, ['adept'], { burnDmg: 0.08 }),
-    n('cryomancer', 'Cryomancer', 3, 1, 1, ['adept'], { frostPower: 0.1 }),
-    n('wildfire', 'Wildfire', 1, -1, 2, ['pyromancer'], { burnDmg: 0.2 }),
-    n('permafrost', 'Permafrost', 1, 1, 2, ['cryomancer'], { frostPower: 0.25 }),
-    n('archmage', 'Archmage', 1, 0, 3, ['wildfire', 'permafrost'], { magicDmg: 0.1, cdr: 0.1 }),
+    n('pyromancer', 'Pyromancer', 3, -1.5, 1, ['adept'], { burnDmg: 0.08 }),
+    n('cryomancer', 'Cryomancer', 3, 0, 1, ['adept'], { frostPower: 0.1 }),
+    n('mender', 'Mender', 3, 1.5, 1, ['adept'], { healPower: 0.06 }),
+    n('wildfire', 'Wildfire', 1, -1.5, 2, ['pyromancer'], { burnDmg: 0.2 }),
+    n('permafrost', 'Permafrost', 1, 0, 2, ['cryomancer'], { frostPower: 0.25 }),
+    n('blessed_light', 'Blessed Light', 2, 1.5, 2, ['mender'], { healCrit: 0.25, crit: 0.02 }),
+    n('kindling', 'Kindling', 2, -2, 3, ['wildfire'], { burnStacks: 1 }),
+    n('archmage', 'Archmage', 1, -0.7, 3, ['wildfire', 'permafrost'], { magicDmg: 0.1, cdr: 0.1 }),
+    n('shatter', 'Shatter', 2, 0.6, 3, ['permafrost'], { shatter: 0.15 }),
+    n('warding_light', 'Warding Light', 1, 2, 3, ['blessed_light'], { overShield: 0.5 }),
+    n('firestorm', 'Firestorm', 1, -2, 4, ['kindling'], { burnDmg: 0.25, magicDmg: 0.04 }),
+    n('brittle_frost', 'Brittle Frost', 1, 0.6, 4, ['shatter'], { brittle: 1, frostPower: 0.1 }),
+    n('renewal', 'Renewal', 2, 2, 4, ['warding_light'], { healPower: 0.08, regen: 2 }),
+    n('radiance', 'Radiance', 1, 2, 5, ['renewal'], { holySplash: 0.4, healPower: 0.05 }),
   ] },
   { id: 'defence', name: 'Defence', skill: 'combat', nodes: [
     n('toughness', 'Toughness', 3, 0, 0, [], { maxHp: 3 }),
@@ -153,6 +173,11 @@ export const TREES: TalentTree[] = [
     n('shield_wall', 'Shield Wall', 1, -1, 2, ['iron_skin'], { block: 0.08 }),
     n('second_breath', 'Second Breath', 1, 1, 2, ['spell_ward'], { regen: 3 }),
     n('bulwark', 'Bulwark', 1, 0, 3, ['shield_wall', 'second_breath'], { physRed: 0.05, magicRed: 0.05, thorns: 2 }),
+    n('thick_hide', 'Thick Hide', 3, -2, 3, ['shield_wall'], { maxHp: 4 }),
+    n('spellbreaker', 'Spellbreaker', 2, 2, 3, ['second_breath'], { magicRed: 0.03 }),
+    n('stalwart', 'Stalwart', 2, -1.5, 4, ['thick_hide'], { physRed: 0.03 }),
+    n('rally', 'Rally', 2, 1.5, 4, ['spellbreaker'], { regen: 2, hpPct: 0.03 }),
+    n('unbreakable', 'Unbreakable', 1, 0, 5, ['stalwart', 'rally'], { hpPct: 0.08, block: 0.05 }),
   ] },
 ];
 
@@ -167,7 +192,7 @@ export const spentIn = (a: TalentAlloc, t: TreeId) => Object.values(a[t] ?? {}).
 /** Unspent points for a tree (combat trees share one pool). */
 export function pointsLeft(a: TalentAlloc, xp: SkillXp, t: TreeId): number {
   const tree = TALENT_TREE[t];
-  const total = levelFromXp(xp[tree.skill] ?? 0) - 1;
+  const total = levelFromXp(xp[tree.skill] ?? 0, tree.skill) - 1;
   const spent = tree.skill === 'combat' ? COMBAT_TREES.reduce((s, c) => s + spentIn(a, c), 0) : spentIn(a, t);
   return total - spent;
 }

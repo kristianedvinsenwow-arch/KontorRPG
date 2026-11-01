@@ -3,8 +3,8 @@
  * shops, the inn, and recipes. Everything is generated deterministically, so ids match everywhere
  * and the server can validate requests by id.
  */
-import { CHUNK_SIZE, SPIKE_CHUNKS, WATER_LEVEL } from './constants.js';
-import { heightAt, mulberry32, VILLAGE, LAKE, PIER, GRUBEN, GRUBEN_SPOTS, inGruben, FJORD, FJORD_SPOTS, inFjord, SHIPWRECK, FORD_Z, fjordMid } from './terrain.js';
+import { CHUNK_SIZE, SPIKE_CHUNKS, WATER_LEVEL, WORLD_HALF } from './constants.js';
+import { heightAt, mulberry32, VILLAGE, MARKET, STALL, LAKE, PIER, GRUBEN, GRUBEN_SPOTS, inGruben, FJORD, FJORD_SPOTS, inFjord, SHIPWRECK, FORD_Z, fjordMid } from './terrain.js';
 import { CAVE, CAVE_ENTRANCE, CHUNK_RANGES, GRUBEN_PASS, caveClearance, caveFloor, caveRoomCentre, inBounds } from './cave.js';
 import { ARMOUR_PIECES, CLOTHS, ITEMS, JEWELS } from './items.js';
 import { HOUSES, houseAt, toWorld, type HouseFrame } from './houses.js';
@@ -30,7 +30,7 @@ export interface NodeTypeDef {
 
 export const VEIN_TYPES: Record<VeinType, NodeTypeDef> = {
   // Each hit gives one ore; a vein gives `hits` before it's worked out, then regrows in `respawnSec`.
-  stone: { name: 'Stone vein', item: 'stone', skill: 'mining', level: 1, power: 1, xp: 8, respawnSec: [10 * 60, 20 * 60], hits: [6, 10], gem: { item: 'quartz', chance: 1 / 150 } },
+  stone: { name: 'Stone vein', item: 'stone', skill: 'mining', level: 1, power: 1, xp: 6, respawnSec: [6 * 60, 12 * 60], hits: [6, 10], gem: { item: 'quartz', chance: 1 / 150 } },
   iron: { name: 'Iron vein', item: 'iron_ore', skill: 'mining', level: 8, power: 1, xp: 20, respawnSec: [12 * 60, 25 * 60], hits: [5, 8], gem: { item: 'sapphire', chance: 1 / 200 } },
   coal: { name: 'Coal seam', item: 'coal', skill: 'mining', level: 14, power: 2, xp: 30, respawnSec: [15 * 60, 30 * 60], hits: [5, 9] },
   coral: { name: 'Coral bed', item: 'coral', skill: 'mining', level: 10, power: 1, xp: 26, respawnSec: [15 * 60, 30 * 60], hits: [3, 6], gem: { item: 'pearl', chance: 1 / 120 } },
@@ -106,45 +106,64 @@ export function keepClear(x: number, z: number): boolean {
 
 /** Hotspots of several veins near the hills; a few lone veins elsewhere. */
 export const MINING_SPOTS = [
-  { name: 'Camp quarry', x: 26, z: -22 },
+  { name: 'Crossroads diggings', x: 26, z: -22 },
   { name: 'Grey Ridge', x: 86, z: -14 },
   { name: 'Hollow Hill', x: -84, z: -78 },
   { name: 'North Scree', x: 30, z: 94 },
   { name: 'Ulvedalen', x: -81, z: -15 },
 ];
 
+/** Ground at least this high in Mofjellet counts as the mountains (where the stone is). */
+export const MOUNTAIN_H = 15;
+
 function generateVeins(): Vein[] {
   const out: Vein[] = [];
   const far = (x: number, z: number) => out.every((v) => Math.hypot(v.x - x, v.z - z) > 3.6);
-  const add = (type: VeinType, x: number, z: number, id: string, cave = false) => {
+  const add = (type: VeinType, x: number, z: number, id: string, cave = false, steep = false) => {
     const y = cave ? caveFloor(x, z) : heightAt(x, z);
     const r = type === 'stone' ? 1.1 : 1.0;
     // Inside the mine: well clear of the walls, so the rock isn't buried in one.
     if (cave && caveClearance(x, z) < r + 0.8) return false;
     if (!cave) {
-      if (y < WATER_LEVEL + 0.6 || slopeY(x, z) < 0.75 || keepClear(x, z)) return false;
+      if (y < WATER_LEVEL + 0.6 || slopeY(x, z) < (steep ? 0.5 : 0.75) || keepClear(x, z)) return false;
       // Fairly level footprint, so the rock sits on the ground instead of sinking into a slope.
       const hs = [[1.3, 0], [-1.3, 0], [0, 1.3], [0, -1.3]].map(([dx, dz]) => heightAt(x + dx, z + dz));
-      if (Math.max(...hs) - Math.min(...hs) > 0.9) return false;
+      if (Math.max(...hs) - Math.min(...hs) > (steep ? 1.8 : 0.9)) return false;
     }
     if (!far(x, z)) return false;
     out.push({ id, type, x, y, z, r: type === 'stone' ? 1.1 : 1.0 });
     return true;
   };
-  // Starter quarry a short walk north-east of camp: stone only.
-  const rngC = mulberry32(4242);
-  for (let i = 0, made = 0; i < 60 && made < 5; i++) {
-    const a = rngC() * Math.PI * 2, d = rngC() * 7;
-    if (add('stone', 26 + Math.cos(a) * d, -22 + Math.sin(a) * d, `camp-${made}`)) made++;
+  // Stone is only found up in Mofjellet's mountains (and nowhere else in the world): quarries of
+  // three or four rocks up on the heights. The lowlands below are iron and coal. So the loop is:
+  // mine stone until you can mine iron/coal; then mine those, and climb up for stone (less XP)
+  // while they grow back — or go do something else.
+  const mrng = mulberry32(5150);
+  for (let i = 0, q = 0; i < 8000 && q < 5; i++) {
+    const x = (mrng() - 0.5) * 2 * (WORLD_HALF - 16), z = (mrng() - 0.5) * 2 * (WORLD_HALF - 16);
+    if (heightAt(x, z) < MOUNTAIN_H || out.some((v) => v.id.startsWith('m') && Math.hypot(v.x - x, v.z - z) < 38)) continue;
+    const before = out.length;
+    for (let j = 0, made = 0; j < 80 && made < 4; j++) {
+      const a = mrng() * Math.PI * 2, d = mrng() * 8;
+      const vx = x + Math.cos(a) * d, vz = z + Math.sin(a) * d;
+      if (heightAt(vx, vz) >= MOUNTAIN_H - 2 && add('stone', vx, vz, `m${q}-${made}`, false, true)) made++;
+    }
+    if (out.length - before >= 3) q++; else out.length = before;
   }
-  // Hotspots: three stone and three iron each, and two coal seams in the far ones.
+  // The old camp quarry, by the crossroads: iron, and a coal seam.
+  const rngC = mulberry32(4242);
+  for (let i = 0, made = 0; i < 60 && made < 4; i++) {
+    const a = rngC() * Math.PI * 2, d = rngC() * 7;
+    if (add(made < 3 ? 'iron' : 'coal', 26 + Math.cos(a) * d, -22 + Math.sin(a) * d, `camp-${made}`)) made++;
+  }
+  // Hotspots: iron, a bit of coal, and coal seams further out.
   MINING_SPOTS.slice(1).forEach((h, hi) => {
     const rng = mulberry32(7000 + hi);
     let s = 0, f = 0;
-    for (let i = 0; i < 80 && (s < 3 || f < 3); i++) {
+    for (let i = 0; i < 80 && (s < 1 || f < 4); i++) {
       const a = rng() * Math.PI * 2, d = 2 + rng() * 9;
-      const type: VeinType = s < 3 ? 'stone' : 'iron';
-      if (add(type, h.x + Math.cos(a) * d, h.z + Math.sin(a) * d, `h${hi}-${s + f}`)) type === 'stone' ? s++ : f++;
+      const type: VeinType = s < 1 ? 'coal' : 'iron';
+      if (add(type, h.x + Math.cos(a) * d, h.z + Math.sin(a) * d, `h${hi}-${s + f}`)) type === 'coal' ? s++ : f++;
     }
     const crng = mulberry32(7300 + hi);
     for (let i = 0, c = 0; i < 60 && c < (hi === 0 ? 1 : 2); i++) {
@@ -161,7 +180,7 @@ function generateVeins(): Vein[] {
       const x = cx * CHUNK_SIZE + 6 + rng() * (CHUNK_SIZE - 12), z = cz * CHUNK_SIZE + 6 + rng() * (CHUNK_SIZE - 12);
       if (keepClear(x, z)) continue;
       const h = heightAt(x, z);
-      if (add(h > 8.5 && rng() < 0.5 ? 'iron' : 'stone', x, z, `s${cx},${cz}`)) break;
+      if (add(rng() < 0.55 ? 'iron' : 'coal', x, z, `s${cx},${cz}`)) break;
     }
   }
   // The Old Mine: silver in the galleries, a little iron on the way.
@@ -172,7 +191,7 @@ function generateVeins(): Vein[] {
   [[gal.x - 7, gal.z + 1], [gal.x + 2, gal.z - 6], [roost.x, roost.z + 4]].forEach(([x, z], i) => add('coal', x, z, `c-c${i}`, true));
   // Gruben: coal seams all over, silver and iron on the scree slopes.
   const grng = mulberry32(9911);
-  const want: [VeinType, number][] = [['coal', 12], ['silver', 7], ['iron', 6], ['stone', 4]];
+  const want: [VeinType, number][] = [['coal', 12], ['silver', 7], ['iron', 9]];
   for (const [type, n] of want) {
     for (let i = 0, made = 0; i < 400 && made < n; i++) {
       const x = G.x + (grng() - 0.5) * (G.half * 2 - 40), z = G.z + (grng() - 0.5) * (G.half * 2 - 40);
@@ -188,10 +207,22 @@ function generateVeins(): Vein[] {
       if (add(type, FJ.x + cx + Math.cos(a) * d, FJ.z + cz + Math.sin(a) * d, `f-${type[0]}${k}${made}`)) made++;
     }
   });
+  // …and iron, spread out up in the hills on both sides.
+  for (let i = 0, made = 0; i < 3000 && made < 7; i++) {
+    const x = FJ.x + (frng() - 0.5) * (FJ.half * 2 - 40), z = FJ.z + (frng() - 0.5) * (FJ.half * 2 - 40);
+    if (heightAt(x, z) < 7 || out.some((v) => v.id.startsWith('f-i') && Math.hypot(v.x - x, v.z - z) < 22)) continue;
+    if (add('iron', x, z, `f-i${made}`)) made++;
+  }
   return out;
 }
 
 export const VEINS: Vein[] = generateVeins();
+/** The mountain stone quarries (centre of each cluster), for the map. */
+export const STONE_QUARRIES: { x: number; z: number }[] = (() => {
+  const by = new Map<string, Vein[]>();
+  for (const v of VEINS) if (v.id.startsWith('m')) { const k = v.id.split('-')[0]; by.set(k, [...(by.get(k) ?? []), v]); }
+  return [...by.values()].map((vs) => ({ x: vs.reduce((s, v) => s + v.x, 0) / vs.length, z: vs.reduce((s, v) => s + v.z, 0) / vs.length }));
+})();
 export const VEIN_BY_ID: Map<string, Vein> = new Map(VEINS.map((v) => [v.id, v]));
 
 // ------------------------------------------------------------------ trees
@@ -367,14 +398,11 @@ export interface Station { id: string; kind: StationKind; name: string; x: numbe
 const V = VILLAGE;
 
 export const STATIONS: Station[] = [
-  { id: 'camp_furnace', kind: 'furnace', name: 'Furnace', x: 6.5, z: -8, r: 1.2 },
-  { id: 'camp_anvil', kind: 'anvil', name: 'Anvil', x: 10.5, z: -4, r: 0.8 },
-  { id: 'camp_bench', kind: 'workbench', name: 'Workbench', x: 9, z: 4, r: 1 },
-  { id: 'camp_fire', kind: 'campfire', name: 'Campfire', x: -3, z: 6, r: 0.9 },
+  // The smithy in Bjørkvik's market, behind the lodge.
+  { id: 'village_furnace', kind: 'furnace', name: 'Furnace', x: MARKET.x - 8, z: MARKET.z - 3, r: 1.2 },
+  { id: 'village_anvil', kind: 'anvil', name: 'Anvil', x: MARKET.x - 3.5, z: MARKET.z - 5, r: 0.8 },
   { id: 'village_fire', kind: 'campfire', name: 'Campfire', x: V.x + 1, z: V.z + 7, r: 0.9 },
-  { id: 'inn_stove', kind: 'stove', name: 'Inn stove', x: V.x + 12.4, z: V.z - 9.5, r: 0.8 },
   { id: 'village_bench', kind: 'workbench', name: 'Workbench', x: V.x - 8, z: V.z - 1, r: 1 },
-  { id: 'camp_tanning', kind: 'tanning', name: 'Tanning rack', x: -4, z: -12.5, r: 1 },
   { id: 'village_tanning', kind: 'tanning', name: 'Tanning rack', x: V.x + 13, z: V.z + 6, r: 1 },
   { id: 'village_loom', kind: 'loom', name: 'Loom', x: V.x + 7, z: V.z + 1, r: 1 },
   { id: 'village_alchemy', kind: 'alchemy', name: 'Alchemy table', x: V.x - 1, z: V.z + 13.5, r: 1 },
@@ -388,6 +416,12 @@ export const STATIONS: Station[] = [
   { id: 'gruben_anvil', kind: 'anvil', name: 'Anvil', x: G.x + 8, z: G.z + 53, r: 0.8 },
   { id: 'gruben_tanning', kind: 'tanning', name: 'Tanning rack', x: G.x - 9, z: G.z + 57, r: 1 },
 ];
+// A cast-iron stove in each cottage (the better houses), in place of the open hearth.
+for (const f of HOUSES) if (f.kind === 'cottage') { const p = toWorld(f, f.w / 2 - 0.85, f.d / 2 - 0.65); STATIONS.push({ id: `stove_${f.id}`, kind: 'stove', name: 'Stove', x: p.x, z: p.z, r: 0.7 }); }
+/** The house a station stands inside, if any (cottage stoves). */
+export const stationHouse = (s: Station) => (s.id.startsWith('stove_') ? HOUSES.find((f) => `stove_${f.id}` === s.id) : undefined);
+/** Cooking on a stove: 15% faster, and less burnt food (see burnChance). */
+export const STOVE_SPEED = 0.15;
 export const STATION_BY_ID: Map<string, Station> = new Map(STATIONS.map((s) => [s.id, s]));
 export const STATION_LABEL: Record<StationKind, string> = { furnace: 'Furnace', anvil: 'Anvil', workbench: 'Workbench', campfire: 'Campfire', stove: 'Stove', tanning: 'Tanning rack', loom: 'Loom', alchemy: 'Alchemy table' };
 
@@ -395,10 +429,10 @@ export type NpcRole = 'shop' | 'quests' | 'inn' | 'imbuer';
 export interface Npc { id: string; name: string; title: string; x: number; z: number; face: number; color: number; race: 'human' | 'dwarf' | 'gnome' | 'ogre'; roles: NpcRole[]; sells?: string[] }
 
 export const NPCS: Npc[] = [
-  { id: 'ingrid', name: 'Ingrid', title: 'Trader', x: -9, z: -7, face: 2, color: 5, race: 'human', roles: ['shop'],
-    sells: ['stone_pickaxe', 'stone_hatchet', 'basic_rod', 'small_rucksack', 'leather_backpack', 'skateboard'] },
-  { id: 'mats', name: 'Mats', title: 'Miner', x: 20, z: -15, face: 3, color: 3, race: 'dwarf', roles: ['quests'] },
-  { id: 'sigrid', name: 'Sigrid', title: 'Smith', x: 13, z: -6.5, face: 1, color: 0, race: 'human', roles: ['quests'] },
+  { id: 'ingrid', name: 'Ingrid', title: 'Trader', x: STALL.x, z: STALL.z, face: 2, color: 5, race: 'human', roles: ['shop'],
+    sells: ['stone_pickaxe', 'stone_hatchet', 'basic_rod', 'small_rucksack', 'leather_backpack', 'bag_strap', 'skateboard'] },
+  { id: 'mats', name: 'Mats', title: 'Miner', x: MARKET.x - 10.5, z: MARKET.z + 2.5, face: 3, color: 3, race: 'dwarf', roles: ['quests'] },
+  { id: 'sigrid', name: 'Sigrid', title: 'Smith', x: MARKET.x - 1, z: MARKET.z - 6.5, face: 1, color: 0, race: 'human', roles: ['quests'] },
   { id: 'hilde', name: 'Hilde', title: 'Innkeeper', x: V.x, z: V.z - 3.2, face: 0, color: 6, race: 'human', roles: ['inn', 'quests'] },
   { id: 'frida', name: 'Frida', title: 'Fisher', x: PIER.x - PIER.uz * 2.4 - PIER.ux * 1.5, z: PIER.z + PIER.ux * 2.4 - PIER.uz * 1.5, face: 4, color: 1, race: 'human', roles: ['quests'] },
   { id: 'halvard', name: 'Halvard', title: 'Hunter', x: V.x + 12, z: V.z + 2, face: 3, color: 2, race: 'ogre', roles: ['quests'] },
@@ -595,6 +629,10 @@ const R: Recipe[] = [
   { id: 'gravlaks', skill: 'cooking', station: ['campfire', 'stove'], level: 13, inputs: [{ item: 'raw_char', qty: 1 }, { item: 'salt', qty: 2 }, { item: 'angelica', qty: 1 }], output: { item: 'gravlaks', qty: 1 }, xp: 34, seconds: 2.8 },
   { id: 'cured_crab', skill: 'cooking', station: ['campfire', 'stove'], level: 14, inputs: [{ item: 'raw_crab', qty: 1 }, { item: 'salt', qty: 3 }], output: { item: 'cured_crab', qty: 1 }, xp: 36, seconds: 2.8 },
   { id: 'lutefisk', skill: 'cooking', station: ['campfire', 'stove'], level: 18, inputs: [{ item: 'raw_cod', qty: 1 }, { item: 'salt', qty: 3 }], output: { item: 'lutefisk', qty: 1 }, xp: 46, seconds: 3 },
+  { id: 'salt_jerky', skill: 'cooking', station: ['campfire', 'stove'], level: 6, inputs: [{ item: 'raw_wolf_meat', qty: 1 }, { item: 'salt', qty: 1 }], output: { item: 'salt_jerky', qty: 1 }, xp: 18, seconds: 2.4 },
+  { id: 'pickled_mackerel', skill: 'cooking', station: ['campfire', 'stove'], level: 13, inputs: [{ item: 'raw_mackerel', qty: 1 }, { item: 'salt', qty: 2 }], output: { item: 'pickled_mackerel', qty: 1 }, xp: 32, seconds: 2.6 },
+  { id: 'klippfisk', skill: 'cooking', station: ['campfire', 'stove'], level: 19, inputs: [{ item: 'raw_cod', qty: 1 }, { item: 'salt', qty: 3 }], output: { item: 'klippfisk', qty: 1 }, xp: 48, seconds: 2.8 },
+  { id: 'cured_wolffish', skill: 'cooking', station: ['campfire', 'stove'], level: 27, inputs: [{ item: 'raw_wolffish', qty: 1 }, { item: 'salt', qty: 5 }], output: { item: 'cured_wolffish', qty: 1 }, xp: 72, seconds: 3.2 },
   { id: 'salt_halibut', skill: 'cooking', station: ['campfire', 'stove'], level: 24, inputs: [{ item: 'raw_halibut', qty: 1 }, { item: 'salt', qty: 4 }], output: { item: 'salt_halibut', qty: 1 }, xp: 64, seconds: 3.2 },
   { id: 'lynx_leather', skill: 'leatherworking', station: 'tanning', level: 17, inputs: [{ item: 'lynx_pelt', qty: 1 }], output: { item: 'lynx_leather', qty: 1 }, xp: 34, seconds: 3 },
   { id: 'goblin_leather', skill: 'leatherworking', station: 'tanning', level: 8, inputs: [{ item: 'goblin_skin', qty: 1 }], output: { item: 'goblin_leather', qty: 1 }, xp: 18, seconds: 2.8 },
@@ -651,6 +689,12 @@ for (const p of ARMOUR_PIECES) {
   R.push({ id: `lynxhide_${p.piece}`, skill: 'leatherworking', station: 'tanning', level: lvl + 18, inputs: [{ item: 'lynx_leather', qty: n }, { item: 'goblin_leather', qty: 1 }], output: { item: `lynxhide_${p.piece}`, qty: 1 }, xp: n * 70, seconds: 3 + n * 0.3 });
   R.push({ id: `goblinhide_${p.piece}`, skill: 'leatherworking', station: 'tanning', level: lvl + 9, inputs: [{ item: 'goblin_leather', qty: n }, { item: 'leather', qty: 1 }], output: { item: `goblinhide_${p.piece}`, qty: 1 }, xp: n * 35, seconds: 2.5 + n * 0.3 });
 }
+// Bags (after the shop's rucksack and backpack): a lot of leather, plus straps from Ingrid.
+R.push(
+  { id: 'travellers_pack', skill: 'leatherworking', station: 'tanning', level: 10, inputs: [{ item: 'leather', qty: 20 }, { item: 'goblin_leather', qty: 6 }, { item: 'bag_strap', qty: 1 }], output: { item: 'travellers_pack', qty: 1 }, xp: 500, seconds: 6 },
+  { id: 'naga_haversack', skill: 'leatherworking', station: 'tanning', level: 17, inputs: [{ item: 'naga_leather', qty: 25 }, { item: 'goblin_leather', qty: 10 }, { item: 'bag_strap', qty: 2 }], output: { item: 'naga_haversack', qty: 1 }, xp: 1100, seconds: 8 },
+  { id: 'lynx_expedition_pack', skill: 'leatherworking', station: 'tanning', level: 23, inputs: [{ item: 'lynx_leather', qty: 30 }, { item: 'naga_leather', qty: 10 }, { item: 'bag_strap', qty: 3 }], output: { item: 'lynx_expedition_pack', qty: 1 }, xp: 1800, seconds: 10 },
+);
 export const RECIPES: Recipe[] = R;
 export const RECIPE_BY_ID: Map<string, Recipe> = new Map(RECIPES.map((r) => [r.id, r]));
 /** Tab a recipe sits under in the crafting menus: by material tier, or food type. */
@@ -659,6 +703,7 @@ export function recipeGroup(r: Recipe): string {
   const ins = r.inputs.map((i) => ITEMS[i.item]);
   if (r.skill === 'cooking') return r.inputs.some((i) => i.item === 'salt') ? 'Salted & cured' : ins.some((d) => d?.kind === 'meat') ? 'Meat' : 'Fish';
   if (r.skill === 'carpentry' && (out.kind === 'ammo' || r.output.item === 'arrow_shaft')) return 'Arrows';
+  if (out.kind === 'bag') return 'Bags';
   if (r.skill === 'leatherworking') return out.look === 'goblin' ? 'Goblinhide' : out.look === 'naga' ? 'Nagahide' : out.look === 'lynx' ? 'Lynx' : 'Wolf leather';
   if (out.slot === 'ring' || out.slot === 'neck') return 'Jewellery';
   if (r.skill === 'alchemy') return ITEMS[r.output.item].potion?.heal ? 'Healing' : 'Elixirs';
@@ -668,9 +713,9 @@ export function recipeGroup(r: Recipe): string {
 }
 export const recipeAt = (r: Recipe, k: StationKind) => (Array.isArray(r.station) ? r.station.includes(k) : r.station === k);
 /** Gear (weapons, armour, tools) rolls a rarity when crafted. */
-export const rollsRarity = (r: Recipe) => !!ITEMS[r.output.item]?.slot && ITEMS[r.output.item]?.kind !== 'ammo';
+export const rollsRarity = (r: Recipe) => !!ITEMS[r.output.item]?.slot && ITEMS[r.output.item]?.kind !== 'ammo' && ITEMS[r.output.item]?.kind !== 'bag';
 
 /** Burn chance for cooking: 40% at the recipe's level, −3% per level above, min 2%; stoves −5%. */
 export function burnChance(level: number, recipeLevel: number, stove: boolean, bonus: number): number {
-  return Math.max(0.02, 0.4 - 0.03 * (level - recipeLevel) - (stove ? 0.05 : 0) - bonus);
+  return Math.max(0.02, 0.4 - 0.03 * (level - recipeLevel) - (stove ? 0.1 : 0) - bonus);
 }

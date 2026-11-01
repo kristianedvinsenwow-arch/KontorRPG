@@ -4,7 +4,7 @@
  */
 import {
   FISH_TABLE, SEA_FISH_TABLE, SEA_RARE, SEA_TREASURE, LAKE_TREASURE, ITEMS, MINE_RANGE, RARE_FISH, TREE_BY_ID, TREE_TYPES, VEIN_BY_ID, VEIN_TYPES, CAST_RANGE,
-  PICK_SEC, PLANT_BY_ID, regionAt, weatherAt, PLANT_TYPES, isFishable, levelOf, roomFor, swingSeconds, type NodeTypeDef, type Stack,
+  PICK_SEC, PLANT_BY_ID, regionAt, weatherAt, PLANT_TYPES, isFishable, levelOf, skillLevel, roomFor, swingSeconds, type NodeTypeDef, type Stack,
 } from '@kontor/shared';
 import type { ServerPlayer } from './types.js';
 import { rollGear } from './combat.js';
@@ -28,7 +28,7 @@ export function gather(w: World, p: ServerPlayer, kind: 'mine' | 'chop' | 'pick'
   const def = tool ? ITEMS[tool.id] : null;
   if (!def) return err(skill === 'mining' ? 'You need a pickaxe. Ingrid at the trading post sells one.' : 'You need a hatchet. Ingrid at the trading post sells one.');
   if ((def.power ?? 0) < type.power) return err(`You need a stronger ${slot}.`);
-  const lvl = levelOf(p.xp, skill);
+  const lvl = skillLevel(p.xp, skill, p.stats.all.skillLvl);
   if (lvl < type.level) return err(`${type.name} needs ${skill === 'mining' ? 'Mining' : 'Woodcutting'} ${type.level} (you have ${lvl}).`);
   const st = (p.stats.scoped as Record<string, typeof p.stats.all>)[skill] ?? p.stats.all;
   const swing = swingSeconds(def.swingSec ?? 2.6, lvl, skill === 'mining' ? st.miningSpeed : st.woodSpeed) * 1000;
@@ -78,7 +78,7 @@ function pick(w: World, p: ServerPlayer, nodeId: string): void {
   if (Math.hypot(p.state.x - plant.x, p.state.z - plant.z) > 3 || Math.abs(p.state.y - plant.y) > 3) return err('Too far away.');
   const skill = type.skill as 'tailoring' | 'herbalism' | 'cooking';
   const skillName = skill[0].toUpperCase() + skill.slice(1);
-  const lvl = levelOf(p.xp, skill);
+  const lvl = skillLevel(p.xp, skill, p.stats.all.skillLvl);
   if (lvl < type.level) return err(`${type.name} needs ${skillName} ${type.level} (you have ${lvl}).`);
   if (now - p.lastGatherAt < PICK_SEC * (1 - 0.01 * (lvl - 1)) * 1000 * 0.8) return;
   const ns = w.nodes.get(nodeId);
@@ -120,7 +120,7 @@ export function cast(w: World, p: ServerPlayer, x: number, z: number): void {
   const rainy = weatherAt(regionAt(p.state.x, p.state.z), w.now()).rain > 0.5 ? 1.25 : 1;
   const wait = (4 + w.rand() * 9) / (1 + Math.max(0, st.fishSpeed)) / rainy;
   // Decide the fish now; the client only learns what it was if the catch succeeds.
-  const lvl = levelOf(p.xp, 'fishing');
+  const lvl = skillLevel(p.xp, 'fishing', p.stats.all.skillLvl);
   let pick: { item: string; xp: number; difficulty: number; rare: boolean; stack?: Stack } = { item: FISH_TABLE[0].item, xp: FISH_TABLE[0].xp, difficulty: FISH_TABLE[0].difficulty, rare: false };
   const luckK = (1 + st.rareFish) * (1 + st.luck * 0.01);
   const sea = regionAt(x, z) === 'fjord';

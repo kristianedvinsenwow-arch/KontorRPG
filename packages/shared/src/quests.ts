@@ -18,7 +18,7 @@ export interface QuestDef {
 }
 
 export const QUESTS: QuestDef[] = [
-  { id: 'mats_stone', npc: 'mats', name: 'Stone for the walls', period: 'daily', text: 'The camp walls need patching. Bring me 10 stone.', need: { item: 'stone', qty: 10 }, reward: { gold: 4, xp: ['mining', 80] } },
+  { id: 'mats_stone', npc: 'mats', name: 'Stone for the walls', period: 'daily', text: 'Bjørkvik’s walls need patching. Bring me 10 stone — you’ll find it up in the mountains.', need: { item: 'stone', qty: 10 }, reward: { gold: 4, xp: ['mining', 80] } },
   { id: 'mats_iron', npc: 'mats', name: 'Iron for the smith', period: 'twice-weekly', text: 'Sigrid’s out of ore again. 10 iron ore, if you can.', need: { item: 'iron_ore', qty: 10 }, reward: { gold: 13, xp: ['mining', 300] } },
   { id: 'sigrid_shaped', npc: 'sigrid', name: 'Building blocks', period: 'daily', text: 'Shape me 10 blocks of stone for the forge wall.', need: { item: 'shaped_stone', qty: 10 }, reward: { gold: 5, xp: ['smithing', 100] } },
   { id: 'sigrid_bars', npc: 'sigrid', name: 'Bars, bars, bars', period: 'weekly', text: 'An order from the coast: 10 iron bars.', need: { item: 'iron_bar', qty: 10 }, reward: { gold: 25, xp: ['smithing', 700] } },
@@ -26,7 +26,7 @@ export const QUESTS: QuestDef[] = [
   { id: 'hilde_supper', npc: 'hilde', name: 'Supper for the guests', period: 'daily', text: 'Five cooked trout for tonight’s guests, please.', need: { item: 'cooked_trout', qty: 5 }, reward: { gold: 8, xp: ['cooking', 160] } },
   { id: 'frida_perch', npc: 'frida', name: 'Perch for the smokehouse', period: 'daily', text: 'Eight raw perch and I’ll pay you fair.', need: { item: 'raw_perch', qty: 8 }, reward: { gold: 5, xp: ['fishing', 120] } },
   { id: 'frida_golden', npc: 'frida', name: 'The golden one', period: 'weekly', text: 'Legend says a golden perch swims in this lake. Bring me one.', need: { item: 'golden_perch', qty: 1 }, reward: { gold: 32, xp: ['fishing', 600] } },
-  { id: 'halvard_wolves', npc: 'halvard', name: 'Wolf trouble', period: 'twice-weekly', text: 'The pack east of camp keeps taking sheep. Thin it out: 6 wolves.', need: { kill: 'wolf', qty: 6 }, reward: { gold: 15, xp: ['combat', 400] } },
+  { id: 'halvard_wolves', npc: 'halvard', name: 'Wolf trouble', period: 'twice-weekly', text: 'The pack east of the crossroads keeps taking sheep. Thin it out: 6 wolves.', need: { kill: 'wolf', qty: 6 }, reward: { gold: 15, xp: ['combat', 400] } },
   { id: 'halvard_goblins', npc: 'halvard', name: 'Goblin trinkets', period: 'daily', text: 'Bring me 5 goblin trinkets so I know you’ve been busy.', need: { item: 'goblin_trinket', qty: 5 }, reward: { gold: 10, xp: ['combat', 250] } },
   { id: 'halvard_knut', npc: 'halvard', name: 'Old Knut', period: 'weekly', text: 'A troll called Old Knut sits in the deepest hall of the Old Mine. Put him down.', need: { kill: 'troll', qty: 1 }, reward: { gold: 38, xp: ['combat', 1500] } },
   { id: 'halvard_pelts', npc: 'halvard', name: 'Pelts for winter', period: 'daily', text: 'Bring me 4 wolf pelts — skin them yourself, mind. A good knife helps.', need: { item: 'wolf_pelt', qty: 4 }, reward: { gold: 9, xp: ['leatherworking', 180] } },

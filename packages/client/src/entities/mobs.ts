@@ -351,7 +351,7 @@ export class Mobs {
       const dead = !!(v.s.st & ST_DEAD);
       if (corpses ? !(dead && v.s.sk) : dead) continue;
       const def = MOBS[v.kind];
-      const r = (isOgre(v.kind) ? 0.55 * def.scale : def.flying ? 0.38 : quad(v.kind) ? 0.5 * def.scale : isUndead(v.kind) ? 0.4 * def.scale : 0.42 * def.scale) * (1 + slack) + (corpses ? 0.25 : 0);
+      const r = (isOgre(v.kind) ? 0.55 * def.scale : def.flying ? 0.38 : quad(v.kind) ? 0.5 * def.scale : isUndead(v.kind) ? 0.4 * def.scale : 0.42 * def.scale) * (1 + slack) + (corpses ? 0.05 : 0);
       // Live bodies are an upright capsule from the feet to the top of the head (so a tall troll can
       // be hit anywhere on its body, not just at one point); corpses are a low sphere.
       const top = corpses ? 0 : isOgre(v.kind) ? 2.2 * def.scale / 1.16 : quad(v.kind) ? 0.9 : def.flying ? 0 : isUndead(v.kind) ? 1.85 * def.scale : 1.0 * def.scale;

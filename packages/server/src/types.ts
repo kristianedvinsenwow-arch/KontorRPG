@@ -67,6 +67,8 @@ export interface ServerPlayer {
   nextSpecialAt: number;
   /** Shield guard: the next melee hit within `until` is cut by `pct`; `riposte` × a basic hit back. */
   guard?: { until: number; pct: number; riposte: number };
+  /** Warding Light: overhealing kept as a shield that soaks damage. */
+  shield?: { amt: number; until: number };
   fishing: Fishing | null;
 }
 
@@ -85,6 +87,10 @@ export interface Mob {
   burn: { stacks: number; until: number; perSec: number; by: string; nextTick: number } | null;
   slowUntil: number;
   frozenUntil: number;
+  /** Frozen by someone with Brittle Frost: fire on it lands as 3 burn stacks at once. */
+  brittleUntil?: number;
+  /** Rend: a melee crit's bleed. */
+  bleed?: { perSec: number; until: number; by: string; nextTick: number } | null;
   dmgBy: Map<string, number>;
   act: 'atk' | 'slam' | undefined;
   actUntil: number;

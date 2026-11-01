@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { heightAt, checkStep, decodeClient, WALK_SPEED, WORLD_HALF, LAKE, WATER_LEVEL } from '../src/index.js';
+import { heightAt, checkStep, decodeClient, WALK_SPEED, WORLD_HALF, LAKE, WATER_LEVEL, SPAWN_POINT, MOUNTAIN_H, STONE_QUARRIES } from '../src/index.js';
 
 test('terrain is deterministic', () => {
   for (const [x, z] of [[0, 0], [12.5, -40], [-90, 77]]) {
@@ -8,8 +8,9 @@ test('terrain is deterministic', () => {
   }
 });
 
-test('spawn clearing is flat and above water', () => {
-  for (const [x, z] of [[0, 0], [5, 5], [-8, 3]]) {
+test('crossroads clearing is flat, and you arrive above water by Bjørkvik’s gate', () => {
+  assert.ok(heightAt(SPAWN_POINT.x, SPAWN_POINT.z) > WATER_LEVEL + 1);
+  for (const [x, z] of [[0, 0], [5, 5], [3, -6]]) {
     assert.ok(Math.abs(heightAt(x, z) - 2.2) < 0.01, `height at ${x},${z} = ${heightAt(x, z)}`);
   }
 });
@@ -132,11 +133,15 @@ test('XP curve: 10 × L² per level', () => {
   assert.equal(levelFromXp(2850), 10);
 });
 
-test('veins exist, are on land, and include a starter cluster near camp', () => {
+test('veins exist and are on land; stone only up in Mofjellet’s mountains, iron and coal below', () => {
   const over = VEINS.filter((v) => !v.id.startsWith('c-') && !v.id.startsWith('g-') && !v.id.startsWith('f-'));
-  assert.ok(over.filter((v) => v.type === 'stone').length >= 10);
-  assert.ok(over.filter((v) => v.type === 'iron').length >= 6);
-  assert.ok(over.length < 45, `fewer veins than M1 (${over.length})`);
+  const stone = VEINS.filter((v) => v.type === 'stone');
+  assert.ok(stone.length >= 14 && stone.length <= 20, `stone veins ${stone.length}`);
+  for (const v of stone) assert.ok(v.id.startsWith('m') && heightAt(v.x, v.z) >= MOUNTAIN_H - 2.5 && Math.abs(v.x) < 200, `${v.id} is a mountain quarry`);
+  assert.ok(STONE_QUARRIES.length >= 4);
+  assert.ok(over.filter((v) => v.type === 'iron').length >= 12);
+  assert.ok(VEINS.filter((v) => v.id.startsWith('f-i')).length >= 5, 'iron in Saltfjorden');
+  assert.ok(over.length < 60, `not too many veins (${over.length})`);
   assert.ok(VEINS.some((v) => v.id.startsWith('camp-')));
   assert.ok(VEINS.some((v) => v.type === 'silver'));
   for (const v of over) assert.ok(v.y > 0.5);

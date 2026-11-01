@@ -6,9 +6,9 @@
 import './styles.css';
 import * as THREE from 'three';
 import {
-  CAST_RANGE, EAT_LOCK_MS, pierDeck, heightAt as heightAtWorld, STATION_BY_ID, daylight, sunAt, weatherAt, HOMES, HOUSES, PORTALS, regionAt, homeAt, homeDoorway, innRoom, toWorld, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS, specialFor,
+  CAST_RANGE, knifeUses, EAT_LOCK_MS, pierDeck, heightAt as heightAtWorld, STATION_BY_ID, daylight, sunAt, weatherAt, HOMES, HOUSES, PORTALS, regionAt, homeAt, homeDoorway, innRoom, toWorld, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS, specialFor,
   STATIONS, TREE_BY_ID, TREE_TYPES, USE_RANGE, VEIN_BY_ID, VEIN_TYPES, WATER_LEVEL,
-  MOBS, groundAt, attackInterval, attackRange, computeStats, faceOf, inCaveRegion, isFishable, levelFromXp, r2, r3, swingSeconds, weaponClass,
+  MOBS, groundAt, attackInterval, attackRange, computeStats, faceOf, inCaveRegion, isFishable, levelFromXp, skillLevel, r2, r3, swingSeconds, weaponClass,
   PICK_SEC, PLANT_BY_ID, PLANT_TYPES, type Plant, type CharacterBuild, type HoldSlot, type MobState, type PlayerStats, type Tree, type Vein,
 } from '@kontor/shared';
 import { createGfx } from './engine/renderer.js';
@@ -22,7 +22,7 @@ import { Veins } from './world/veins.js';
 import { Plants } from './world/plants.js';
 import { Precip } from './world/precip.js';
 import { sound } from './engine/audio.js';
-import { makeHorse, animateHorse, rideLift, type Horse } from './entities/horse.js';
+import { makeHorse, animateHorse, riderEyeLift, type Horse } from './entities/horse.js';
 import { Places } from './world/places.js';
 import { CaveView } from './world/cave.js';
 import { Fx } from './world/fx.js';
@@ -129,7 +129,7 @@ syncCreatorPreview();
 initPause(() => { uiStore.set({ panel: 'none' }); input.lock(); });
 initBossKey(() => input.unlock());
 
-const panels = initPanels((m) => net.send(m), () => { if (me) input.lock(); }, () => 1 + (stats?.all.sell ?? 0));
+const panels = initPanels((m) => net.send(m), () => { if (me) input.lock(); }, () => 1 + (stats?.all.sell ?? 0), () => stats?.all.skillLvl ?? 0);
 const hotbar = initHotbar(
   (slot) => net.send({ t: 'hold', slot }),
   (index) => { net.send({ t: 'eat', index }); if (ITEMS[gameStore.get().bag[index]?.id ?? '']?.food) sound.play('eat'); },
@@ -281,6 +281,7 @@ net.on((msg) => {
         const name = msg.item === 'coins' ? 'gold' : ITEMS[msg.item]?.name ?? msg.item;
         pop(`+${msg.qty ?? 1} ${name}`, msg.rare ? 'rare' : '', msg.item, msg.r ? rarityColor({ id: msg.item, r: msg.r as 0 }) : undefined);
       }
+      if (msg.item && msg.item !== 'coins' && gameStore.get().job) panels.noteMade(msg.item, msg.qty ?? 1, msg.r, msg.xp, msg.skill);
       if (msg.xp && msg.skill) setTimeout(() => pop(`+${msg.xp} ${msg.skill === 'combat' ? 'combat' : msg.skill![0].toUpperCase() + msg.skill!.slice(1)} XP`, 'xp'), 180);
       break;
     case 'nodes':
@@ -343,7 +344,7 @@ net.on((msg) => {
         const to = msg.to;
         fx.projectile(msg.kind, start, () => (to ? posOf(to) : null));
       } else if (msg.kind === 'spin') fx.ring(from.clone().setY(from.y - 1), 3.6, 0xe8e0c8);
-      else if (msg.kind === 'nova') fx.ring(from.clone().setY(from.y - 1), 6, 0x9fdcff, 0.7);
+      else if (msg.kind === 'nova') { const at = (msg.to ? posOf(msg.to) : null) ?? from; fx.ring(at.clone().setY(at.y - 1), 5, 0x9fdcff, 0.7); }
       else if (msg.kind === 'ignite') fx.flash(from, 0xff7a2a);
       else if (msg.kind === 'slam') fx.ring(from.clone().setY(from.y - 1.5), MOBS[mobs.get(msg.from)?.k ?? 'troll']?.slam?.r ?? 5, 0xb08a60, 0.6);
       else if (msg.kind === 'slamWarn') {
@@ -444,7 +445,7 @@ const plantClose = (p: Plant) => !!me && Math.hypot(p.x - me.x, p.z - me.z) < 2.
 function blocker(a: NonNullable<Aim>): string | null {
   const g = gameStore.get();
   if (a.kind === 'plant') {
-    const type = PLANT_TYPES[a.p.kind], lvl = levelFromXp(g.xp[type.skill] ?? 0);
+    const type = PLANT_TYPES[a.p.kind], lvl = skillLevel(g.xp, type.skill, stats?.all.skillLvl);
     if (plants.isDepleted(a.p.id)) return `${type.name} — picked clean`;
     if (lvl < type.level) return `${type.name} — needs ${type.skill[0].toUpperCase() + type.skill.slice(1)} ${type.level} (you have ${lvl})`;
     return null;
@@ -454,9 +455,9 @@ function blocker(a: NonNullable<Aim>): string | null {
   const slot = type.skill === 'mining' ? 'pickaxe' : 'hatchet';
   const tool = g.equip[slot] ? ITEMS[g.equip[slot]!.id] : null;
   if (a.kind === 'vein' && veins.isDepleted(a.v.id)) return `${type.name} — mined out`;
-  if (!tool) return `You need a ${slot} — <b>Ingrid</b> at camp sells one`;
+  if (!tool) return `You need a ${slot} — <b>Ingrid</b> in Bjørkvik’s market sells one`;
   if ((tool.power ?? 0) < type.power) return `You need a stronger ${slot}`;
-  const lvl = levelFromXp(g.xp[type.skill] ?? 0);
+  const lvl = skillLevel(g.xp, type.skill, stats?.all.skillLvl);
   if (lvl < type.level) return `${type.name} — needs ${type.skill === 'mining' ? 'Mining' : 'Woodcutting'} ${type.level} (you have ${lvl})`;
   return null;
 }
@@ -469,7 +470,7 @@ function special() {
   let target = aimed?.kind === 'mob' ? aimed.m : null;
   if (!target && (sp.kind === 'spin' || sp.kind === 'nova' || sp.kind === 'ignite')) {
     // Area specials don't need aiming: use the nearest enemy in range.
-    let bd = (sp.kind === 'ignite' ? 22 : sp.radius ?? 3) + 1;
+    let bd = (sp.kind === 'ignite' ? 22 : sp.kind === 'nova' ? attackRange(g.equip.mainHand) : sp.radius ?? 3) + 1; // Nova lands on a target, so: anything in staff range
     for (const m of mobs.all()) { if (m.st & 8) continue; const d = Math.hypot(m.x - me.x, m.z - me.z); if (d < bd) { bd = d; target = m; } }
   }
   if (sp.kind === 'guard' || sp.kind === 'mend') {
@@ -495,7 +496,11 @@ function interact(now: number, playing: boolean) {
   cam.getWorldDirection(fwd);
   near = null;
   const loot = fx.nearestLoot(me.x, me.z, 2.2);
-  const body = mobs.pick(cam.position, fwd, 3.2, 0.3, true);
+  // Bodies only count when you could actually skin them (a knife with uses left), and with a
+  // tighter hitbox, so the meat and drops around a body are easy to pick up without one.
+  const knife = g.equip.knife;
+  const canSkin = !!knife && !!ITEMS[knife.id]?.knife && (knife.d ?? knifeUses(knife)) > 0;
+  const body = canSkin ? mobs.pick(cam.position, fwd, 2.8, 0, true) : null;
   if (body) near = { kind: 'corpse', id: body.id, name: MOBS[body.k].name.toLowerCase() };
   else if (loot) near = { kind: 'loot', id: loot.id, name: `${ITEMS[loot.item.id]?.name ?? loot.item.id}${loot.item.qty > 1 ? ` ×${loot.item.qty}` : ''}` };
   else {
@@ -598,7 +603,7 @@ function interact(now: number, playing: boolean) {
       const skill = aimed.kind === 'vein' ? 'mining' : 'woodcutting';
       const slot = skill === 'mining' ? 'pickaxe' : 'hatchet';
       const def = ITEMS[g.equip[slot]!.id];
-      const lvl = levelFromXp(g.xp[skill] ?? 0);
+      const lvl = skillLevel(g.xp, skill, stats?.all.skillLvl);
       const sp = stats ? (skill === 'mining' ? stats.scoped.mining.miningSpeed : stats.scoped.woodcutting.woodSpeed) : 0;
       nextSwingAt = now + Math.max(swingSeconds(def.swingSec ?? 2.6, lvl, sp) * 1000, SWING_SEC * 1000);
       const id = aimed.kind === 'vein' ? aimed.v.id : aimed.t.id;
@@ -608,7 +613,7 @@ function interact(now: number, playing: boolean) {
       setTimeout(() => { net.send(skill === 'mining' ? { t: 'mine', node: id } : { t: 'chop', node: id }); if (skill === 'mining') veins.hit(id); sound.play(skill === 'mining' ? 'mine' : 'chop'); }, SWING_SEC * STRIKE_AT * 1000);
       swingUntil = now + SWING_SEC * 1000;
     } else if (aimed?.kind === 'plant' && !block && plantClose(aimed.p) && now >= nextSwingAt) {
-      const lvl = levelFromXp(g.xp[PLANT_TYPES[aimed.p.kind].skill] ?? 0);
+      const lvl = skillLevel(g.xp, PLANT_TYPES[aimed.p.kind].skill, stats?.all.skillLvl);
       nextSwingAt = now + Math.max(PICK_SEC * (1 - 0.01 * (lvl - 1)) * 1000, SWING_SEC * 1000);
       const id = aimed.p.id;
       setTimeout(() => { net.send({ t: 'pick', node: id }); plants.hit(id); sound.play('pick'); }, 250);
@@ -641,7 +646,7 @@ function interact(now: number, playing: boolean) {
     const what = `<b>${type.name}</b> <span class="dim">· ${skill} ${type.level} · gives ${ITEMS[type.item]?.name ?? type.item}</span>`;
     setPrompt(block ? `<span class="bad">${block}</span>` : plantClose(aimed.p) ? `Hold <b>click</b> to pick · ${what}` : `${what} · walk closer to pick`);
   } else if (aimed?.kind === 'water') setPrompt('<b>Click</b> to cast');
-  else if (near) setPrompt(`<b>E</b> ${near.kind === 'loot' ? `Pick up ${near.name}` : near.kind === 'corpse' ? `Skin the ${near.name}${g.equip.knife ? '' : ' <span class="bad">(needs a skinning knife)</span>'}` : near.kind === 'npc' ? `Talk to ${near.name}` : near.kind === 'home' ? (near.name === 'chest' ? 'Open your chest' : `Knock on the ${near.name}`) : near.kind === 'bed' ? 'Rest (Rested: more XP for 30 min)' : near.kind === 'door' ? (myRoom() === near.id ? `${places.doorOpen(near.id) ? 'Close' : 'Open'} your door` : `Knock on ${near.name}`) : `Use the ${near.name}`}`);
+  else if (near) setPrompt(`<b>E</b> ${near.kind === 'loot' ? `Pick up ${near.name}` : near.kind === 'corpse' ? `Skin the ${near.name}` : near.kind === 'npc' ? `Talk to ${near.name}` : near.kind === 'home' ? (near.name === 'chest' ? 'Open your chest' : `Knock on the ${near.name}`) : near.kind === 'bed' ? 'Rest (Rested: more XP for 30 min)' : near.kind === 'door' ? (myRoom() === near.id ? `${places.doorOpen(near.id) ? 'Close' : 'Open'} your door` : `Knock on ${near.name}`) : `Use the ${near.name}`}`);
   else setPrompt(null);
 
   // Purse and crafting bar.
@@ -692,7 +697,7 @@ function frame() {
     const mounted = gameStore.get().mounted;
     mountedNow = !!mounted;
     stepPlayer(me, moveIn, colliders, dt, stats?.all.moveSpeed ?? 0, mounted ? ITEMS[mounted]?.mount?.mult ?? 1 : 1);
-    mountLift += ((mounted ? rideLift(mounted) : 0) - mountLift) * Math.min(1, dt * 6);
+    mountLift += ((mounted && myBuild ? riderEyeLift(mounted, myBuild.race) : 0) - mountLift) * Math.min(1, dt * 6);
     if (myHorse) {
       myHorse.g.position.set(me.x, me.y, me.z);
       myHorse.g.rotation.y = me.yaw;

@@ -69,6 +69,15 @@ export function stepMobs(w: World, dt: number, now: number): void {
       continue;
     }
     // Burn ticks once a second.
+    if (m.bleed) {
+      if (m.bleed.until <= now) m.bleed = null;
+      else if (now >= m.bleed.nextTick) {
+        m.bleed.nextTick = now + 1000;
+        const dmg = Math.round(m.bleed.perSec * 10) / 10;
+        if (dmg > 0) { w.broadcastNear(m, { t: 'hit', to: m.id, dmg, kind: 'phys', from: m.bleed.by }); damageMob(w, m, dmg, m.bleed.by, now); }
+      }
+    }
+    if (m.dead) continue;
     if (m.burn) {
       if (m.burn.until <= now) m.burn = null;
       else if (now >= m.burn.nextTick) {
@@ -115,7 +124,7 @@ export function stepMobs(w: World, dt: number, now: number): void {
     }
     if (m.returning) {
       moveToward(m, m.spawn.x, m.spawn.z, m.def.speed * 1.4, dt);
-      if (home < 1.5) { m.returning = false; m.hp = m.def.hp; m.dmgBy.clear(); m.burn = null; resetBoss(w, m); }
+      if (home < 1.5) { m.returning = false; m.hp = m.def.hp; m.dmgBy.clear(); m.burn = null; m.bleed = null; resetBoss(w, m); }
     } else if (target) {
       const d = Math.hypot(target.state.x - m.x, target.state.z - m.z);
       const reach = m.def.range + 0.35 + mobRadius(m) * 0.5;
@@ -198,7 +207,7 @@ function resetBoss(w: World, m: Mob): void {
 }
 
 function respawnMob(m: Mob, now: number): void {
-  Object.assign(m, { dead: false, hp: m.def.hp, x: m.spawn.x, z: m.spawn.z, y: groundAt(m.spawn.x, m.spawn.z), target: null, returning: false, burn: null, slowUntil: 0, frozenUntil: 0, nextSlam: now + 4000, enraged: false, called: false, slamAt: undefined, taunt: undefined });
+  Object.assign(m, { dead: false, hp: m.def.hp, x: m.spawn.x, z: m.spawn.z, y: groundAt(m.spawn.x, m.spawn.z), target: null, returning: false, burn: null, bleed: null, brittleUntil: 0, slowUntil: 0, frozenUntil: 0, nextSlam: now + 4000, enraged: false, called: false, slamAt: undefined, taunt: undefined });
   m.dmgBy.clear();
 }
 
@@ -222,6 +231,12 @@ function hurtPlayer(w: World, p: ServerPlayer, m: Mob, raw: number, magic: boole
     }
   }
   dmg = Math.max(0.5, Math.round(dmg * 10) / 10);
+  // Warding Light: a shield from overhealing soaks the hit first.
+  if (p.shield && p.shield.until > now && p.shield.amt > 0) {
+    const soak = Math.min(p.shield.amt, dmg);
+    p.shield.amt -= soak; dmg = Math.round((dmg - soak) * 10) / 10;
+    if (dmg <= 0) return void w.broadcastNear(p.state, { t: 'hit', to: p.state.id, dmg: 0, kind: 'block', from: m.id });
+  }
   p.hp -= dmg;
   p.lastHurtAt = now;
   w.dismount(p);
@@ -246,8 +261,19 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
     p.client.send({ t: 'cooldown', until: Date.now() + (p.nextSpecialAt - now) });
     p.act = 'cast'; p.actUntil = now + 600;
     w.broadcastNear(p.state, { t: 'fx', kind: 'mend', from: p.state.id });
-    const amount = outgoing(main, undefined, p.stats.all, HEAL_MULT * spDef.mult);
-    for (const q of w.players.values()) if (!q.dead && sameRegion(q.state, p.state) && Math.hypot(q.state.x - p.state.x, q.state.z - p.state.z) <= (spDef.radius ?? 8)) applyHeal(w, p, q, amount, now);
+    const s0 = p.stats.all;
+    const amount = outgoing(main, undefined, s0, HEAL_MULT * spDef.mult) * (1 + s0.healPower) * (w.rand() < s0.crit ? 1.5 + s0.healCrit : 1);
+    for (const q of w.players.values()) {
+      if (q.dead || !sameRegion(q.state, p.state) || Math.hypot(q.state.x - p.state.x, q.state.z - p.state.z) > (spDef.radius ?? 8)) continue;
+      applyHeal(w, p, q, amount, now);
+      // Radiance: the light burns enemies standing next to each friend it heals.
+      if (s0.holySplash > 0) for (const t of w.mobs.values()) {
+        if (t.dead || !sameRegion(t, q.state) || Math.hypot(t.x - q.state.x, t.z - q.state.z) > 3 + mobRadius(t)) continue;
+        const hit = Math.max(0.5, Math.round(mitigate(amount * s0.holySplash, true, t.def.armour, t.def.ward) * 10) / 10);
+        w.broadcastNear(t, { t: 'hit', to: t.id, dmg: hit, crit: false, kind: 'magic', from: p.state.id });
+        damageMob(w, t, hit, p.state.id, now);
+      }
+    }
     return;
   }
   // Parry needs no target: raise the shield.
@@ -290,12 +316,15 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
   const giant = !!(main && ITEMS[main.id]?.giantslayer);
   const strike = (t: Mob, mult: number, then?: (t: Mob) => void) => {
     const { dmg: d0, crit } = roll(mult);
-    const dmg = giant ? d0 * giantslayerMult(t.def.scale) : d0;
+    let dmg = giant ? d0 * giantslayerMult(t.def.scale) : d0;
+    if (t.frozenUntil > w.now()) dmg *= 1 + s.shatter; // Shatter: the freeze holds
+    if (style === 'melee' && t.hp < t.def.hp * 0.3) dmg *= 1 + s.execute;
     if (sp?.stun) t.frozenUntil = Math.max(t.frozenUntil, w.now() + sp.stun * 1000);
     if (sp?.taunt) { t.taunt = { by: p.state.id, until: w.now() + sp.taunt * 1000 }; t.target = p.state.id; }
     const final = Math.max(0.5, Math.round(mitigate(dmg, magic, t.def.armour, t.def.ward) * 10) / 10);
     w.broadcastNear(t, { t: 'hit', to: t.id, dmg: final, crit, kind: magic ? 'magic' : 'phys', from: p.state.id });
     then?.(t);
+    if (style === 'melee' && crit && s.bleed > 0) t.bleed = { perSec: (final * s.bleed) / 4, until: w.now() + 4000, by: p.state.id, nextTick: w.now() + 1000 };
     damageMob(w, t, final, p.state.id, w.now(), cls === 'fireStaff');
   };
   const flight = (t: Mob) => (Math.hypot(t.x - p.state.x, t.z - p.state.z) / PROJECTILE_SPEED) * 1000;
@@ -304,7 +333,31 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
   if (!sp || sp.kind === 'single' || sp.kind === 'shot') {
     // Frost power: longer freezes, and frostbolts hit harder (half the bonus).
     const mult = (sp ? sp.mult : 1) * (cls === 'frostStaff' ? 1 + s.frostPower / 2 : 1) * (cls === 'lifeStaff' ? LIFE_BOLT_MULT : 1);
-    if (style === 'melee') return strike(m, mult);
+    if (style === 'melee') {
+      strike(m, mult);
+      // Cleave: a two-handed hit splashes onto enemies right beside the target.
+      if (s.cleave > 0 && main && ITEMS[main.id]?.twoHanded) for (const o of [...w.mobs.values()]) {
+        if (o === m || o.dead || !sameRegion(o, m) || Math.hypot(o.x - m.x, o.z - m.z) > 2.5 + mobRadius(o)) continue;
+        strike(o, mult * s.cleave);
+      }
+      return;
+    }
+    // Multishot: now and then a second arrow flies at another enemy close to the target.
+    if (cls === 'bow' && !sp && w.rand() < s.multishot) {
+      const other = [...w.mobs.values()].filter((o) => o !== m && !o.dead && sameRegion(o, m) && Math.hypot(o.x - m.x, o.z - m.z) < 8).sort((a, b) => Math.hypot(a.x - m.x, a.z - m.z) - Math.hypot(b.x - m.x, b.z - m.z))[0] ?? m;
+      w.broadcastNear(p.state, { t: 'fx', kind: 'arrow', from: p.state.id, to: other.id });
+      w.later(now + flight(other) + 80, () => { if (!other.dead) strike(other, mult); });
+    }
+    // Piercing Shot: a right-click shot carries on into the next enemy behind the target.
+    if (cls === 'bow' && sp && s.pierce > 0) {
+      const dx = m.x - p.state.x, dz = m.z - p.state.z, dl = Math.hypot(dx, dz) || 1;
+      const behind = [...w.mobs.values()].filter((o) => {
+        if (o === m || o.dead || !sameRegion(o, m)) return false;
+        const ox = o.x - m.x, oz = o.z - m.z, along = (ox * dx + oz * dz) / dl, side = Math.abs(ox * dz - oz * dx) / dl;
+        return along > 0 && along < 8 && side < 1.2 + mobRadius(o);
+      }).sort((a, b) => Math.hypot(a.x - m.x, a.z - m.z) - Math.hypot(b.x - m.x, b.z - m.z))[0];
+      if (behind) w.later(now + flight(behind), () => { if (!behind.dead) strike(behind, mult * s.pierce); });
+    }
     const kind = cls === 'bow' ? 'arrow' : cls === 'fireStaff' ? 'firebolt' : cls === 'lifeStaff' ? 'heal' : 'frostbolt';
     w.broadcastNear(p.state, { t: 'fx', kind, from: p.state.id, to: m.id });
     w.later(now + flight(m), () => {
@@ -312,7 +365,9 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
       strike(m, mult, (t) => {
         if (cls === 'fireStaff') {
           const per = outgoing(main, undefined, s, 1) * BURN.perStackPerSec * (1 + s.burnDmg);
-          const stacks = Math.min(BURN.maxStacks, (t.burn && t.burn.until > w.now() ? t.burn.stacks : 0) + 1);
+          const max = BURN.maxStacks + Math.floor(s.burnStacks); // Kindling: up to 5
+          let stacks = Math.min(max, (t.burn && t.burn.until > w.now() ? t.burn.stacks : 0) + 1);
+          if ((t.brittleUntil ?? 0) > w.now() && t.frozenUntil > w.now()) stacks = Math.max(stacks, Math.min(max, 3)); // Brittle Frost
           t.burn = { stacks, until: w.now() + BURN.sec * 1000, perSec: per, by: p.state.id, nextTick: t.burn?.nextTick ?? w.now() + 1000 };
         }
       });
@@ -332,13 +387,19 @@ export function attack(w: World, p: ServerPlayer, targetId: string, special: boo
       if (t === m || (ax * bx + az * bz) / (al * bl) > 0.5) strike(t, sp.mult);
     }
   } else if (sp.kind === 'nova') {
-    w.broadcastNear(p.state, { t: 'fx', kind: 'nova', from: p.state.id });
-    for (const t of near(sp.radius ?? 6)) strike(t, sp.mult, (x) => { x.frozenUntil = w.now() + FREEZE_SEC * 1000 * (1 + s.frostPower); });
+    // Frost Nova bursts around the target: freeze everything within its radius of it.
+    w.broadcastNear(p.state, { t: 'fx', kind: 'nova', from: p.state.id, to: m.id });
+    const around = [...w.mobs.values()].filter((x) => !x.dead && sameRegion(x, m) && Math.hypot(x.x - m.x, x.z - m.z) <= (sp.radius ?? 5) + mobRadius(x));
+    for (const t of around) strike(t, sp.mult, (x) => {
+      x.frozenUntil = w.now() + FREEZE_SEC * 1000 * (1 + s.frostPower);
+      if (s.brittle > 0) x.brittleUntil = x.frozenUntil;
+    });
   } else if (sp.kind === 'ignite') {
     const burning = near(sp.radius ?? 22).filter((x) => x.burn && x.burn.until > now);
     if (!burning.length) { p.nextSpecialAt = now + 1000; p.client.send({ t: 'cooldown', until: Date.now() + 1000 }); return w.notice(p, 'Nothing is burning — hit them with firebolts first.', 'error'); }
     w.broadcastNear(p.state, { t: 'fx', kind: 'ignite', from: p.state.id });
-    for (const t of burning) strike(t, sp.mult * t.burn!.stacks * (1 + s.burnDmg));
+    // Brittle Frost: a frozen, brittle target counts as at least 3 stacks.
+    for (const t of burning) strike(t, sp.mult * ((t.brittleUntil ?? 0) > now && t.frozenUntil > now ? Math.max(3, t.burn!.stacks) : t.burn!.stacks) * (1 + s.burnDmg));
   }
 }
 
@@ -355,7 +416,8 @@ export function heal(w: World, p: ServerPlayer, targetId: string): void {
   p.nextAttackAt = now + attackInterval(main) * 1000;
   if (p.held !== 'mainHand') { p.held = 'mainHand'; w.refreshGear(p); }
   p.act = 'cast'; p.actUntil = now + 600;
-  const amount = outgoing(main, undefined, p.stats.all, HEAL_MULT) * (w.rand() < p.stats.all.crit ? 1.5 : 1);
+  const s = p.stats.all;
+  const amount = outgoing(main, undefined, s, HEAL_MULT) * (1 + s.healPower) * (w.rand() < s.crit ? 1.5 + s.healCrit : 1);
   if (t === p) return applyHeal(w, p, p, amount, now);
   w.broadcastNear(p.state, { t: 'fx', kind: 'heal', from: p.state.id, to: t.state.id });
   const flight = (Math.hypot(t.state.x - p.state.x, t.state.z - p.state.z) / PROJECTILE_SPEED) * 1000;
@@ -367,6 +429,12 @@ function applyHeal(w: World, healer: ServerPlayer, t: ServerPlayer, amount: numb
   t.hp = Math.min(t.stats.maxHp, t.hp + amount);
   const done = Math.round((t.hp - before) * 10) / 10;
   healer.lastHealAt = now;
+  // Warding Light: what spills over becomes a shield (8 s, at most 30% of their max HP).
+  const over = amount - (t.hp - before), keep = healer.stats.all.overShield;
+  if (keep > 0 && over > 0) {
+    const cur = t.shield && t.shield.until > now ? t.shield.amt : 0;
+    t.shield = { amt: Math.min(t.stats.maxHp * 0.3, cur + over * keep), until: now + 8000 };
+  }
   w.broadcastNear(t.state, { t: 'hit', to: t.state.id, dmg: Math.max(done, 0), kind: 'heal', from: healer.state.id });
   w.sendHp(t);
   // Healing someone who is actually fighting earns player-level XP (half a point per HP restored).
@@ -383,6 +451,7 @@ export function damageMob(w: World, m: Mob, dmg: number, by: string, now: number
   m.dead = true;
   m.hp = 0;
   m.burn = null;
+  m.bleed = null;
   m.firedBy = fire ? by : undefined;
   const [lo, hi] = m.def.respawnSec;
   m.respawnAt = m.spawn.summonedBy ? Infinity : now + (lo + w.rand() * (hi - lo)) * 1000;

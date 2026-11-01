@@ -55,9 +55,11 @@ export function stepPlayer(p: LocalPlayer, input: MoveInput, colliders: Collider
   }
 
   // Refuse to climb slopes steeper than ~50°: the step is cancelled and you slide along.
-  const ground0 = heightAt(p.x, p.z), ground1 = heightAt(nx, nz);
+  // Wading: measure from where you float, not the sea bed below, and allow a steeper scramble
+  // out — so a bank you could walk down is one you can climb back up.
+  const ground0 = inWater ? Math.max(heightAt(p.x, p.z), p.y) : heightAt(p.x, p.z), ground1 = heightAt(nx, nz);
   const horiz = Math.hypot(nx - p.x, nz - p.z);
-  if (p.onGround && horiz > 1e-4 && (ground1 - ground0) / horiz > 1.2) { nx = p.x; nz = p.z; }
+  if (p.onGround && horiz > 1e-4 && (ground1 - ground0) / horiz > (inWater ? 1.8 : 1.2)) { nx = p.x; nz = p.z; }
 
   // Cave walls (and the world's edge): slide along instead of walking through.
   if (!walkable(nx, nz, PLAYER_RADIUS)) {

@@ -30,7 +30,7 @@ function renderSummary(c: SavedCharacter | null): void {
   const skills = el('div', 'savedskills');
   for (const s of SKILLS) {
     if (s.id === 'combat') continue;
-    const row = el('span', 'sk'); row.append(el('span', '', s.name), el('b', '', String(levelFromXp(xp[s.id] ?? 0)))); skills.append(row);
+    const row = el('span', 'sk'); row.append(el('span', '', s.name), el('b', '', String(levelFromXp(xp[s.id] ?? 0, s.id)))); skills.append(row);
   }
   box.replaceChildren(head, el('div', 'lbl', 'Equipment'), gear, el('div', 'lbl', 'Skills'), skills);
 }

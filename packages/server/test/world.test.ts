@@ -187,7 +187,7 @@ test('bad tokens are rejected and a second login replaces the first', async () =
 
 // ------------------------------------------------------------------ gameplay systems
 import { ITEMS, NPC_BY_ID, STATION_BY_ID, VEIN_BY_ID, VEIN_TYPES, TREE_BY_ID, MOBS, INN, CAVE_ENTRANCE, CAVE_START, QUEST_BY_ID, countItem, xpForLevel, isFishable, LAKE, heightAt as h } from '@kontor/shared';
-import { PORTAL_BY_ID, regionAt, STATIONS, HOMES, innDoor, innRoomAt, homeAt, PLANTS } from '@kontor/shared';
+import { VEINS, SPAWN_POINT, PORTAL_BY_ID, regionAt, STATIONS, HOMES, innDoor, innRoomAt, homeAt, PLANTS } from '@kontor/shared';
 import { damageMob } from '../src/combat.js';
 
 function game(random: () => number = () => 0.5, store?: MemoryStore) {
@@ -220,7 +220,7 @@ test('buy a pickaxe from Ingrid, equip it, mine; vein wear is shared and it depl
   assert.equal(p.gold, 5);
   world.handle(c, { t: 'equip', index: p.bag.findIndex((s) => s?.id === 'stone_pickaxe') });
   assert.equal(p.equip.pickaxe?.id, 'stone_pickaxe');
-  const vein = VEIN_BY_ID.get('camp-0')!;
+  const vein = VEINS.find((v) => v.type === 'stone')!; // up in a mountain quarry
   place(vein.x + 1.5, vein.z);
   world.handle(c, { t: 'mine', node: vein.id });
   const n = last('node')!;
@@ -258,7 +258,7 @@ test('drop and pick up: items go to the ground and back', () => {
 
 test('crafting gear can roll a rarity with effects', () => {
   const { world, c, p, place, advance } = game(() => 0.001);
-  const anvil = STATION_BY_ID.get('camp_anvil')!;
+  const anvil = STATION_BY_ID.get('village_anvil')!;
   place(anvil.x + 1.5, anvil.z);
   p.xp.smithing = xpForLevel(3);
   p.bag[0] = { id: 'shaped_stone', qty: 4 };
@@ -277,12 +277,12 @@ test('crafting gear can roll a rarity with effects', () => {
 
 test('cooking can burn; stations must match the recipe', () => {
   const { world, c, p, place, last, advance } = game(() => 0.01);
-  const anvil = STATION_BY_ID.get('camp_anvil')!;
+  const anvil = STATION_BY_ID.get('village_anvil')!;
   p.bag[0] = { id: 'raw_perch', qty: 2 };
   place(anvil.x + 1, anvil.z);
   world.handle(c, { t: 'craft', recipe: 'cooked_perch', count: 1, station: anvil.id });
   assert.equal(last('job'), undefined);
-  const fire = STATION_BY_ID.get('camp_fire')!;
+  const fire = STATION_BY_ID.get('village_fire')!;
   place(fire.x + 1.2, fire.z);
   world.handle(c, { t: 'craft', recipe: 'cooked_perch', count: 2, station: fire.id });
   advance(2500); world.step(); advance(2500); world.step();
@@ -328,14 +328,14 @@ test('combat: kill a wolf, get XP and loot on the ground; wolves fight back', ()
   void last;
 });
 
-test('dying knocks you out; respawn at camp, weakened', () => {
+test('dying knocks you out; you wake at Bjørkvik’s gate, weakened', () => {
   const { world, c, p } = game();
   world.kill(p, 'a test');
   assert.ok(p.dead);
   world.handle(c, { t: 'mine', node: 'camp-0' }); // ignored while dead
   world.handle(c, { t: 'respawn' });
   assert.ok(!p.dead && p.hp > 0);
-  assert.ok(Math.hypot(p.state.x, p.state.z) < 6);
+  assert.ok(Math.hypot(p.state.x - SPAWN_POINT.x, p.state.z - SPAWN_POINT.z) < 4);
   assert.ok(p.buffs.some((b) => b.name === 'Weakened'));
 });
 
@@ -478,7 +478,7 @@ test('skinning: needs a knife, can ruin the hide, the body goes away, the knife 
   world.step();
   assert.equal(last('snap')!.mobs.find((m) => m.id === wolf.id)?.sk, undefined, 'gone once skinned');
   // Repair at the anvil for a shaped stone.
-  const anvil = STATION_BY_ID.get('camp_anvil')!;
+  const anvil = STATION_BY_ID.get('village_anvil')!;
   place(anvil.x + 1.2, anvil.z);
   p.bag[5] = { id: 'shaped_stone', qty: 1 };
   world.handle(c, { t: 'repair', slot: 'knife' });
@@ -509,7 +509,7 @@ test('a ruined hide gives nothing; bodies vanish after 30 s', () => {
 test('leather: tan pelts at the tanning rack, then make armour; Ingrid no longer sells leather', () => {
   const { world, c, p, place, advance } = game();
   assert.ok(!NPC_BY_ID.get('ingrid')!.sells!.some((i) => i.startsWith('leather_') && i !== 'leather_backpack'));
-  const rack = STATION_BY_ID.get('camp_tanning')!;
+  const rack = STATION_BY_ID.get('village_tanning')!;
   place(rack.x + 1.3, rack.z);
   p.bag[0] = { id: 'wolf_pelt', qty: 2 };
   world.handle(c, { t: 'craft', recipe: 'leather', count: 2, station: rack.id });
@@ -875,7 +875,7 @@ test('tanking: the mob turns to the closest (a shield counts as closer); Parry c
 
 test('plans teach a weapon for good; giantslayer hits big monsters harder', async () => {
   const { world, c, p, place, advance } = game(() => 0.5);
-  const anvil = STATION_BY_ID.get('camp_anvil')!;
+  const anvil = STATION_BY_ID.get('village_anvil')!;
   place(anvil.x + 1.5, anvil.z);
   p.xp.smithing = xpForLevel(8);
   p.bag[0] = { id: 'shaped_stone', qty: 8 }; p.bag[1] = { id: 'birch_log', qty: 2 };
@@ -1025,4 +1025,52 @@ test('Saltfjorden content: nagas, crabs, the wreck (walkable deck), salt pans, c
   assert.ok((p.xp.cooking ?? 0) > 0, 'cooking XP');
   const ground = [...(world as any).ground.values()].map((g: any) => g.item.id);
   assert.ok(ground.includes('cooked_wolf_meat') && !ground.includes('raw_wolf_meat'), JSON.stringify(ground));
+});
+
+test('an open door swings shut when the room becomes vacant', () => {
+  const { world, c, p, at, place, advance } = game();
+  p.gold = 500;
+  at('hilde');
+  world.handle(c, { t: 'rent', weeks: 1 });
+  const room = p.lease!.room, d = innDoor(room);
+  place(d.x, d.z + 0.5);
+  world.handle(c, { t: 'door', home: room });
+  assert.ok(world.doorsOpen.has(room), 'tenant opened it');
+  advance(8 * 24 * 3600 * 1000); world.step();
+  assert.ok(!world.doorsOpen.has(room), 'shut once the lease ran out');
+});
+
+test('drag in the bag: move to an empty slot, or swap with what is there', () => {
+  const { world, c, p } = game();
+  p.bag = p.bag.map(() => null);
+  p.bag[0] = { id: 'stone', qty: 3 }; p.bag[1] = { id: 'leather', qty: 2 };
+  world.handle(c, { t: 'moveItem', from: 0, to: 5 });
+  assert.equal(p.bag[0], null); assert.equal(p.bag[5]?.id, 'stone');
+  world.handle(c, { t: 'moveItem', from: 1, to: 5 });
+  assert.equal(p.bag[5]?.id, 'leather'); assert.equal(p.bag[1]?.id, 'stone');
+  world.handle(c, { t: 'moveItem', from: 1, to: 999 }); // out of range: ignored
+  assert.equal(p.bag[1]?.id, 'stone');
+});
+
+test('talents: Kindling burns to 5 stacks; Frost Nova lands around the target; Brittle Frost gives 3 stacks at once', () => {
+  const { world, c, p, place, advance } = game(() => 0.9);
+  p.equip.mainHand = { id: 'birch_fire_staff', qty: 1 };
+  p.talents = { magic: { adept: 3, pyromancer: 3, wildfire: 1, kindling: 2 } };
+  p.xp.combat = xpForLevel(30);
+  world.recompute(p);
+  const wolf = [...world.mobs.values()].find((m) => m.def.kind === 'wolf')!;
+  wolf.def = { ...wolf.def, hp: 100000 }; wolf.hp = 100000;
+  place(wolf.x + 10, wolf.z);
+  for (let i = 0; i < 7; i++) { world.handle(c, { t: 'attack', target: wolf.id, special: false }); advance(2000); world.step(); }
+  assert.equal(wolf.burn?.stacks, 5, 'Kindling: 5 stacks');
+  // Frost Nova from 10 m away freezes the wolf (and its pack) where they stand, not around you.
+  const frost = game(() => 0.9);
+  frost.p.equip.mainHand = { id: 'birch_frost_staff', qty: 1 };
+  frost.p.talents = { magic: { adept: 3, cryomancer: 3, permafrost: 1, shatter: 2, brittle_frost: 1 } };
+  frost.p.xp.combat = xpForLevel(30);
+  frost.world.recompute(frost.p);
+  const w2 = [...frost.world.mobs.values()].find((m) => m.def.kind === 'wolf')!;
+  frost.place(w2.x + 10, w2.z);
+  frost.world.handle(frost.c, { t: 'attack', target: w2.id, special: true });
+  assert.ok(w2.frozenUntil > frost.world.now() && (w2.brittleUntil ?? 0) > frost.world.now(), 'frozen and brittle from 10 m');
 });

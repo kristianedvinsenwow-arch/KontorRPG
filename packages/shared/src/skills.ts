@@ -17,24 +17,31 @@ export const SKILLS: { id: SkillId; name: string; live: boolean; blurb: string }
   { id: 'herbalism', name: 'Herbalism', live: true, blurb: 'Pick angelica, cloudberries, roseroot and grave moss by hand.' },
   { id: 'alchemy', name: 'Alchemy', live: true, blurb: 'Brew potions at an alchemy table: healing over time (usable mid-fight) and elixirs that buff you.' },
   { id: 'fishing', name: 'Fishing', live: true, blurb: 'Cast at the lake, then keep the fish in the bar.' },
-  { id: 'cooking', name: 'Cooking', live: true, blurb: 'Campfires and the inn stove. Food heals and gives buffs.' },
+  { id: 'cooking', name: 'Cooking', live: true, blurb: 'Campfires, and the stoves in Bjørkvik’s cottages (faster, less burnt). Food heals and gives buffs.' },
 ];
 
 export const COMING_SKILLS = ['Hunting', 'Enchanting'];
 
 export const MAX_LEVEL = 60;
 
-/** Total XP needed to reach `level` (level 1 = 0 XP). */
-export function xpForLevel(level: number): number {
+/** Crafting skills (the ones that turn materials into things) level on a cheaper curve than
+ *  gathering — 20% less XP a level — so you can work what you just learned to gather. */
+export const CRAFT_SKILLS: SkillId[] = ['smithing', 'carpentry', 'leatherworking', 'tailoring', 'alchemy', 'cooking'];
+const curve = (skill?: SkillId) => (skill && CRAFT_SKILLS.includes(skill) ? 8 : 10);
+
+/** Total XP needed to reach `level` (level 1 = 0 XP) in a skill. */
+export function xpForLevel(level: number, skill?: SkillId): number {
+  const k = curve(skill);
   let total = 0;
-  for (let l = 1; l < Math.min(level, MAX_LEVEL); l++) total += 10 * l * l;
+  for (let l = 1; l < Math.min(level, MAX_LEVEL); l++) total += k * l * l;
   return total;
 }
 
-export function levelFromXp(xp: number): number {
+export function levelFromXp(xp: number, skill?: SkillId): number {
+  const k = curve(skill);
   let level = 1, total = 0;
   while (level < MAX_LEVEL) {
-    const need = 10 * level * level;
+    const need = k * level * level;
     if (total + need > xp) break;
     total += need;
     level++;
@@ -43,12 +50,15 @@ export function levelFromXp(xp: number): number {
 }
 
 /** Progress inside the current level, 0..1. */
-export function levelProgress(xp: number): number {
-  const l = levelFromXp(xp);
+export function levelProgress(xp: number, skill?: SkillId): number {
+  const l = levelFromXp(xp, skill);
   if (l >= MAX_LEVEL) return 1;
-  const a = xpForLevel(l), b = xpForLevel(l + 1);
+  const a = xpForLevel(l, skill), b = xpForLevel(l + 1, skill);
   return (xp - a) / (b - a);
 }
 
 export type SkillXp = Partial<Record<SkillId, number>>;
-export const levelOf = (xp: SkillXp, s: SkillId) => levelFromXp(xp[s] ?? 0);
+export const levelOf = (xp: SkillXp, s: SkillId) => levelFromXp(xp[s] ?? 0, s);
+/** Your working level in a skill: real level plus food that sharpens your skills (`skillLvl`,
+ *  never combat, never talent points). Use it for what you're allowed to gather or craft. */
+export const skillLevel = (xp: SkillXp, s: SkillId, boost = 0) => levelOf(xp, s) + (s === 'combat' ? 0 : Math.floor(boost));

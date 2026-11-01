@@ -60,6 +60,8 @@ export type ClientMsg =
   | { t: 'craft'; recipe: string; count: number; station: string }
   | { t: 'cancelCraft' }
   | { t: 'equip'; index: number }
+  /** Drag in the bag: move an item to another slot (swapping with whatever is there). */
+  | { t: 'moveItem'; from: number; to: number }
   | { t: 'unequip'; slot: Slot }
   | { t: 'hold'; slot: HoldSlot }
   | { t: 'buy'; npc: string; item: string }
@@ -167,6 +169,7 @@ export function decodeClient(raw: string): ClientMsg | null {
       return str(m.recipe) && num(m.count) && str(m.station) ? { t: 'craft', recipe: m.recipe, station: m.station, count: Math.max(1, Math.min(100, int(m.count))) } : null;
     case 'cancelCraft': return { t: 'cancelCraft' };
     case 'equip': return num(m.index) ? { t: 'equip', index: int(m.index) } : null;
+    case 'moveItem': return num(m.from) && num(m.to) ? { t: 'moveItem', from: int(m.from), to: int(m.to) } : null;
     case 'unequip': return str(m.slot, 12) ? { t: 'unequip', slot: m.slot as Slot } : null;
     case 'hold': return ['mainHand', 'pickaxe', 'hatchet', 'rod'].includes(m.slot) ? { t: 'hold', slot: m.slot } : null;
     case 'buy': return str(m.npc) && str(m.item) ? { t: 'buy', npc: m.npc, item: m.item } : null;

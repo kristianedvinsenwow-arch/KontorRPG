@@ -1,11 +1,11 @@
 /**
  * Built places: every crafting station (furnace, anvil, workbench, campfire, stove), every NPC,
- * Ingrid's trading stall at camp, Bjørkvik Lodge with its eight rented rooms, a few village
+ * Ingrid's trading stall in the market, Bjørkvik Lodge with its eight rented rooms, a few village
  * cottages, and the mouth of the Old Mine. Positions all come from shared data, so the server
  * checks the same spots.
  */
 import * as THREE from 'three';
-import { STABLE, CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, FJORD_PIER, SHIPWRECK, fjordMid, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
+import { stationHouse, STALL, STABLE, MARKET, TOWN_GATE, CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, FJORD_PIER, SHIPWRECK, fjordMid, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
 import { mat, bx, mesh, canvasTex } from '../engine/procgen.js';
 import { makeCharacter, animateCharacter, type Character } from '../entities/character.js';
 import { applyGear } from '../entities/held.js';
@@ -69,12 +69,13 @@ export class Places {
     this.village();
     this.pier();
     this.fence();
-    this.signpost(-7, 12.5, [['Bjørkvik', VILLAGE.x, VILLAGE.z], ['Camp', 0, 0]]);
-    this.signpost(18, -16, [['Grey Ridge', 86, -14], ['Old Mine', 50, -78], ['Camp', 0, 0]]);
-    this.signpost(24, 26, [['North Scree', 30, 94], ['Wolf pack ⚠', 66, 33], ['Camp', 0, 0]]);
+    { const ox = TOWN_GATE.x - VILLAGE.x, oz = TOWN_GATE.z - VILLAGE.z, l = Math.hypot(ox, oz); this.signpost(TOWN_GATE.x + (ox / l) * 3 + (oz / l) * 3.6, TOWN_GATE.z + (oz / l) * 3 - (ox / l) * 3.6, [['Bjørkvik', VILLAGE.x, VILLAGE.z], ['Crossroads', 0, 0]]); } // outside the gate, beside the road
+    this.gate();
+    this.signpost(18, -16, [['Grey Ridge', 86, -14], ['Old Mine', 50, -78], ['Crossroads', 0, 0]]);
+    this.signpost(24, 26, [['North Scree', 30, 94], ['Wolf pack ⚠', 66, 33], ['Crossroads', 0, 0]]);
     this.signpost(-38, 22, [['Goblin camp ⚠', -62, -60], ['Bjørkvik', VILLAGE.x, VILLAGE.z]]);
     this.caveMouth();
-    this.signpost(86, 40, [['Gruben pass ⚠', GRUBEN_PASS.x, GRUBEN_PASS.z], ['Wolf pack ⚠', 66, 33], ['Camp', 0, 0]]);
+    this.signpost(86, 40, [['Gruben pass ⚠', GRUBEN_PASS.x, GRUBEN_PASS.z], ['Wolf pack ⚠', 66, 33], ['Crossroads', 0, 0]]);
     this.passGate(GRUBEN_PASS.x, GRUBEN_PASS.z, 70, 34, 'Pass to Gruben', 'Walk through · monsters level 13–22 · the Mine King');
     this.gruben();
     this.stable();
@@ -87,6 +88,17 @@ export class Places {
    * the highest ground under it and gets a stone plinth down to the lowest, so nothing floats on a
    * slope or half-sinks into it.
    */
+  /** Solid walls for a box-shaped building (w across, d deep, in the group's own frame): a ring of
+   *  small circles along the outline, so corners don't stick through a single round collider. */
+  private rectCollider(g: THREE.Object3D, w: number, d: number, r = 0.3): void {
+    const c = Math.cos(g.rotation.y), s = Math.sin(g.rotation.y), x0 = g.position.x, z0 = g.position.z;
+    const add = (lx: number, lz: number) => this.colliders.push({ x: x0 + lx * c + lz * s, z: z0 - lx * s + lz * c, r });
+    const hw = w / 2 - r, hd = d / 2 - r;
+    for (let t = -hw; t <= hw + 1e-6; t += r * 1.4) { add(t, -hd); add(t, hd); }
+    for (let t = -hd; t <= hd + 1e-6; t += r * 1.4) { add(-hw, t); add(hw, t); }
+    this.colliders.push({ x: x0, z: z0, r: Math.min(hw, hd) }); // and the middle, so you can't end up inside
+  }
+
   private place(x: number, z: number, faceX = 0, faceZ = 0, foot?: [number, number]): THREE.Group {
     const g = new THREE.Group();
     g.rotation.y = Math.atan2(faceX - x, faceZ - z) + Math.PI;
@@ -114,9 +126,12 @@ export class Places {
   }
 
   private station(s: Station): void {
-    const centre = s.id.startsWith('camp') ? { x: 0, z: 0 } : s.id.startsWith('gruben') ? GRUBEN_CAMP : s.id.startsWith('fjord') ? FJORD_VILLAGE : VILLAGE;
+    const centre = s.id === 'village_furnace' || s.id === 'village_anvil' ? MARKET : s.id.startsWith('camp') ? { x: 0, z: 0 } : s.id.startsWith('gruben') ? GRUBEN_CAMP : s.id.startsWith('fjord') ? FJORD_VILLAGE : VILLAGE;
     const foot: Record<string, [number, number]> = { furnace: [2.2, 2.2], anvil: [1.2, 1.2], workbench: [2, 1], stove: [1.4, 1], tanning: [2.2, 1], loom: [1.8, 1.2], alchemy: [1.6, 0.9] };
-    const g = this.place(s.x, s.z, centre.x, centre.z, foot[s.kind]);
+    const home = stationHouse(s);
+    // A cottage stove stands on the house floor, facing into the room.
+    const g = home ? this.place(s.x, s.z, home.x, home.z) : this.place(s.x, s.z, centre.x, centre.z, foot[s.kind]);
+    if (home) g.position.y = home.floor + 0.08;
     let h = 1.6;
     if (s.kind === 'furnace') {
       mesh(new THREE.CylinderGeometry(0.95, 1.15, 1.5, 9).translate(0, 0.75, 0), M.stone, g);
@@ -214,15 +229,15 @@ export class Places {
       h = 1.9;
     }
     this.colliders.push({ x: s.x, z: s.z, r: s.r });
-    const p = new THREE.Vector3(s.x, heightAt(s.x, s.z) + h, s.z);
-    tag(s.name, null, 'station', p, 22);
+    const p = new THREE.Vector3(s.x, (home ? home.floor + 0.08 : heightAt(s.x, s.z)) + h, s.z);
+    tag(s.name, home ? 'Cooks 15% faster, burns less' : null, 'station', p, home ? 8 : 22);
   }
 
   private npc(n: Npc): void {
     const c = makeCharacter(n.color, undefined, n.race, n.face);
     const g = this.place(n.x, n.z, n.id === 'ingrid' ? 0 : n.x + (n.x > VILLAGE.x - 20 && n.z > 20 ? VILLAGE.x - n.x : -n.x) * 0.1, n.z + 1);
     // Face towards the middle of camp / the village green.
-    const centre = n.x > 600 ? GRUBEN_CAMP : Math.hypot(n.x, n.z) < 30 ? { x: 0, z: 0 } : { x: VILLAGE.x, z: VILLAGE.z };
+    const centre = n.x > 600 ? GRUBEN_CAMP : Math.hypot(n.x - MARKET.x, n.z - MARKET.z) < 14 ? MARKET : { x: VILLAGE.x, z: VILLAGE.z };
     g.rotation.y = Math.atan2(n.x - centre.x, n.z - centre.z);
     g.add(c.g);
     const look: Record<string, Parameters<typeof applyGear>[1]> = {
@@ -238,10 +253,10 @@ export class Places {
     tag(n.name, n.title, n.roles.includes('quests') ? 'npc quest' : 'npc', new THREE.Vector3(n.x, heightAt(n.x, n.z) + R + 0.35, n.z), 28);
   }
 
-  /** Ingrid's stall at camp. */
+  /** Ingrid's stall in the market. */
   private stall(): void {
     const n = NPCS.find((x) => x.id === 'ingrid')!;
-    const post = this.place(n.x, n.z, 0, 0, [3.2, 2.2]);
+    const post = this.place(n.x, n.z, STALL.faceX, STALL.faceZ, [3.2, 2.2]);
     for (const [px, pz] of [[-1.4, -0.7], [1.4, -0.7], [-1.4, 0.9], [1.4, 0.9]]) {
       mesh(new THREE.CylinderGeometry(0.07, 0.08, pz < 0 ? 2.95 : 2.55, 6).translate(px, pz < 0 ? 1.475 : 1.275, pz), M.darkWood, post);
     }
@@ -474,12 +489,15 @@ export class Places {
     bx(ch, 0.84, 0.08, 0.5, M.iron, 0, 0.44, 0);
     // Hearth with a fire, and a chimney through the roof.
     const he = new THREE.Group(); he.position.set(f.hearth.x, 0.08, f.hearth.z); g.add(he);
+    if (f.kind === 'cottage') { bx(he, 0.4, H + 1.2, 0.4, M.dark, 0.1, (H + 1.2) / 2 + 0.6, 0.2); he.visible = true; } // the stove (a station) stands here; just the chimney
+    else {
     bx(he, 0.9, 0.9, 0.7, M.stone, 0, 0.45, 0.1);
     const fm = new THREE.MeshStandardMaterial({ color: 0x1a0a04, emissive: 0xff6a1a, emissiveIntensity: 2.2, roughness: 1 });
     const hl = new THREE.Object3D(); hl.position.set(0, 0.5, -0.4); he.add(hl);
     this.fires.push({ light: hl, mats: [fm], base: 2, color: 0xff7a2a, range: 5 });
     const fl = mesh(new THREE.PlaneGeometry(0.45, 0.3), fm, he, false); fl.position.set(0, 0.3, -0.26); fl.rotation.y = Math.PI;
     bx(he, 0.4, H + 1.2, 0.4, M.dark, 0.1, (H + 1.2) / 2 + 0.6, 0.2);
+    }
     if (f.table) {
       const t = new THREE.Group(); t.position.set(f.table.x, 0.08, f.table.z); g.add(t);
       bx(t, 1.1, 0.07, 0.7, M.plank, 0, 0.75, 0);
@@ -492,7 +510,7 @@ export class Places {
     const push = (lx: number, lz: number, r: number) => { const p = toWorld(f, lx, lz); this.colliders.push({ x: p.x, z: p.z, r }); };
     for (let lx = -w / 2; lx <= w / 2 + 1e-6; lx += 0.35) { push(lx, d / 2, 0.18); if (Math.abs(lx) > doorW / 2 + 0.15) push(lx, -d / 2, 0.18); }
     for (let lz = -d / 2; lz <= d / 2 + 1e-6; lz += 0.35) for (const sx of [-1, 1]) push(sx * w / 2, lz, 0.18);
-    push(f.bed.x, f.bed.z + 0.45, 0.5); push(f.bed.x, f.bed.z - 0.5, 0.5); push(f.chest.x, f.chest.z, 0.42); push(f.hearth.x, f.hearth.z, 0.5);
+    push(f.bed.x, f.bed.z + 0.45, 0.5); push(f.bed.x, f.bed.z - 0.5, 0.5); push(f.chest.x, f.chest.z, 0.42); if (f.kind !== 'cottage') push(f.hearth.x, f.hearth.z, 0.5);
     this.doorTag(h, H + 1.2);
   }
 
@@ -556,8 +574,24 @@ export class Places {
   }
 
   /** A split-rail fence around Bjørkvik's east side, open towards the paths and the lake. */
+  /** Bjørkvik's gate on the road in from the crossroads: two posts, a beam and a name board. */
+  private gate(): void {
+    const g = this.place(TOWN_GATE.x, TOWN_GATE.z, VILLAGE.x, VILLAGE.z);
+    for (const sx of [-1, 1]) bx(g, 0.28, 3.4, 0.28, M.darkWood, sx * 2.1, 1.7, 0);
+    bx(g, 5.0, 0.3, 0.32, M.darkWood, 0, 3.35, 0);
+    const board = canvasTex((c, n) => { c.fillStyle = '#5a3e26'; c.fillRect(0, 0, n, n); c.fillStyle = '#f2e6c4'; c.scale(0.25, 1); c.font = `bold ${n * 0.6}px Georgia, serif`; c.textAlign = 'center'; c.textBaseline = 'middle'; c.fillText('BJØRKVIK', n * 2, n * 0.54); }, 256); // text squeezed: the board is 4:1
+    for (const side of [-1, 1]) { const b = mesh(new THREE.PlaneGeometry(2.6, 0.65), new THREE.MeshStandardMaterial({ map: board, roughness: 0.9 }), g); b.position.set(0, 2.85, side * 0.17); if (side < 0) b.rotation.y = Math.PI; }
+    bx(g, 2.7, 0.75, 0.3, M.wood, 0, 2.85, 0);
+    for (const sx of [-1, 1]) this.colliders.push({ x: TOWN_GATE.x + sx * 2.1 * Math.cos(g.rotation.y), z: TOWN_GATE.z - sx * 2.1 * Math.sin(g.rotation.y), r: 0.3 });
+  }
+
+  /** The fence round Bjørkvik: the east side and the back of the market, open by the lake and the north-west road, with the gate in it. */
   private fence(): void {
-    const r = 23.5, a0 = -0.6, a1 = 2.1, step = 2.4 / r;
+    for (const [a0, a1] of [[-1.95, -1.03], [-0.68, 2.1]]) this.fenceArc(31.5, a0, a1);
+  }
+
+  private fenceArc(r: number, a0: number, a1: number): void {
+    const step = (a1 - a0) / Math.max(1, Math.round(((a1 - a0) * r) / 2.4));
     const pts: THREE.Vector3[] = [];
     for (let a = a0; a <= a1 + 1e-6; a += step) {
       const x = VILLAGE.x + Math.cos(a) * r, z = VILLAGE.z + Math.sin(a) * r;
@@ -684,7 +718,7 @@ export class Places {
       bx(g, 4, 2.4, 5.5, red, 0, 1.2, 0);
       for (const sx of [-1, 1]) bx(g, 2.6, 0.12, 5.9, M.roof, sx * 1.05, 2.9, 0, 0, 0, sx * -0.68);
       bx(g, 2, 1.8, 0.06, white, 0, 0.95, -2.78); // doors to the water
-      this.colliders.push({ x, z, r: 2.6 });
+      this.rectCollider(g, 4.1, 5.6);
     }
     // Drying racks with cod (stockfish).
     for (let i = 0; i < 2; i++) {

@@ -9,7 +9,7 @@ import {
   NPC_BY_ID, PLAYER_COLORS, PROTOCOL_VERSION, QUEST_BY_ID, RECIPE_BY_ID, START_GOLD, START_TOOLS, STATION_BY_ID, TICK_HZ, USE_RANGE,
   EAT_LOCK_MS, POTION_CD_MS, addStack, burnChance, knifeRepair, knifeUses, STATIONS, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
   questAvailable, r2, r3, recipeAt, removeItem, resizeBag, respecCost, rollCraftRarity, canCraftEpic, sellEach, rollEffects, rollsRarity,
-  validateBuild, xpMult, COMBAT_TREES, TALENT_TREE,
+  validateBuild, xpMult, COMBAT_TREES, TALENT_TREE, SPAWN_POINT, VILLAGE, STOVE_SPEED, skillLevel,
   type Buff, type ClientMsg, type HoldSlot, type MobKind, type PlayerState, type ServerMsg, type SkillId, type Slot,
   type Stack, type TreeId,
 } from '@kontor/shared';
@@ -34,7 +34,7 @@ export interface WorldOptions {
 
 type Joining = Omit<StoredCharacter, 'userId'> & { userId: string | null };
 
-const RESPAWN = { x: 0, z: 3 };
+const RESPAWN = SPAWN_POINT; // just inside Bjørkvik's gate
 const GROUND_SECONDS = 300;
 
 let nextId = 1;
@@ -180,6 +180,7 @@ export class World {
       case 'craft': return this.craft(p, msg.recipe, msg.count, msg.station);
       case 'cancelCraft': p.job = null; return this.sendJob(p);
       case 'equip': return this.equipFromBag(p, msg.index);
+      case 'moveItem': return this.moveItem(p, msg.from, msg.to);
       case 'unequip': return this.unequip(p, msg.slot);
       case 'hold': return this.hold(p, msg.slot);
       case 'buy': return this.buy(p, msg.npc, msg.item);
@@ -251,7 +252,7 @@ export class World {
     const now = this.now();
     let x: number, z: number, yaw: number;
     if (c.pos && checkStep(c.pos, c.pos, 0.1).ok) { x = c.pos.x; z = c.pos.z; yaw = c.pos.yaw; }
-    else { const a = this.rand() * Math.PI * 2, d = 2 + this.rand() * 4; x = Math.cos(a) * d; z = Math.sin(a) * d; yaw = -a + Math.PI / 2; }
+    else { x = SPAWN_POINT.x + (this.rand() - 0.5) * 3; z = SPAWN_POINT.z + (this.rand() - 0.5) * 3; yaw = Math.atan2(SPAWN_POINT.x - VILLAGE.x, SPAWN_POINT.z - VILLAGE.z); } // at the gate, facing into town
     const y = groundAt(x, z);
     const stats = computeStats(c.build, c.equip, c.talents, c.xp);
     const bag = resizeBag(c.bag, stats.bagSlots) ?? c.bag;
@@ -454,7 +455,7 @@ export class World {
     this.teleport(p, RESPAWN.x + (this.rand() - 0.5) * 3, RESPAWN.z + (this.rand() - 0.5) * 3);
     p.client.send({ t: 'buffs', list: p.buffs });
     this.sendHp(p);
-    this.notice(p, 'You come to at camp. Weakened for 2 minutes (−20% damage and speed).', 'info');
+    this.notice(p, 'You come to at Bjørkvik’s gate. Weakened for 2 minutes (−20% damage and speed).', 'info');
   }
 
   private teleport(p: ServerPlayer, x: number, z: number): void {
@@ -523,11 +524,11 @@ export class World {
     if (!r || !st) return;
     if (!recipeAt(r, st.kind)) return;
     if (!this.near(p, st)) return this.notice(p, `Stand next to the ${st.name.toLowerCase()}.`, 'error');
-    const lvl = levelOf(p.xp, r.skill);
+    const lvl = skillLevel(p.xp, r.skill, p.stats.all.skillLvl);
     if (lvl < r.level) return this.notice(p, `Needs ${r.skill[0].toUpperCase()}${r.skill.slice(1)} ${r.level} (you have ${lvl}).`, 'error');
     if (r.plans && !p.achievements.c[`plans:${r.plans}`]) return this.notice(p, `You need ${r.plans} plans first — they’re found on monsters.`, 'error');
     if (!r.inputs.every((i) => countItem(p.bag, i.item) >= i.qty)) return this.notice(p, 'You don’t have the materials.', 'error');
-    const speed = 1 + Math.max(0, (p.stats.scoped as any)[r.skill]?.craftSpeed ?? 0);
+    const speed = 1 + Math.max(0, (p.stats.scoped as any)[r.skill]?.craftSpeed ?? 0) + (st.kind === 'stove' ? STOVE_SPEED : 0);
     const seconds = r.seconds / speed;
     p.job = { recipe: r.id, station: st.id, total: count, done: 0, nextAt: this.now() + seconds * 1000, seconds };
     stopFishing(this, p, 'cancel');
@@ -546,7 +547,7 @@ export class World {
     for (const i of r.inputs) removeItem(trial, i.item, i.qty);
     const sc = (p.stats.scoped as any)[r.skill] ?? p.stats.all;
     let out: Stack = { id: r.output.item, qty: r.output.qty };
-    if (r.burns && this.rand() < burnChance(levelOf(p.xp, 'cooking'), r.level, st.kind === 'stove', sc.burnChance)) out = { id: 'burnt_fish', qty: 1 };
+    if (r.burns && this.rand() < burnChance(skillLevel(p.xp, 'cooking', p.stats.all.skillLvl), r.level, st.kind === 'stove', sc.burnChance)) out = { id: 'burnt_fish', qty: 1 };
     else if (rollsRarity(r)) {
       const rar = rollCraftRarity(sc.luck, () => this.rand(), canCraftEpic(p.talents, r.skill));
       if (rar) { out.r = rar; out.fx = rollEffects(ITEMS[out.id], rar, () => this.rand()); }
@@ -569,6 +570,15 @@ export class World {
   }
 
   // ---------------------------------------------------------------- bag and gear
+
+  /** Sort your bag by hand: move an item to another slot; whatever was there takes its place. */
+  private moveItem(p: ServerPlayer, from: number, to: number): void {
+    const n = p.bag.length;
+    if (from === to || from < 0 || to < 0 || from >= n || to >= n || !p.bag[from]) return;
+    [p.bag[from], p.bag[to]] = [p.bag[to], p.bag[from]];
+    p.dirty = true;
+    this.sendInv(p);
+  }
 
   private equipFromBag(p: ServerPlayer, index: number): void {
     const s = p.bag[index];
@@ -866,6 +876,13 @@ export class World {
   // ---------------------------------------------------------------- the inn
 
   private roomKey(p: ServerPlayer): string { return p.userId ?? `guest:${p.state.id}`; }
+  /** A door left open swings shut once nobody rents the place (lease ran out, moved out, reset). */
+  private closeVacantDoors(now: number): void {
+    let shut = false;
+    for (const n of this.doorsOpen) if (!this.rooms[n] || this.rooms[n]!.until <= now) { this.doorsOpen.delete(n); shut = true; }
+    if (shut) this.broadcast({ t: 'doors', open: [...this.doorsOpen] });
+  }
+
   private roomNames(): (string | null)[] { const now = this.now(); return this.rooms.map((r) => (r && r.until > now ? r.name : null)); }
 
   /** Your current home, if the lease is still running. */
@@ -1014,6 +1031,7 @@ export class World {
     const due = this.timers.filter((t) => t.at <= now);
     if (due.length) { this.timers = this.timers.filter((t) => t.at > now); for (const t of due) t.fn(); }
     stepMobs(this, dt, now);
+    this.closeVacantDoors(now);
     const list = [...this.players.values()];
     for (const p of list) {
       if (now - p.lastValid.at > 400) p.state.spd = r2(p.state.spd * 0.5);
