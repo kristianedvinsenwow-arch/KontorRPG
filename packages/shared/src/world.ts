@@ -338,11 +338,11 @@ export const SEA_RARE = { item: 'pearl', chance: 1 / 90, xp: 120, difficulty: 0.
  * alligator. Very hard catches.
  */
 export const SEA_TREASURE: { item: string; chance: number; level: number; xp: number; difficulty: number }[] = [
-  { item: 'swordfish_blade', chance: 1 / 500, level: 14, xp: 200, difficulty: 1.0 },
-  { item: 'harpoon', chance: 1 / 500, level: 16, xp: 200, difficulty: 1.0 },
-  { item: 'sea_kings_trident', chance: 1 / 1400, level: 22, xp: 350, difficulty: 1.12 },
-  { item: 'ships_anchor', chance: 1 / 1400, level: 22, xp: 350, difficulty: 1.12 },
-  { item: 'fjord_alligator', chance: 1 / 2500, level: 25, xp: 500, difficulty: 1.25 },
+  { item: 'swordfish_blade', chance: 1 / 500, level: 14, xp: 200, difficulty: 0.92 },
+  { item: 'harpoon', chance: 1 / 500, level: 16, xp: 200, difficulty: 0.92 },
+  { item: 'sea_kings_trident', chance: 1 / 1400, level: 22, xp: 350, difficulty: 0.95 },
+  { item: 'ships_anchor', chance: 1 / 1400, level: 22, xp: 350, difficulty: 0.95 },
+  { item: 'fjord_alligator', chance: 1 / 2500, level: 25, xp: 500, difficulty: 0.95 },
 ];
 /**
  * Things at the bottom of the lake, rolled before the fish (chances per cast, before luck). The
@@ -352,8 +352,8 @@ export const SEA_TREASURE: { item: string; chance: number; level: number; xp: nu
 export const LAKE_TREASURE: { what: 'gem' | 'gear' | 'plans' | 'mount'; chance: number; level: number; xp: number; difficulty: number }[] = [
   { what: 'gem', chance: 1 / 70, level: 4, xp: 40, difficulty: 0.75 },
   { what: 'gear', chance: 1 / 160, level: 6, xp: 70, difficulty: 0.9 },
-  { what: 'plans', chance: 1 / 900, level: 12, xp: 120, difficulty: 1.05 },
-  { what: 'mount', chance: 1 / 3000, level: 15, xp: 250, difficulty: 1.2 },
+  { what: 'plans', chance: 1 / 900, level: 12, xp: 120, difficulty: 0.92 },
+  { what: 'mount', chance: 1 / 3000, level: 15, xp: 250, difficulty: 0.95 },
 ];
 /** You must stand within this of the water's edge, and cast at most this far. */
 export const CAST_RANGE = 14;

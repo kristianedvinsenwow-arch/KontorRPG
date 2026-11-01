@@ -55,7 +55,8 @@ export const fishing = {
     // Fish: darts to a new spot now and then (harder catches: more often, further, faster).
     // Difficulty runs from ~0.05 (an old boot) and 0.15 (perch, gentle) to 0.85 (rare: hard work)
     // and 1.25 (an alligator: nearly impossible). Tuned by simulation: with ~200 ms reactions a rare
-    // fish lands ~50% on a plain rod and ~65–85% on a good one; treasures 20–50%; the alligator <10%.
+    // fish lands ~50% on a plain rod and ~65–85% on a good one; the big treasures (alligator, trident, fjord horse) sit at ~0.95, so
+    // ~25–35% on a plain rod and ~45–65% on a good one: their rarity does most of the gatekeeping.
     if (s.t >= s.nextMove) {
       const dart = Math.random() < 0.05 + d * 0.3;
       const jump = (Math.random() - 0.5) * TRACK * (dart ? 0.35 + d * 0.4 : 0.1 + d * 0.35);
