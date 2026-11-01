@@ -53,7 +53,7 @@ export const MOBS: Record<MobKind, MobDef> = {
     drops: [{ item: 'goblin_trinket', chance: 0.5, qty: [1, 2] }, { item: 'iron_arrowheads', chance: 0.15, qty: [5, 10] }, { gear: 1, chance: 0.06 }, { gear: 2, chance: 0.03 }, { item: 'spear_plans', chance: 0.012, qty: [1, 1] }], skin: { item: 'goblin_skin', qty: [1, 2] }, respawnSec: [120, 200], scale: 1.1 },
   cave_shaman: { kind: 'cave_shaman', name: 'Goblin shaman', level: 8, hp: 60, dmg: 5, interval: 2.2, range: 14, speed: 3.4, aggro: 14, armour: 3, ward: 8, magic: true, xp: 85, gold: [1, 4],
     drops: [{ item: 'quartz', chance: 0.1, qty: [1, 1] }, { gear: 2, chance: 0.05 }, { item: 'spear_plans', chance: 0.02, qty: [1, 1] }], respawnSec: [150, 240], scale: 1 },
-  troll: { kind: 'troll', name: 'Old Knut', level: 12, hp: 500, dmg: 12, interval: 2.6, range: 3.6, speed: 3.2, aggro: 12, armour: 15, ward: 5, xp: 800, gold: [15, 30],
+  troll: { kind: 'troll', name: 'Old Knut', level: 12, hp: 500, dmg: 17, interval: 2.6, range: 3.6, speed: 3.2, aggro: 12, armour: 15, ward: 5, xp: 800, gold: [15, 30],
     drops: [{ item: 'troll_tooth', chance: 1, qty: [1, 2] }, { gear: 2, chance: 0.6, legendary: 0.04 }, { item: 'trolltooth_necklace', chance: 0.03, qty: [1, 1] }, { item: 'knuts_bellyplate', chance: 0.04, qty: [1, 1] }, { item: 'trollshaman_helm', chance: 0.05, qty: [1, 1] }, { item: 'warhammer_plans', chance: 0.2, qty: [1, 1] }, { item: 'jotunbane', chance: 0.015, qty: [1, 1] }, { item: 'garnet', chance: 0.25, qty: [1, 1] }],
     respawnSec: [90 * 60, 150 * 60], boss: true, slam: { every: 11, r: 5, mult: 1.8 }, enrage: 0.25, scale: 2.3 },
   // Saltfjorden (levels 8–14)

@@ -74,7 +74,7 @@ export class CaveView {
         const x = CAVE.x + a[0] + Math.sin(ang) * d, z = CAVE.z + a[1] + Math.cos(ang) * d;
         const g = new THREE.Group();
         g.position.set(x, caveFloor(x, z), z);
-        g.rotation.y = ang + Math.PI / 2;
+        g.rotation.y = ang; // local x across the tunnel: posts against both walls, the cap beam spanning it
         for (const s of [-1, 1]) bx(g, 0.22, 3.2, 0.22, wood, s * (w / 2 - 0.25), 1.6, 0);
         bx(g, w - 0.2, 0.24, 0.26, wood, 0, 3.2, 0);
         this.group.add(g);
