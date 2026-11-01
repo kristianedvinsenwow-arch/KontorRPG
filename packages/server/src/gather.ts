@@ -3,7 +3,7 @@
  * (cast → bite → the client's reel minigame → catch). All rolls happen here.
  */
 import {
-  FISH_TABLE, SEA_FISH_TABLE, SEA_RARE, SEA_TREASURE, LAKE_TREASURE, ITEMS, MINE_RANGE, RARE_FISH, TREE_BY_ID, TREE_TYPES, VEIN_BY_ID, VEIN_TYPES, CAST_RANGE,
+  FISH_TABLE, SEA_FISH_TABLE, SEA_RARE, GROTTO_FISH_TABLE, GROTTO_RARE, inGrottoPool, SEA_TREASURE, LAKE_TREASURE, ITEMS, MINE_RANGE, RARE_FISH, TREE_BY_ID, TREE_TYPES, VEIN_BY_ID, VEIN_TYPES, CAST_RANGE,
   PICK_SEC, PLANT_BY_ID, regionAt, weatherAt, PLANT_TYPES, isFishable, levelOf, skillLevel, roomFor, swingSeconds, type NodeTypeDef, type Stack,
 } from '@kontor/shared';
 import type { ServerPlayer } from './types.js';
@@ -123,11 +123,12 @@ export function cast(w: World, p: ServerPlayer, x: number, z: number): void {
   const lvl = skillLevel(p.xp, 'fishing', p.stats.all.skillLvl);
   let pick: { item: string; xp: number; difficulty: number; rare: boolean; stack?: Stack } = { item: FISH_TABLE[0].item, xp: FISH_TABLE[0].xp, difficulty: FISH_TABLE[0].difficulty, rare: false };
   const luckK = (1 + st.rareFish) * (1 + st.luck * 0.01);
-  const sea = regionAt(x, z) === 'fjord';
+  const sea = regionAt(x, z) === 'fjord', pool = inGrottoPool(x, z);
+  if (pool && lvl < GROTTO_FISH_TABLE[0].level) return w.notice(p, `Nothing bites in these pools under Fishing ${GROTTO_FISH_TABLE[0].level}.`, 'error');
   if (sea && lvl < SEA_FISH_TABLE[0].level) return w.notice(p, `Sea fish won’t bite for a beginner — you need Fishing ${SEA_FISH_TABLE[0].level}.`, 'error');
-  const deep = sea ? SEA_TREASURE.find((t) => lvl >= t.level && w.rand() < t.chance * luckK) : undefined;
-  const treasure = deep ? undefined : LAKE_TREASURE.find((t) => lvl >= t.level && w.rand() < t.chance * luckK);
-  const rare = sea ? SEA_RARE : RARE_FISH;
+  const deep = sea && !pool ? SEA_TREASURE.find((t) => lvl >= t.level && w.rand() < t.chance * luckK) : undefined;
+  const treasure = deep || pool ? undefined : LAKE_TREASURE.find((t) => lvl >= t.level && w.rand() < t.chance * luckK);
+  const rare = pool ? GROTTO_RARE : sea ? SEA_RARE : RARE_FISH;
   if (deep) {
     const def = ITEMS[deep.item];
     pick = { item: deep.item, xp: deep.xp, difficulty: deep.difficulty, rare: true, stack: { id: deep.item, qty: 1, ...(def.fixedRarity ? { r: def.fixedRarity } : {}) } };
@@ -145,7 +146,7 @@ export function cast(w: World, p: ServerPlayer, x: number, z: number): void {
     pick = { item: stack.id, xp: treasure.xp, difficulty: Math.min(1.25, diff), rare: true, stack };
   } else if (w.rand() < rare.chance * (1 + st.rareFish) * (1 + st.luck * 0.01)) pick = { item: rare.item, xp: rare.xp, difficulty: rare.difficulty, rare: true };
   else {
-    const table = (sea ? SEA_FISH_TABLE : FISH_TABLE).filter((f) => f.level <= lvl);
+    const table = (pool ? GROTTO_FISH_TABLE : sea ? SEA_FISH_TABLE : FISH_TABLE).filter((f) => f.level <= lvl);
     let roll = w.rand() * table.reduce((s, f) => s + f.weight, 0);
     for (const f of table) { roll -= f.weight; if (roll <= 0) { pick = { item: f.item, xp: f.xp, difficulty: f.difficulty, rare: false }; break; } }
   }

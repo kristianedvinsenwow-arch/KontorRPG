@@ -1020,10 +1020,12 @@ export class World {
     const lvl = levelOf(p.xp, 'combat');
     this.teleport(p, portal.to.x, portal.to.z);
     if (id === 'cave') this.notice(p, 'The Old Mine. It’s cold, and something is breathing down here.');
+    if (id === 'grotto') this.count(p, 'grotto');
+    if (id === 'grotto') this.notice(p, 'Sjøgrotta. Dripping rock, glowing water, and the sea breathing somewhere below. Monsters here are level 14–17; the Kraken waits at the bottom.');
     if (id === 'gruben') this.count(p, 'gruben');
     if (id === 'fjord') { this.count(p, 'fjord'); this.notice(p, 'Saltfjorden. Salt wind, gulls, and deep green water. Sølvi in the village buys fish — and sells a proper sea rod.'); }
     if (id === 'gruben') this.notice(p, 'Gruben. The old mine valley. Lights move in the bog, and the dead still work the row.');
-    if (portal.level && lvl < portal.level) this.notice(p, `Careful: the monsters here are level 13–22, and you’re level ${lvl}.`, 'error');
+    if (portal.level && lvl < portal.level) this.notice(p, `Careful: the monsters here are level ${id === 'grotto' ? '14–18' : '13–22'}, and you’re level ${lvl}.`, 'error');
     p.job = null;
   }
 

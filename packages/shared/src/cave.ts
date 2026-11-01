@@ -3,7 +3,7 @@
  * in its own region far outside the overworld (around CAVE.x, CAVE.z). An entrance in the hills
  * teleports you there; the exit brings you back. Shape = corridors (capsules) + chambers (circles).
  */
-import { heightAt, pierDeck, GRUBEN, inGruben, FJORD, inFjord, BOAT_HOME, BOAT_FJORD } from './terrain.js';
+import { heightAt, pierDeck, GRUBEN, inGruben, FJORD, FJORD_SPOTS, inFjord, BOAT_HOME, BOAT_FJORD } from './terrain.js';
 import { CHUNK_SIZE, WORLD_HALF } from './constants.js';
 import { houseFloor } from './houses.js';
 
@@ -38,21 +38,64 @@ const distSeg = (px: number, pz: number, a: P, b: P) => {
   return Math.hypot(px - (a[0] + dx * t), pz - (a[1] + dz * t));
 };
 
-/** Is (x, z) in the cave's region at all (as opposed to the overworld)? */
-export const inCaveRegion = (x: number, z: number) => Math.abs(x - CAVE.x) < 200 && Math.abs(z - CAVE.z) < 200;
+/**
+ * Sjøgrotta, the Sea Grotto: a flooded cavern under Saltfjorden's north-eastern hills (levels
+ * 14–17), with glowing pools to fish, ore in the walls, and the Kraken's lair at the bottom.
+ * Its own patch of the underground region, well away from the Old Mine.
+ */
+export const GROTTO = { x: 400, z: 1000 };
+export const GROTTO_TUNNELS: [P, P, number][] = [
+  [[0, 6], [0, -10], 5],
+  [[0, -10], [-16, -24], 4.5],
+  [[0, -10], [17, -30], 4.5],
+  [[-16, -24], [-2, -50], 4.5],
+  [[17, -30], [-2, -50], 4],
+  [[-2, -50], [0, -70], 5],
+];
+export const GROTTO_ROOMS: { c: P; r: number; name: string }[] = [
+  { c: [0, 2], r: 7, name: 'Tide mouth' },
+  { c: [-17, -25], r: 11, name: 'Glow pools' },
+  { c: [18, -32], r: 10, name: 'Crab hollow' },
+  { c: [-2, -52], r: 10, name: 'Drowned gallery' },
+  { c: [0, -86], r: 17, name: 'The Kraken’s lair' },
+];
+/** Water you can't walk on, only fish (local centre, radius): the glowing pools, and the lair's. */
+export const GROTTO_POOLS: { c: P; r: number }[] = [
+  { c: [-21, -29], r: 4.2 }, { c: [-12, -19], r: 2.6 },
+  { c: [0, -88], r: 4 },
+];
+/** The gate into the lair (local): an arch across the last tunnel. */
+export const GROTTO_GATE = { x: GROTTO.x + 0, z: GROTTO.z - 68 };
+/** Where the lair starts (local z): everything deeper counts as the boss's room. */
+export const GROTTO_LAIR_Z = -69;
+
+/** Which underground place (x, z) is in, if any. */
+export type CaveId = 'mine' | 'grotto';
+export const caveAt = (x: number, z: number): CaveId | null =>
+  Math.abs(z - CAVE.z) >= 200 ? null : Math.abs(x - CAVE.x) < 200 ? 'mine' : Math.abs(x - GROTTO.x) < 200 ? 'grotto' : null;
+
+/** Is (x, z) underground at all (the Old Mine or the Sea Grotto), as opposed to the overworld? */
+export const inCaveRegion = (x: number, z: number) => caveAt(x, z) !== null;
 
 /** How far inside the walkable cave a point is (positive = inside, metres to the nearest wall). */
 export function caveClearance(x: number, z: number): number {
-  const lx = x - CAVE.x, lz = z - CAVE.z;
+  const grotto = caveAt(x, z) === 'grotto';
+  const O = grotto ? GROTTO : CAVE, lx = x - O.x, lz = z - O.z;
   let best = -Infinity;
-  for (const [a, b, w] of CAVE_TUNNELS) best = Math.max(best, w / 2 - distSeg(lx, lz, a, b));
-  for (const r of CAVE_ROOMS) best = Math.max(best, r.r - Math.hypot(lx - r.c[0], lz - r.c[1]));
+  for (const [a, b, w] of grotto ? GROTTO_TUNNELS : CAVE_TUNNELS) best = Math.max(best, w / 2 - distSeg(lx, lz, a, b));
+  for (const r of grotto ? GROTTO_ROOMS : CAVE_ROOMS) best = Math.max(best, r.r - Math.hypot(lx - r.c[0], lz - r.c[1]));
+  // The pools are water: not walkable (you fish them from the edge).
+  if (grotto) for (const p of GROTTO_POOLS) best = Math.min(best, Math.hypot(lx - p.c[0], lz - p.c[1]) - p.r);
   return best;
 }
+
+/** In one of the grotto's pools (for fishing). */
+export const inGrottoPool = (x: number, z: number) => caveAt(x, z) === 'grotto' && GROTTO_POOLS.some((p) => Math.hypot(x - GROTTO.x - p.c[0], z - GROTTO.z - p.c[1]) < p.r);
 
 /** Cave floor: gentle bumps, sloping down the deeper you go. */
 export function caveFloor(x: number, z: number): number {
   const lz = z - CAVE.z;
+  if (caveAt(x, z) === 'grotto') return -0.03 * Math.max(0, -lz) + Math.sin(x * 0.5 + z * 0.2) * 0.12 + Math.cos(z * 0.45) * 0.1;
   return -0.04 * Math.max(0, -lz) + Math.sin(x * 0.7) * 0.08 + Math.cos(z * 0.6) * 0.08;
 }
 
@@ -103,6 +146,9 @@ export const regionAt = (x: number, z: number): Region => (inCaveRegion(x, z) ? 
 /** `use`: taken with E (a rowboat) instead of by walking in. */
 export interface Portal { id: string; name: string; at: { x: number; z: number; r: number }; to: { x: number; z: number }; level?: number; use?: boolean }
 export const GRUBEN_PASS = { x: 99, z: 49.5, r: 2.6 };
+/** Sjøgrotta's mouth, in Saltfjorden's north-eastern hills, and where you come back out. */
+export const GROTTO_ENTRANCE = { x: FJORD.x + FJORD_SPOTS.grotto.x, z: FJORD.z + FJORD_SPOTS.grotto.z - 1.5, r: 2.4 };
+export const GROTTO_EXIT_OUT = { x: FJORD.x + FJORD_SPOTS.grotto.x, z: FJORD.z + FJORD_SPOTS.grotto.z + 3.5 };
 /** Rowboats at the end of Bjørkvik's pier and Saltfjorden's jetty: press E to row across. */
 const step = (p: { x: number; z: number }, dx: number, dz: number) => ({ x: p.x + dx, z: p.z + dz });
 export const PORTALS: Portal[] = [
@@ -111,8 +157,11 @@ export const PORTALS: Portal[] = [
   { id: 'gruben', name: 'The pass to Gruben', at: GRUBEN_PASS, to: { x: GRUBEN.x, z: GRUBEN.z + 58 }, level: 12 },
   { id: 'fjord', name: 'Rowboat to Saltfjorden', at: { ...BOAT_HOME, r: 2 }, to: step(BOAT_FJORD, 1.5, 0), use: true },
   { id: 'fjord_out', name: 'Rowboat to Bjørkvik', at: { ...BOAT_FJORD, r: 2 }, to: BOAT_HOME, use: true },
+  { id: 'grotto', name: 'Sjøgrotta', at: GROTTO_ENTRANCE, to: { x: GROTTO.x, z: GROTTO.z + 2 }, level: 14 },
+  { id: 'grotto_out', name: 'Out of the grotto', at: { x: GROTTO.x, z: GROTTO.z + 6.5, r: 2 }, to: GROTTO_EXIT_OUT },
   { id: 'gruben_out', name: 'Back to the valley', at: { x: GRUBEN.x, z: GRUBEN.z + 64, r: 2.6 }, to: { x: GRUBEN_PASS.x - 4.5, z: GRUBEN_PASS.z - 2.5 } },
 ];
 export const PORTAL_BY_ID: Map<string, Portal> = new Map(PORTALS.map((p) => [p.id, p]));
 
 export const caveRoomCentre = (i: number) => ({ x: CAVE.x + CAVE_ROOMS[i].c[0], z: CAVE.z + CAVE_ROOMS[i].c[1] });
+export const grottoRoomCentre = (i: number) => ({ x: GROTTO.x + GROTTO_ROOMS[i].c[0], z: GROTTO.z + GROTTO_ROOMS[i].c[1] });

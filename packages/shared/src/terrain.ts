@@ -63,11 +63,15 @@ export const STALL = (() => {
 export const ULVEDAL = { x: -80, z: -14, r: 15, h: 3.5 };
 
 /** The lakeside manor: across the lake from Bjørkvik, on a levelled terrace under the mountains. */
-export const MANOR = { x: -78, z: 102, r: 17, h: 4.2 };
+export const MANOR = { x: -81, z: 108, r: 17, h: 3.2 };
+/** Which way the manor faces (towards the lake), and its lawn, levelled down to near the water. */
+const MANOR_FACE = (() => { const dx = -56 - MANOR.x, dz = 58 - MANOR.z, l = Math.hypot(dx, dz); return { ux: dx / l, uz: dz / l }; })();
+export const MANOR_GATE = { x: MANOR.x + MANOR_FACE.ux * 20.6, z: MANOR.z + MANOR_FACE.uz * 20.6 };
+export const MANOR_LAWN = { x: MANOR.x + MANOR_FACE.ux * 28, z: MANOR.z + MANOR_FACE.uz * 28, r: 11, h: 1.1 };
 /** The road round the lake's east and south shore from Bjørkvik to the manor gate. Where it crosses
  *  the low, wet ground it runs on a raised causeway. */
-export const LAKE_ROAD: [number, number][] = [[-30, 62], [-30, 72], [-32, 82], [-38, 89], [-48, 93], [-57, 91], [-64, 87.5], [-68.8, 84.6]];
-const ROAD_BOX = { x0: -76, x1: -24, z0: 56, z1: 96 };
+export const LAKE_ROAD: [number, number][] = [[-30, 62], [-30, 72], [-32, 82], [-38, 89], [-48, 93], [-57, 92], [MANOR_GATE.x + 2, MANOR_GATE.z - 1], [MANOR_GATE.x, MANOR_GATE.z]];
+const ROAD_BOX = { x0: -80, x1: -24, z0: 56, z1: 100 };
 function roadDist(x: number, z: number): number {
   let best = Infinity;
   for (let i = 0; i < LAKE_ROAD.length - 1; i++) {
@@ -117,6 +121,8 @@ export const FJORD = { x: -1056, z: 0, half: 96, name: 'Saltfjorden' };
 export const FJORD_SPOTS = {
   arrival: { x: 44, z: -66, r: 9, h: 5 },
   village: { x: 34, z: 8, r: 12, h: 2.4 },
+  /** A shelf in the north-eastern hills where Sjøgrotta opens. */
+  grotto: { x: 58, z: -68, r: 8, h: 6 },
 };
 /** Local z of the ford across the fjord's head. */
 export const FORD_Z = -60;
@@ -178,9 +184,12 @@ export function heightAt(x: number, z: number): number {
     if (lift > 0) h = Math.max(h, h + (1.4 - h) * lift);
   }
 
-  // The manor's terrace and garden, levelled out of the foot of the mountains.
+  // The manor's terrace and garden, levelled out of the foot of the mountains, and below it a
+  // lawn running gently down to the lake (where its dock is).
+  const dLawn = Math.hypot(x - MANOR_LAWN.x, z - MANOR_LAWN.z);
+  if (dLawn < MANOR_LAWN.r + 12) h = h + (Math.max(MANOR_LAWN.h, Math.min(h, MANOR_LAWN.h + 0.6)) - h) * (1 - smooth(MANOR_LAWN.r, MANOR_LAWN.r + 12, dLawn));
   const dManor = Math.hypot(x - MANOR.x, z - MANOR.z);
-  h = h + (MANOR.h - h) * (1 - smooth(MANOR.r, MANOR.r + 14, dManor));
+  h = h + (MANOR.h - h) * (1 - smooth(MANOR.r, MANOR.r + 12, dManor));
 
   return h;
 }
@@ -196,6 +205,14 @@ export const PIER = (() => {
   while (d < len && heightAt(VILLAGE.x + ux * d, VILLAGE.z + uz * d) > 0.45) d += 0.5;
   const sx = VILLAGE.x + ux * (d - 3), sz = VILLAGE.z + uz * (d - 3);
   return { x: sx, z: sz, ux, uz, length: 17, width: 2.8, deck: 0.75 };
+})();
+
+/** The manor's little fishing dock, straight down from its gate into the lake. */
+export const MANOR_DOCK = (() => {
+  const { ux, uz } = MANOR_FACE;
+  let d = 20;
+  while (d < 80 && heightAt(MANOR.x + ux * d, MANOR.z + uz * d) > 0.45) d += 0.5;
+  return { x: MANOR.x + ux * (d - 2.5), z: MANOR.z + uz * (d - 2.5), ux, uz, length: 10, width: 2.2, deck: 0.7 };
 })();
 
 /** Saltfjorden's jetty: from the village shore out west into the fjord. */
@@ -235,7 +252,7 @@ export const BOAT_FJORD = pierEnd(FJORD_PIER);
 
 /** Deck height if (x, z) is on a pier (Bjørkvik's or Saltfjorden's jetty), else null. */
 export function pierDeck(x: number, z: number): number | null {
-  for (const P of [PIER, FJORD_PIER]) {
+  for (const P of [PIER, FJORD_PIER, MANOR_DOCK]) {
     const px = x - P.x, pz = z - P.z;
     const along = px * P.ux + pz * P.uz, side = -px * P.uz + pz * P.ux;
     if (along >= 0 && along <= P.length && Math.abs(side) <= P.width / 2) return P.deck;

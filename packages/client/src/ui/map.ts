@@ -4,7 +4,7 @@
  * Inside the mine it shows the mine's layout instead.
  */
 import {
-  CAVE, CAVE_ENTRANCE, CAVE_ROOMS, CAVE_TUNNELS, MINING_SPOTS, MOB_AREAS, MOBS, NPCS, VILLAGE, WATER_LEVEL, WORLD_HALF,
+  CAVE, CAVE_ENTRANCE, CAVE_ROOMS, GROTTO, GROTTO_ROOMS, GROTTO_ENTRANCE, caveAt, inGrottoPool, type CaveId, MINING_SPOTS, MOB_AREAS, MOBS, NPCS, VILLAGE, WATER_LEVEL, WORLD_HALF,
   ZONES, ZONE_LINKS, type ZonePlan, FLAX_FIELDS, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, PORTAL_BY_ID, SHIPWRECK, FORD_Z, fjordMid, HOMES, VEINS, STONE_QUARRIES, MANOR, caveClearance, heightAt, inCaveRegion, regionAt, type Region,
 } from '@kontor/shared';
 
@@ -19,7 +19,7 @@ const AREA: Record<'valley' | 'gruben' | 'fjord', { x: number; z: number; half: 
   fjord: { x: FJORD.x, z: FJORD.z, half: FJORD.half },
 };
 type Outdoor = keyof typeof AREA;
-let cave: HTMLCanvasElement | null = null;
+const caves = new Map<CaveId, HTMLCanvasElement>();
 
 function paintTerrain(r: Outdoor): HTMLCanvasElement {
   const A = AREA[r];
@@ -46,21 +46,26 @@ function paintTerrain(r: Outdoor): HTMLCanvasElement {
   return c;
 }
 
-const X0 = -30, X1 = 45, Z0 = -96, Z1 = 14;
-function paintCave(): HTMLCanvasElement {
+/** The underground place you're in: its origin, the painted bounds, and its named chambers. */
+const CAVE_MAPS: Record<CaveId, { O: { x: number; z: number }; X0: number; X1: number; Z0: number; Z1: number; rooms: { c: [number, number]; name: string }[]; title: string }> = {
+  mine: { O: CAVE, X0: -30, X1: 45, Z0: -96, Z1: 14, rooms: CAVE_ROOMS, title: 'The Old Mine' },
+  grotto: { O: GROTTO, X0: -36, X1: 36, Z0: -108, Z1: 14, rooms: GROTTO_ROOMS, title: 'Sjøgrotta — the Sea Grotto' },
+};
+const whichCave = (): CaveId => (mapInfo.me && caveAt(mapInfo.me.x, mapInfo.me.z)) || 'mine';
+function paintCave(id: CaveId): HTMLCanvasElement {
+  const { O, X0, X1, Z0, Z1 } = CAVE_MAPS[id];
   const c = document.createElement('canvas');
   const N = 220;
   c.width = c.height = N;
   const g = c.getContext('2d')!;
   const img = g.createImageData(N, N);
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
-    const x = CAVE.x + X0 + (i / N) * (X1 - X0), z = CAVE.z + Z0 + (j / N) * (Z1 - Z0);
-    const inside = caveClearance(x, z) > 0;
+    const x = O.x + X0 + (i / N) * (X1 - X0), z = O.z + Z0 + (j / N) * (Z1 - Z0);
+    const inside = caveClearance(x, z) > 0, water = id === 'grotto' && inGrottoPool(x, z);
     const k = (j * N + i) * 4;
-    img.data.set(inside ? [92, 86, 78, 255] : [22, 20, 18, 255], k);
+    img.data.set(water ? [48, 150, 150, 255] : inside ? (id === 'grotto' ? [70, 88, 96, 255] : [92, 86, 78, 255]) : [22, 20, 18, 255], k);
   }
   g.putImageData(img, 0, 0);
-  void CAVE_ROOMS; void CAVE_TUNNELS;
   return c;
 }
 
@@ -152,11 +157,12 @@ function drawZone(region: Region): HTMLElement {
   const under = region === 'cave';
   let toPx: (x: number, z: number) => [number, number];
   if (under) {
-    cave ??= paintCave();
+    const id = whichCave(), M = CAVE_MAPS[id];
+    if (!caves.has(id)) caves.set(id, paintCave(id));
     g.imageSmoothingEnabled = true;
-    g.drawImage(cave, 0, 0, SIZE, SIZE);
-    toPx = (x, z) => [((x - CAVE.x - X0) / (X1 - X0)) * SIZE, ((z - CAVE.z - Z0) / (Z1 - Z0)) * SIZE];
-    for (const r of CAVE_ROOMS) { const [px, py] = toPx(CAVE.x + r.c[0], CAVE.z + r.c[1]); label(g, r.name, px, py, '#e8dcc0'); }
+    g.drawImage(caves.get(id)!, 0, 0, SIZE, SIZE);
+    toPx = (x, z) => [((x - M.O.x - M.X0) / (M.X1 - M.X0)) * SIZE, ((z - M.O.z - M.Z0) / (M.Z1 - M.Z0)) * SIZE];
+    for (const r of M.rooms) { const [px, py] = toPx(M.O.x + r.c[0], M.O.z + r.c[1]); label(g, r.name, px, py, '#e8dcc0'); }
   } else {
     const r = region as Outdoor, A = AREA[r];
     if (!painted.has(r)) painted.set(r, paintTerrain(r));
@@ -177,6 +183,7 @@ function drawZone(region: Region): HTMLElement {
       mark(FJORD.x + FJORD_SPOTS.village.x, FJORD.z + FJORD_SPOTS.village.z, 'Fishing village', '#f2a23a', 7);
       { const b = PORTAL_BY_ID.get('fjord_out')!.at; mark(b.x, b.z, 'Rowboat to Bjørkvik', '#b77be8', 5); }
       mark(SHIPWRECK.x, SHIPWRECK.z, 'The wreck — the Drowned Captain (lv 15)', '#b77be8', 6);
+      mark(GROTTO_ENTRANCE.x, GROTTO_ENTRANCE.z, 'Sjøgrotta — sea cave, lv 14–18, the Kraken', '#b77be8', 6);
       mark(FJORD.x + fjordMid(FORD_Z), FJORD.z + FORD_Z, 'The ford', '#d8c890', 4);
     } else {
       const S = GRUBEN_SPOTS;
@@ -222,10 +229,12 @@ export function drawMinimap(c: HTMLCanvasElement, mobs: { x: number; z: number; 
   const k = R / MINI_R; // px per metre
   const toPx = (x: number, z: number): [number, number] => [R + (x - me.x) * k, R + (z - me.z) * k];
   if (region === 'cave') {
-    cave ??= paintCave();
-    const sx = cave.width / (X1 - X0), sz = cave.height / (Z1 - Z0);
+    const id = caveAt(me.x, me.z) ?? 'mine', M = CAVE_MAPS[id];
+    if (!caves.has(id)) caves.set(id, paintCave(id));
+    const img = caves.get(id)!;
+    const sx = img.width / (M.X1 - M.X0), sz = img.height / (M.Z1 - M.Z0);
     g.fillStyle = '#16140f'; g.fillRect(0, 0, S, S);
-    g.drawImage(cave, (me.x - CAVE.x - X0 - MINI_R) * sx, (me.z - CAVE.z - Z0 - MINI_R) * sz, MINI_R * 2 * sx, MINI_R * 2 * sz, 0, 0, S, S);
+    g.drawImage(img, (me.x - M.O.x - M.X0 - MINI_R) * sx, (me.z - M.O.z - M.Z0 - MINI_R) * sz, MINI_R * 2 * sx, MINI_R * 2 * sz, 0, 0, S, S);
   } else {
     const r = region as Outdoor, A = AREA[r];
     if (!painted.has(r)) painted.set(r, paintTerrain(r));
@@ -259,5 +268,5 @@ function label(g: CanvasRenderingContext2D, text: string, x: number, y: number, 
 export function mapTitle(): string {
   if (view.world) return 'The world — zones by the order you reach them';
   const r = view.zone ?? hereRegion();
-  return r === 'cave' ? 'The Old Mine' : r === 'gruben' ? 'Gruben — the old mine valley' : r === 'fjord' ? 'Saltfjorden — the fishing fjord' : 'Mofjellet and Bjørkvik';
+  return r === 'cave' ? CAVE_MAPS[whichCave()].title : r === 'gruben' ? 'Gruben — the old mine valley' : r === 'fjord' ? 'Saltfjorden — the fishing fjord' : 'Mofjellet and Bjørkvik';
 }

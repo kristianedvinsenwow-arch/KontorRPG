@@ -6,7 +6,7 @@
  * Local frame: origin at the house centre, −Z towards the door (the yard it faces), +X to the
  * right as you walk in... mirrored, but consistent everywhere via toWorld / toLocal.
  */
-import { GRUBEN, VILLAGE, MANOR, LAKE, heightAt } from './terrain.js';
+import { GRUBEN, VILLAGE, MANOR, heightAt } from './terrain.js';
 
 export type HouseKind = 'cottage' | 'hut' | 'manor';
 export interface HouseFrame {
@@ -52,7 +52,7 @@ export const HOUSES: HouseFrame[] = [
   frame(10, 'cottage', 'Lakeview cottage', V.x + 8, V.z + 17, V.x, V.z),
   frame(11, 'hut', 'East miners’ hut', G.x + 13, G.z + 59, G.x, G.z + 54),
   frame(12, 'hut', 'West miners’ hut', G.x - 12, G.z + 47, G.x, G.z + 54),
-  frame(13, 'manor', 'Lakeside Manor', MANOR.x, MANOR.z, LAKE.x + 6, LAKE.z),
+  frame(13, 'manor', 'Lakeside Manor', MANOR.x, MANOR.z, -56, 58),
 ];
 export const MANOR_ID = 13;
 

@@ -39,17 +39,17 @@ function swapSkin(root: THREE.Object3D, from: number, to: THREE.Material) {
   });
 }
 
-const quad = (k: MobKind) => k === 'wolf' || k === 'lynx' || k === 'giant_crab';
-const isNaga = (k: MobKind) => k === 'naga' || k === 'naga_siren';
+const quad = (k: MobKind) => k === 'wolf' || k === 'lynx' || k === 'giant_crab' || k === 'grotto_crab';
+const isNaga = (k: MobKind) => k === 'naga' || k === 'naga_siren' || k === 'deep_naga';
 const OGRES: MobKind[] = ['troll', 'hill_troll'];
 const isOgre = (k: MobKind) => OGRES.includes(k);
-const isUndead = (k: MobKind) => k === 'draug' || k === 'mine_king' || k === 'drowned' || k === 'drowned_captain';
+const isUndead = (k: MobKind) => k === 'draug' || k === 'mine_king' || k === 'drowned' || k === 'drowned_captain' || k === 'tide_wraith';
 
 export function humanoid(kind: MobKind): { g: THREE.Group; c: Character } {
   const race = isOgre(kind) ? 'ogre' : isUndead(kind) || isNaga(kind) ? 'human' : 'gnome';
-  const color = kind === 'cave_shaman' ? 4 : kind === 'troll' ? 7 : kind === 'hill_troll' ? 3 : kind === 'cave_goblin' ? 0 : kind === 'naga_siren' ? 4 : isNaga(kind) ? 5 : kind === 'drowned' || kind === 'drowned_captain' ? 1 : isUndead(kind) ? 7 : 3;
+  const color = kind === 'cave_shaman' ? 4 : kind === 'troll' ? 7 : kind === 'hill_troll' ? 3 : kind === 'cave_goblin' ? 0 : kind === 'naga_siren' ? 4 : isNaga(kind) ? 5 : kind === 'drowned' || kind === 'drowned_captain' || kind === 'tide_wraith' ? 1 : isUndead(kind) ? 7 : 3;
   const c = makeCharacter(color, undefined, race, isOgre(kind) ? 3 : 1);
-  const skinHex = kind === 'troll' ? 0x7d8790 : kind === 'hill_troll' ? 0x8a7a62 : isNaga(kind) ? 0x4f9a86 : kind === 'drowned' || kind === 'drowned_captain' ? 0x7a9a8a : isUndead(kind) ? 0x8fa3a8 : kind === 'cave_goblin' ? 0x5f7a48 : 0x7a9a4a;
+  const skinHex = kind === 'troll' ? 0x7d8790 : kind === 'hill_troll' ? 0x8a7a62 : kind === 'deep_naga' ? 0x2f5a6a : isNaga(kind) ? 0x4f9a86 : kind === 'tide_wraith' ? 0x9fd8e0 : kind === 'drowned' || kind === 'drowned_captain' ? 0x7a9a8a : isUndead(kind) ? 0x8fa3a8 : kind === 'cave_goblin' ? 0x5f7a48 : 0x7a9a4a;
   const skin = mat(skinHex, null, { r: 0.7 });
   swapSkin(c.g, race === 'ogre' ? 0x9fa478 : 0xd1a582, skin);
   // Goblin ears.
@@ -66,6 +66,14 @@ export function humanoid(kind: MobKind): { g: THREE.Group; c: Character } {
     // Seaweed hanging off them.
     const weed = mat(0x3a5a2a, 'cloth', { r: 1 });
     for (let i = 0; i < 6; i++) { const w = mesh(new THREE.ConeGeometry(0.03, 0.35, 4), weed, c.upper); w.position.set(-0.2 + i * 0.08, 0.55 - (i % 2) * 0.2, -0.16); w.rotation.x = Math.PI; }
+  }
+  if (kind === 'tide_wraith') {
+    // A drowned ghost: pale, see-through, trailing a ragged hem instead of legs, glowing a little.
+    for (const l of c.legs) l.hip.visible = false;
+    const ghost = new THREE.MeshStandardMaterial({ color: 0x9fe0e8, emissive: 0x3fa8c0, emissiveIntensity: 0.6, transparent: true, opacity: 0.55, roughness: 0.3 });
+    const hem = mesh(new THREE.ConeGeometry(0.32, 0.9, 10, 1, true), ghost, c.g); hem.position.y = c.hipY - 0.35; hem.rotation.x = Math.PI;
+    c.g.traverse((o) => { const m = o as THREE.Mesh; if (m.isMesh && m !== hem) { const mm = (m.material as THREE.MeshStandardMaterial).clone(); mm.transparent = true; mm.opacity = 0.6; mm.emissive = new THREE.Color(0x2a7890); mm.emissiveIntensity = 0.4; m.material = mm; } });
+    c.g.position.y += 0.35; // it floats
   }
   if (kind === 'drowned_captain') {
     // A sodden tricorn.
@@ -84,7 +92,7 @@ export function humanoid(kind: MobKind): { g: THREE.Group; c: Character } {
     cave_goblin: { h: 'iron_sword', hd: 'stone_helm' }, goblin: { h: 'stone_sword' },
     draug: { h: 'iron_pickaxe', hd: 'iron_helm', c: 'stone_breastplate' },
     mine_king: { h: 'silversteel_longsword', c: 'steel_breastplate', s: 'steel_pauldrons' },
-    naga: { h: 'iron_spear' }, naga_siren: { h: 'birch_frost_staff' },
+    naga: { h: 'iron_spear' }, naga_siren: { h: 'birch_frost_staff' }, deep_naga: { h: 'harpoon' }, tide_wraith: { h: 'pine_frost_staff' },
     drowned: { h: 'iron_sword' }, drowned_captain: { h: 'captains_cutlass', c: 'iron_breastplate' },
   };
   applyGear(c, gear[kind] ?? {});
@@ -93,7 +101,7 @@ export function humanoid(kind: MobKind): { g: THREE.Group; c: Character } {
   if (isNaga(kind)) {
     // No legs: a long scaled tail from the hips, down to the ground and trailing behind.
     for (const l of c.legs) l.hip.visible = false;
-    const scales = mat(kind === 'naga_siren' ? 0x3a7a8a : 0x3f8a5a, 'cloth', { r: 0.5 }), belly = mat(0xd8c890, null, { r: 0.7 });
+    const scales = mat(kind === 'naga_siren' ? 0x3a7a8a : kind === 'deep_naga' ? 0x1e3e52 : 0x3f8a5a, 'cloth', { r: 0.5 }), belly = mat(0xd8c890, null, { r: 0.7 });
     const tail = new THREE.Group(); tail.position.set(0, c.hipY, 0.02); c.g.add(tail);
     let prev = new THREE.Vector3(0, 0, 0), r = 0.17;
     const pts = [[0, -0.35, 0.05], [0, -0.7, 0.2], [0, -0.82, 0.55], [0.1, -0.86, 0.9], [-0.05, -0.88, 1.25], [0.12, -0.9, 1.55]];
@@ -110,9 +118,11 @@ export function humanoid(kind: MobKind): { g: THREE.Group; c: Character } {
   return { g, c };
 }
 
-function crab(): { g: THREE.Group; legs: THREE.Object3D[] } {
+function crab(grotto = false): { g: THREE.Group; legs: THREE.Object3D[] } {
   const g = new THREE.Group();
-  const shell = mat(0xb8402a, null, { r: 0.6 }), dark = mat(0x6a2014, null, { r: 0.6 }), eye = mat(0x111111, null);
+  // Grotto crabs: blue-black shells crusted with glowing spots.
+  const shell = mat(grotto ? 0x2a3e5a : 0xb8402a, null, { r: 0.6 }), dark = mat(grotto ? 0x18243a : 0x6a2014, null, { r: 0.6 }), eye = mat(0x111111, null);
+  if (grotto) { const glow = new THREE.MeshStandardMaterial({ color: 0x60f0d0, emissive: 0x40e0c0, emissiveIntensity: 1.6 }); for (const [x, z] of [[-0.25, -0.1], [0.2, 0.1], [0, 0.25], [0.3, -0.15], [-0.15, 0.2]]) ball(g, v3(x, 0.6, z), 0.04, glow, 6); }
   const body = ball(g, v3(0, 0.42, 0), 0.42, shell, 14); body.scale.set(1.35, 0.5, 1);
   for (const sx of [-1, 1]) {
     ball(g, v3(sx * 0.12, 0.62, -0.32), 0.04, eye, 6);
@@ -133,6 +143,40 @@ function crab(): { g: THREE.Group; legs: THREE.Object3D[] } {
     const pinch = ball(arm, v3(sx * 0.12, 0.12, -0.62), 0.07, dark, 6); pinch.scale.set(0.6, 0.5, 1.4);
   }
   return { g, legs };
+}
+
+/**
+ * The Kraken: a great mottled head half out of its pool, two huge eyes, a beak, and eight thick
+ * tentacles reaching out of the water around it (they sway and curl; see update()).
+ */
+function kraken(): { g: THREE.Group; arms: THREE.Object3D[] } {
+  const g = new THREE.Group();
+  const skin = mat(0x8a3a4a, null, { r: 0.5 }), under = mat(0xd89aa0, null, { r: 0.6 }), dark = mat(0x4a1a28, null, { r: 0.6 });
+  const eyeW = new THREE.MeshStandardMaterial({ color: 0xf0e8a0, emissive: 0xc8b040, emissiveIntensity: 0.8 }), pupil = mat(0x080808, null);
+  g.position.y = -0.35; // half sunk in its pool
+  const head = ball(g, v3(0, 0.55, 0.15), 0.62, skin, 18); head.scale.set(1.1, 0.95, 1.1);
+  ball(g, v3(0, 1.0, 0.45), 0.42, skin, 14).scale.set(0.95, 1.0, 1.15); // the mantle, swept back
+  for (let i = 0; i < 9; i++) ball(g, v3(Math.sin(i * 2.1) * 0.45, 0.5 + (i % 3) * 0.35, 0.15 + Math.cos(i * 2.1) * 0.45), 0.06, dark, 6); // mottling
+  for (const sx of [-1, 1]) {
+    const e = ball(g, v3(sx * 0.32, 0.72, -0.38), 0.15, eyeW, 12); e.scale.set(1, 0.8, 0.6);
+    const p = ball(g, v3(sx * 0.32, 0.72, -0.47), 0.06, pupil, 8); p.scale.set(1.6, 0.5, 0.5);
+  }
+  const beak = mesh(new THREE.ConeGeometry(0.1, 0.22, 6), dark, g); beak.position.set(0, 0.32, -0.52); beak.rotation.x = -Math.PI / 2 - 0.4;
+  const arms: THREE.Object3D[] = [];
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2 + 0.2;
+    const arm = new THREE.Group(); arm.position.set(Math.sin(a) * 0.5, 0.15, Math.cos(a) * 0.5); arm.rotation.y = a; g.add(arm);
+    // Each tentacle: tapering segments rising out of the water and curling over at the tip.
+    let parent: THREE.Object3D = arm, r0 = 0.16;
+    for (let i = 0; i < 6; i++) {
+      const seg = new THREE.Group(); seg.position.set(0, i ? 0.32 : 0, 0); seg.rotation.x = i ? -0.22 : 1.15; parent.add(seg); // out over the water, then curling up
+      mesh(new THREE.CylinderGeometry(r0 * 0.82, r0, 0.34, 8).translate(0, 0.17, 0), skin, seg);
+      for (const sx of [-1, 1]) ball(seg, v3(sx * r0 * 0.4, 0.17, r0 * 0.75), r0 * 0.25, under, 5); // suckers
+      parent = seg; r0 *= 0.82;
+    }
+    arms.push(arm);
+  }
+  return { g, arms };
 }
 
 function lynx(): { g: THREE.Group; legs: THREE.Object3D[] } {
@@ -243,7 +287,8 @@ export class Mobs {
     else if (s.k === 'lynx') { const w = lynx(); body.add(w.g); legs = w.legs; }
     else if (s.k === 'bat') { const b = bat(); body.add(b.g); wings = b.wings; }
     else if (s.k === 'wisp') { const b = wisp(); body.add(b.g); wings = b.wings; }
-    else if (s.k === 'giant_crab') { const w = crab(); body.add(w.g); legs = w.legs; }
+    else if (s.k === 'giant_crab' || s.k === 'grotto_crab') { const w = crab(s.k === 'grotto_crab'); body.add(w.g); legs = w.legs; }
+    else if (s.k === 'kraken') { const k = kraken(); body.add(k.g); legs = k.arms; }
     else { const h = humanoid(s.k); body.add(h.g); char = h.c; }
     const tail = (body.children[0]?.userData as { tail?: THREE.Object3D } | undefined)?.tail;
     body.scale.setScalar(isOgre(s.k) ? def.scale / 1.16 : def.scale);
@@ -314,6 +359,11 @@ export class Mobs {
       // Animation per kind.
       if (v.char) animateCharacter(v.char, frozen ? 0 : v.speed, 0, !!s.act && !frozen, frozen ? 0 : dt);
       if (v.tail) v.tail.rotation.y = Math.sin(v.ph * 0.8 + performance.now() / 700) * (0.15 + Math.min(0.25, v.speed * 0.06));
+      if (v.kind === 'kraken') {
+        // Tentacles weave slowly, and lash when it attacks.
+        const t = now / 1000, lash = v.s.act === 'atk' || v.s.act === 'slam' ? 0.5 : 0;
+        v.legs.forEach((l, i) => { l.rotation.z = Math.sin(t * 0.9 + i * 0.8) * 0.18; l.rotation.x = Math.sin(t * 1.3 + i) * 0.12 - lash * Math.sin(t * 9 + i); });
+      } else
       v.legs.forEach((l, i) => (l.rotation.x = Math.sin(v.ph + (i % 2 ? Math.PI : 0) + (i > 1 ? Math.PI / 2 : 0)) * Math.min(0.7, v.speed * 0.15)));
       if (quad(v.kind)) v.body.rotation.x = -v.atkT * 0.35;
       if (v.kind === 'wisp') v.wings.forEach((w, i) => (w.rotation.y = v.ph + i * Math.PI));

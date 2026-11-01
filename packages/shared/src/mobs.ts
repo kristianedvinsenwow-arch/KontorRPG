@@ -2,10 +2,10 @@
  * Monsters and where they live. The server runs their AI; clients draw them from snapshots.
  * Small-number scale (design doc §5): a level-1 player hits for ~11 with a stone sword.
  */
-import { caveRoomCentre, CAVE } from './cave.js';
+import { caveRoomCentre, grottoRoomCentre, CAVE, GROTTO } from './cave.js';
 import { heightAt, GRUBEN, GRUBEN_SPOTS, FJORD, SHIPWRECK } from './terrain.js';
 
-export type MobKind = 'wolf' | 'goblin' | 'bat' | 'cave_goblin' | 'cave_shaman' | 'troll' | 'lynx' | 'draug' | 'wisp' | 'hill_troll' | 'mine_king' | 'naga' | 'naga_siren' | 'giant_crab' | 'drowned' | 'drowned_captain';
+export type MobKind = 'wolf' | 'goblin' | 'bat' | 'cave_goblin' | 'cave_shaman' | 'troll' | 'lynx' | 'draug' | 'wisp' | 'hill_troll' | 'mine_king' | 'naga' | 'naga_siren' | 'giant_crab' | 'drowned' | 'drowned_captain' | 'grotto_crab' | 'deep_naga' | 'tide_wraith' | 'kraken';
 
 export type Drop =
   | { item: string; chance: number; qty: [number, number] }
@@ -40,6 +40,12 @@ export interface MobDef {
   adds?: number;
   scale: number;
   flying?: boolean;
+  /** Never moves from its spawn (the Kraken in its pool). */
+  rooted?: boolean;
+  /** Boss: every n seconds, tentacles burst up under up to `count` fighters (a ring warns first). */
+  erupt?: { every: number; r: number; mult: number; count: number };
+  /** Boss: on enraging, a cloud of ink blinds everyone close for a few seconds. */
+  ink?: boolean;
 }
 
 export const MOBS: Record<MobKind, MobDef> = {
@@ -68,6 +74,16 @@ export const MOBS: Record<MobKind, MobDef> = {
   drowned_captain: { kind: 'drowned_captain', name: 'The Drowned Captain', level: 15, hp: 650, dmg: 11, interval: 2.4, range: 2.8, speed: 3.3, aggro: 16, armour: 14, ward: 8, xp: 1000, gold: [20, 40],
     drops: [{ item: 'pearl', chance: 0.6, qty: [1, 2] }, { gear: 2, chance: 0.5, legendary: 0.03 }, { gear: 3, chance: 0.2 }, { item: 'captains_cutlass', chance: 0.05, qty: [1, 1] }, { item: 'captains_hat', chance: 0.06, qty: [1, 1] }, { item: 'chaplains_breastplate', chance: 0.05, qty: [1, 1] }, { item: 'spear_plans', chance: 0.12, qty: [1, 1] }],
     respawnSec: [60 * 60, 100 * 60], boss: true, slam: { every: 11, r: 4.5, mult: 1.7 }, enrage: 0.25, adds: 0.5, scale: 1.25 },
+  // Sjøgrotta, the Sea Grotto (levels 14–18)
+  grotto_crab: { kind: 'grotto_crab', name: 'Grotto crab', level: 14, hp: 150, dmg: 8, interval: 2.3, range: 2.1, speed: 2.8, aggro: 8, armour: 20, ward: 5, xp: 150, gold: [0, 0],
+    drops: [{ item: 'raw_crab', chance: 0.8, qty: [1, 3] }, { item: 'crab_shell', chance: 0.6, qty: [1, 3] }, { item: 'sea_glass', chance: 0.12, qty: [1, 1] }, { item: 'coral', chance: 0.15, qty: [1, 2] }], respawnSec: [100, 160], scale: 1.2 },
+  deep_naga: { kind: 'deep_naga', name: 'Deep naga', level: 16, hp: 165, dmg: 9.5, interval: 1.9, range: 2.3, speed: 3.9, aggro: 12, armour: 13, ward: 9, xp: 200, gold: [2, 6],
+    drops: [{ item: 'naga_scale', chance: 0.6, qty: [1, 3] }, { item: 'sea_glass', chance: 0.1, qty: [1, 1] }, { gear: 3, chance: 0.06 }, { item: 'pearl', chance: 0.03, qty: [1, 1] }], skin: { item: 'naga_hide', qty: [2, 3] }, respawnSec: [120, 200], scale: 0.95 },
+  tide_wraith: { kind: 'tide_wraith', name: 'Tide wraith', level: 17, hp: 120, dmg: 10, interval: 2.3, range: 14, speed: 3.6, aggro: 15, armour: 4, ward: 16, magic: true, xp: 210, gold: [1, 4],
+    drops: [{ item: 'grave_dust', chance: 0.5, qty: [1, 3] }, { item: 'wisp_essence', chance: 0.2, qty: [1, 1] }, { gear: 3, chance: 0.06 }], respawnSec: [140, 220], scale: 1 },
+  kraken: { kind: 'kraken', name: 'The Kraken', level: 18, hp: 1800, dmg: 15, interval: 2.2, range: 6.5, speed: 0, aggro: 18, armour: 18, ward: 14, xp: 2600, gold: [40, 80],
+    drops: [{ item: 'pearl', chance: 1, qty: [2, 4] }, { gear: 3, chance: 0.7, legendary: 0.05 }, { gear: 4, chance: 0.2 }, { item: 'krakens_eye', chance: 0.08, qty: [1, 1] }, { item: 'kraken_ink', chance: 1, qty: [2, 4] }],
+    respawnSec: [90 * 60, 150 * 60], boss: true, rooted: true, slam: { every: 13, r: 7.5, mult: 1.6 }, erupt: { every: 7, r: 2.6, mult: 1.5, count: 3 }, ink: true, enrage: 0.3, adds: 0.6, scale: 3.4 },
   // Gruben (levels 13–22)
   lynx: { kind: 'lynx', name: 'Lynx', level: 13, hp: 95, dmg: 6.5, interval: 1.5, range: 1.8, speed: 5, aggro: 9, armour: 8, ward: 6, xp: 130, gold: [0, 0],
     drops: [{ item: 'raw_wolf_meat', chance: 0.4, qty: [1, 2] }], skin: { item: 'lynx_pelt', qty: [1, 2] }, respawnSec: [90, 160], scale: 0.9 },
@@ -133,6 +149,18 @@ function spawns(): Spawn[] {
   out.push({ id: 'drowned-captain', kind: 'drowned_captain', x: S.x, z: S.z + S.length / 2 - 2, leash: 30 });
   out.push({ id: 'captain-crew-0', kind: 'drowned', x: S.x - 1, z: S.z + 4, leash: 30, summonedBy: 'drowned-captain' });
   out.push({ id: 'captain-crew-1', kind: 'drowned', x: S.x + 1, z: S.z + 4, leash: 30, summonedBy: 'drowned-captain' });
+  // Sjøgrotta: crabs at the mouth and in their hollow, deep nagas in the gallery, wraiths in the
+  // dark, and the Kraken in the pool at the bottom (its brood of crabs scuttles out at 60%).
+  const G = (i: number) => grottoRoomCentre(i);
+  const gp: [MobKind, number, number, number][] = [
+    ['grotto_crab', 1, 3, -4], ['grotto_crab', 2, -4, 2], ['grotto_crab', 2, 4, 4], ['grotto_crab', 2, 0, -5],
+    ['deep_naga', 1, 5, 4], ['deep_naga', 3, -4, 2], ['deep_naga', 3, 4, -2], ['deep_naga', 3, 0, 5],
+    ['tide_wraith', 1, -2, 6], ['tide_wraith', 3, -6, -4], ['tide_wraith', 2, -6, -4],
+  ];
+  gp.forEach(([kind, room, dx, dz], i) => { const c = G(room); out.push({ id: `grotto-${i}`, kind, x: c.x + dx, z: c.z + dz, leash: 18 }); });
+  const lair = G(4);
+  out.push({ id: 'kraken', kind: 'kraken', x: GROTTO.x, z: GROTTO.z - 88, leash: 40 });
+  [[-8, 4], [8, 4], [0, 9]].forEach(([dx, dz], i) => out.push({ id: `kraken-brood-${i}`, kind: 'grotto_crab', x: lair.x + dx, z: lair.z + dz, leash: 30, summonedBy: 'kraken' }));
   // The Mine King's honour guard: they rise when he's down to half.
   out.push({ id: 'king-guard-0', kind: 'draug', x: pit.x - 4, z: pit.z - 8, leash: 32, summonedBy: 'mine-king' });
   out.push({ id: 'king-guard-1', kind: 'draug', x: pit.x + 4, z: pit.z - 8, leash: 32, summonedBy: 'mine-king' });

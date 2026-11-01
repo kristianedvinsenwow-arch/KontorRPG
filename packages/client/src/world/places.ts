@@ -5,7 +5,7 @@
  * checks the same spots.
  */
 import * as THREE from 'three';
-import { MANOR_PRICE, mulberry32, stationHouse, STALL, STABLE, MARKET, TOWN_GATE, CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, FJORD_PIER, SHIPWRECK, fjordMid, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
+import { GROTTO_ENTRANCE, MANOR_DOCK, MANOR_PRICE, mulberry32, stationHouse, STALL, STABLE, MARKET, TOWN_GATE, CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, FJORD_PIER, SHIPWRECK, fjordMid, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
 import { mat, bx, mesh, canvasTex } from '../engine/procgen.js';
 import { makeCharacter, animateCharacter, type Character } from '../entities/character.js';
 import { applyGear } from '../entities/held.js';
@@ -75,6 +75,7 @@ export class Places {
     this.signpost(24, 26, [['North Scree', 30, 94], ['Wolf pack ⚠', 66, 33], ['Crossroads', 0, 0]]);
     this.signpost(-38, 22, [['Goblin camp ⚠', -62, -60], ['Bjørkvik', VILLAGE.x, VILLAGE.z]]);
     this.caveMouth();
+    this.grottoMouth();
     this.signpost(86, 40, [['Gruben pass ⚠', GRUBEN_PASS.x, GRUBEN_PASS.z], ['Wolf pack ⚠', 66, 33], ['Crossroads', 0, 0]]);
     this.passGate(GRUBEN_PASS.x, GRUBEN_PASS.z, 70, 34, 'Pass to Gruben', 'Walk through · monsters level 13–22 · the Mine King');
     this.gruben();
@@ -790,6 +791,19 @@ export class Places {
       for (let k = 0; k < 6; k++) bx(gate, 0.04, 1.5, 0.04, M.iron, -sx * (0.1 + k * 0.16), 0.75, 0);
       for (const y of [0.3, 1.35]) bx(gate, 0.95, 0.05, 0.05, M.iron, -sx * 0.5, y, 0);
     }
+    // A little fishing dock down on the lake, below the lawn: planks on posts, a bench and a lantern.
+    {
+      const P = MANOR_DOCK;
+      const dk = new THREE.Group(); dk.position.set(P.x, 0, P.z); dk.rotation.y = Math.atan2(P.ux, P.uz); this.group.add(dk);
+      for (let dd = 0; dd < P.length; dd += 0.5) bx(dk, P.width, 0.08, 0.46, M.plank, 0, P.deck - 0.04, dd + 0.25);
+      for (let dd = 0.3; dd <= P.length; dd += 2.4) for (const sx of [-1, 1]) { const post = mesh(new THREE.CylinderGeometry(0.08, 0.09, 3, 7), M.darkWood, dk); post.position.set(sx * (P.width / 2 - 0.08), P.deck - 1.5, dd); }
+      bx(dk, 1.3, 0.08, 0.4, M.wood, 0, P.deck + 0.45, P.length - 1.2); // bench at the end
+      for (const sx of [-0.5, 0.5]) bx(dk, 0.08, 0.45, 0.35, M.darkWood, sx, P.deck + 0.22, P.length - 1.2);
+      const lp = new THREE.Group(); lp.position.set(P.width / 2 - 0.15, P.deck, P.length - 0.2); dk.add(lp);
+      mesh(new THREE.CylinderGeometry(0.05, 0.06, 1.8, 6).translate(0, 0.9, 0), M.darkWood, lp);
+      const lm = this.fire(lp, 1.9, 2, 7); bx(lp, 0.2, 0.26, 0.2, lm, 0, 1.9, 0);
+      tag('Manor dock', 'Cast off the end', 'place', new THREE.Vector3(P.x + P.ux * P.length, P.deck + 2, P.z + P.uz * P.length), 25);
+    }
     this.doorTag(h, DOOR_H + 0.8);
     const sign = toWorld(f, 0, gz1 - 1.5);
     tag('Lakeside Manor', `${MANOR_PRICE} g a week · the Lord’s seat · every workshop (+10% speed, +5 luck) · ${h.storage}-slot chest`, 'place', new THREE.Vector3(sign.x, heightAt(sign.x, sign.z) + TOP + 3, sign.z), 70);
@@ -1105,6 +1119,29 @@ export class Places {
     this.fires.push({ light: lamp, mats: [], base: 3, color: 0xffb060, range: 7 });
     tag('The Old Mine', 'Walk in · levels 5–12 · Old Knut', 'place', new THREE.Vector3(x, heightAt(x, z) + 3.6, z), 40);
     for (const [dx, dz] of [[-2.2, 0], [2.2, 0], [-2.6, 1.6], [2.6, 1.6], [0, 2.8]]) this.colliders.push({ x: x + dx, z: z + dz, r: 1.1 });
+  }
+
+  /** Sjøgrotta's mouth: a dark cleft in a heap of wet, barnacled rock, with a lantern on a pole. */
+  private grottoMouth(): void {
+    const { x, z } = GROTTO_ENTRANCE;
+    const g = this.place(x, z, x, z + 6);
+    const wet = mat(0x4a5a5e, null, { r: 0.5 }), barnacle = mat(0xd8d0c0, null, { r: 0.8 });
+    for (let i = 0; i < 8; i++) {
+      const r = mesh(rockGeo(80 + i, 0.8), wet, g);
+      const a = -0.7 + (i / 7) * 4.6;
+      r.scale.setScalar(1.8 + (i % 3) * 0.6);
+      r.position.set(Math.cos(a) * 3.2, 0.7 + (i % 2) * 1.3, Math.sin(a) * 3.2 + 1.6);
+      for (let k = 0; k < 4; k++) mesh(new THREE.ConeGeometry(0.08, 0.1, 5), barnacle, g).position.set(r.position.x + Math.sin(i + k) * 0.8, r.position.y + 0.9 + k * 0.1, r.position.z - 0.9);
+    }
+    const hole = mesh(new THREE.PlaneGeometry(2.4, 3.0), new THREE.MeshBasicMaterial({ color: 0x03080a }), g, false);
+    hole.position.set(0, 1.5, -0.2); hole.rotation.y = Math.PI;
+    const glow = mesh(new THREE.PlaneGeometry(1.6, 0.4), new THREE.MeshBasicMaterial({ color: 0x40d0c0, transparent: true, opacity: 0.35 }), g, false);
+    glow.position.set(0, 0.25, -0.25); glow.rotation.y = Math.PI;
+    const lp = new THREE.Group(); lp.position.set(1.9, 0, -1.0); g.add(lp);
+    mesh(new THREE.CylinderGeometry(0.06, 0.08, 2.4, 6).translate(0, 1.2, 0), M.darkWood, lp);
+    const lm = this.fire(lp, 2.4, 3, 7); bx(lp, 0.22, 0.3, 0.22, lm, 0, 2.4, 0);
+    tag('Sjøgrotta', 'Sea cave · walk in · levels 14–18 · the Kraken', 'place', new THREE.Vector3(x, heightAt(x, z) + 4.2, z), 45);
+    for (const [dx, dz] of [[-2.5, 0.2], [2.5, 0.2], [-2.9, 1.8], [2.9, 1.8], [0, 3.2]]) this.colliders.push({ x: x + dx, z: z + dz, r: 1.2 });
   }
 
   animate(dt: number, at: THREE.Vector3): void {

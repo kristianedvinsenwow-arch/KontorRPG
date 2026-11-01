@@ -58,6 +58,8 @@ add({ id: 'potions_100', name: 'Iron Stomach', text: 'Drink 100 potions.', key: 
 add({ id: 'fjord', name: 'Salt Air', text: 'Take the coast road to Saltfjorden.', key: 'fjord', goal: 1, group: 'Life' });
 add({ id: 'deeps', name: 'Deep Water', text: 'Fish up a weapon or a beast from Saltfjorden’s deeps.', key: 'deeps', goal: 1, title: 'of the Deep', group: 'Gathering' });
 add({ id: 'captain', name: 'Shipbreaker', text: 'Put the Drowned Captain to rest.', key: 'kill:drowned_captain', goal: 1, title: 'Shipbreaker', group: 'Combat' });
+add({ id: 'kraken', name: 'Krakenslayer', text: 'Kill the Kraken at the bottom of Sjøgrotta.', key: 'kill:kraken', goal: 1, title: 'Krakenslayer', group: 'Combat' });
+add({ id: 'grotto', name: 'Into the Deep', text: 'Find your way into Sjøgrotta, the sea cave.', key: 'grotto', goal: 1, group: 'Life' });
 add({ id: 'gruben', name: 'Over the Pass', text: 'Walk through the pass to Gruben.', key: 'gruben', goal: 1, group: 'Life' });
 add({ id: 'ride', name: 'Rider', text: 'Mount up for the first time.', key: 'rides', goal: 1, group: 'Life' });
 add({ id: 'home', name: 'Homebody', text: 'Rent a cottage or a miners’ hut.', key: 'house', goal: 1, title: 'Homebody', group: 'Life' });

@@ -134,7 +134,7 @@ test('XP curve: 10 × L² per level', () => {
 });
 
 test('veins exist and are on land; stone only up in Mofjellet’s mountains, iron and coal below', () => {
-  const over = VEINS.filter((v) => !v.id.startsWith('c-') && !v.id.startsWith('g-') && !v.id.startsWith('f-'));
+  const over = VEINS.filter((v) => !v.id.startsWith('c-') && !v.id.startsWith('g-') && !v.id.startsWith('f-') && !v.id.startsWith('gr-'));
   const stone = VEINS.filter((v) => v.type === 'stone');
   assert.ok(stone.length >= 14 && stone.length <= 20, `stone veins ${stone.length}`);
   for (const v of stone) assert.ok(v.id.startsWith('m') && heightAt(v.x, v.z) >= MOUNTAIN_H - 2.5 && Math.abs(v.x) < 200, `${v.id} is a mountain quarry`);

@@ -104,6 +104,8 @@ export interface Mob {
   nextThreat?: number;
   /** A slam winding up: lands at this time. */
   slamAt?: number;
+  /** The Kraken's next tentacle eruption. */
+  nextErupt?: number;
   enraged?: boolean;
   /** Who killed it with fire (its meat drops cooked). */
   firedBy?: string;

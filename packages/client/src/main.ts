@@ -8,7 +8,7 @@ import * as THREE from 'three';
 import {
   CAST_RANGE, knifeUses, EAT_LOCK_MS, pierDeck, heightAt as heightAtWorld, STATION_BY_ID, daylight, sunAt, weatherAt, HOMES, HOUSES, PORTALS, regionAt, homeAt, homeDoorway, innRoom, toWorld, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS, specialFor,
   STATIONS, TREE_BY_ID, TREE_TYPES, USE_RANGE, VEIN_BY_ID, VEIN_TYPES, WATER_LEVEL,
-  MOBS, groundAt, attackInterval, attackRange, computeStats, faceOf, inCaveRegion, isFishable, levelFromXp, skillLevel, r2, r3, swingSeconds, weaponClass,
+  MOBS, groundAt, attackInterval, attackRange, computeStats, faceOf, inCaveRegion, caveAt, isFishable, levelFromXp, skillLevel, r2, r3, swingSeconds, weaponClass,
   PICK_SEC, PLANT_BY_ID, PLANT_TYPES, type Plant, type CharacterBuild, type HoldSlot, type MobState, type PlayerStats, type Tree, type Vein,
 } from '@kontor/shared';
 import { createGfx } from './engine/renderer.js';
@@ -25,6 +25,7 @@ import { sound } from './engine/audio.js';
 import { makeHorse, animateHorse, riderEyeLift, type Horse } from './entities/horse.js';
 import { Places } from './world/places.js';
 import { CaveView } from './world/cave.js';
+import { GrottoView } from './world/grotto.js';
 import { Fx } from './world/fx.js';
 import { initTrees, setTreesDepleted, animateTrees, targetTree } from './world/trees.js';
 import { createLocalPlayer, stepPlayer, type LocalPlayer } from './physics/movement.js';
@@ -57,6 +58,7 @@ const plants = new Plants(scene);
 const precip = new Precip(scene);
 const places = new Places(scene);
 const caveView = new CaveView(scene);
+const grottoView = new GrottoView(scene);
 const mobs = new Mobs(scene);
 mobs.onVoice = (kind, mood, pos) => sound.voice(kind, mood, { x: pos.x, y: pos.y + 1, z: pos.z });
 const fx = new Fx(scene);
@@ -338,7 +340,8 @@ net.on((msg) => {
     case 'fx': {
       const from = posOf(msg.from);
       if (!from) break;
-      sound.play(msg.kind === 'arrow' ? 'bow' : msg.kind === 'firebolt' ? 'fire' : msg.kind === 'frostbolt' ? 'frost' : msg.kind === 'magic' ? 'zap' : msg.kind === 'guard' ? 'block' : msg.kind === 'mend' ? 'heal' : msg.kind, from);
+      const at = msg.x != null && msg.z != null ? new THREE.Vector3(msg.x, groundAt(msg.x, msg.z), msg.z) : from;
+      sound.play(msg.kind === 'arrow' ? 'bow' : msg.kind === 'firebolt' ? 'fire' : msg.kind === 'frostbolt' ? 'frost' : msg.kind === 'magic' ? 'zap' : msg.kind === 'guard' ? 'block' : msg.kind === 'mend' ? 'heal' : msg.kind === 'erupt' ? 'slam' : msg.kind === 'ink' ? 'ignite' : msg.kind === 'eruptWarn' ? 'none' : msg.kind, at);
       if (msg.kind === 'arrow' || msg.kind === 'firebolt' || msg.kind === 'frostbolt' || msg.kind === 'magic' || msg.kind === 'heal') {
         const start = msg.from === myId && me ? new THREE.Vector3(me.x, me.y + eyeHeight - 0.2, me.z).add(new THREE.Vector3(-Math.sin(me.yaw), 0, -Math.cos(me.yaw)).multiplyScalar(0.6)) : from;
         const to = msg.to;
@@ -353,6 +356,16 @@ net.on((msg) => {
         const gp = mobs.position(msg.from);
         if (gp) fx.warn(new THREE.Vector3(gp.x, groundAt(gp.x, gp.z), gp.z), r, 1.3);
         hud.toast(`${k ? MOBS[k].name : 'It'} raises its arms — get clear!`, 1300, 'error');
+      }
+      else if (msg.kind === 'eruptWarn') fx.warn(at, msg.r ?? 2.5, 1.6); // tentacles coming up here
+      else if (msg.kind === 'erupt') { fx.ring(at, (msg.r ?? 2.5) + 0.6, 0x9a3a4a, 0.6); fx.ring(at, (msg.r ?? 2.5) * 0.6, 0xbfe8f0, 0.45); }
+      else if (msg.kind === 'ink') {
+        // The Kraken's ink: everyone close goes blind for a few seconds.
+        if (me && Math.hypot(me.x - from.x, me.z - from.z) < (msg.r ?? 16)) {
+          const ink = document.getElementById('ink') ?? Object.assign(document.body.appendChild(document.createElement('div')), { id: 'ink' });
+          ink.classList.remove('on'); void ink.offsetWidth; ink.classList.add('on');
+          hud.toast('Ink! You can barely see.', 2000, 'error');
+        }
       }
       else if (msg.kind === 'mend') fx.ring(from.clone().setY(from.y - 1), 8, 0x7fe08a, 0.8);
       else if (msg.kind === 'guard') fx.ring(from.clone().setY(from.y - 1), 1.2, 0xc8d8ff, 0.5);
@@ -723,7 +736,9 @@ function frame() {
       hud.setClock(ms, under ? null : weather.kind);
     }
     precip.update(dt, cam.position, weather.rain, weather.snow, under || homeAt(me.x, me.z) >= 0);
-    caveView.setVisible(under);
+    const which = caveAt(me.x, me.z);
+    caveView.setVisible(which === 'mine');
+    grottoView.setVisible(which === 'grotto');
     if (!under) { terrain.update(me.x, me.z); terrain.followWater(me.x, me.z); }
 
     // Footsteps (hooves when riding): one per half stride, by what's underfoot.
@@ -780,6 +795,7 @@ function frame() {
   animateTrees(dt);
   places.animate(dt, cam.position);
   caveView.animate(dt);
+  grottoView.animate(dt);
   panels.frame();
   hotbar.frame();
 

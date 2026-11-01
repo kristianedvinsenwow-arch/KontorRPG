@@ -219,6 +219,8 @@ const FISH: [string, string, number, number, number, ItemDef['food']][] = [
   ['cod', 'Cod', 2, 4, 3, { heal: 20, buff: { name: 'Well fed (cod)', stats: { maxHp: 8 }, sec: 600 } }],
   ['halibut', 'Halibut', 3, 6, 3, { heal: 26, buff: { name: 'Well fed (halibut)', stats: { allDmg: 0.06 }, sec: 600 } }],
   ['wolffish', 'Wolffish', 4, 8, 4, { heal: 32, buff: { name: 'Well fed (wolffish)', stats: { physRed: 0.05, maxHp: 6 }, sec: 600 } }],
+  // From the glowing pools in Sjøgrotta.
+  ['glowfin', 'Glowfin', 3, 7, 3, { heal: 28, buff: { name: 'Well fed (glowfin)', stats: { magicDmg: 0.06, healPower: 0.06 }, sec: 600 } }],
 ];
 for (const [id, name, raw, cooked, tier, food] of FISH) {
   add({ id: `raw_${id}`, name: `Raw ${name.toLowerCase()}`, kind: 'fish', stack: 10, tier, sellValue: raw, blurb: 'Cook it at a campfire or a cottage stove.' });
@@ -302,6 +304,7 @@ const POTIONS: [string, string, NonNullable<ItemDef['potion']>, number, string][
   ['healing_draught', 'Healing draught', { heal: 20, sec: 10 }, 3, 'Heals 20 HP over 10 s. Works mid-fight.'],
   ['cloudberry_tonic', 'Cloudberry tonic', { heal: 38, sec: 10 }, 6, 'Heals 38 HP over 10 s. Works mid-fight.'],
   ['grave_draught', 'Grave draught', { heal: 70, sec: 12 }, 12, 'Heals 70 HP over 12 s. Works mid-fight. Tastes like a cellar.'],
+  ['ink_elixir', 'Kraken-ink elixir', { buff: { name: 'Elixir: kraken ink', stats: { aoeRadius: 0.15, aoeDmg: 0.1 }, sec: 900 } }, 14, 'Area attacks reach 15% further and hit 10% harder for 15 min.'],
   ['strength_elixir', 'Roseroot elixir', { buff: { name: 'Elixir: roseroot', stats: { meleeDmg: 0.08, rangedDmg: 0.08 }, sec: 900 } }, 8, '+8% melee and ranged damage for 15 min.'],
   ['mind_elixir', 'Lantern elixir', { buff: { name: 'Elixir: lantern', stats: { magicDmg: 0.1, ward: 2 }, sec: 900 } }, 10, '+10% magic damage and +2 ward for 15 min.'],
   ['warding_elixir', 'Warding elixir', { buff: { name: 'Elixir: warding', stats: { magicRed: 0.08, armour: 3 }, sec: 900 } }, 10, '+8% magic damage reduction and +3 armour for 15 min.'],
@@ -454,6 +457,8 @@ add({ id: 'wisplit_greaves', name: 'Wisp-lit greaves', kind: 'armour', stack: 1,
 add({ id: 'mine_kings_runegauntlets', name: 'Mine King’s rune-gauntlets', kind: 'armour', stack: 1, tier: 4, look: 'silversteel', slot: 'hands', armourType: 'metal', armour: 3, ward: 2, fixedRarity: 4, runed: true, mods: { spellPower: 0.08, cdr: 0.05 }, sellValue: 90, blurb: 'Runed: silversteel that doesn’t get in the way of your spells. The King wrote his runes into the knuckles; they hum when you cast.' });
 add({ id: 'mine_kings_pauldrons', name: 'Mine King’s pauldrons', kind: 'armour', stack: 1, tier: 4, look: 'silversteel', slot: 'shoulders', armourType: 'metal', armour: 7, ward: 3, fixedRarity: 4, heavy: 0.03, mods: { allDmg: 0.06, physRed: 0.05 }, sellValue: 90, blurb: 'Silversteel the size of cart wheels. They weigh you down, and nothing much gets through.' });
 add({ id: 'mine_kings_ring', name: 'Mine King’s signet', kind: 'trinket', stack: 1, slot: 'ring', fixedRarity: 4, mods: { maxHp: 8, allDmg: 0.06, miningSpeed: 0.1, gemChance: 0.3 }, sellValue: 90, blurb: 'Heavy, cold silver. The Mine King wore it for three hundred years.' });
+add({ id: 'krakens_eye', name: 'Kraken’s eye', kind: 'trinket', stack: 1, slot: 'neck', fixedRarity: 4, mods: { maxHp: 12, aoeDmg: 0.1, aoeRadius: 0.1, ward: 3 }, sellValue: 120, blurb: 'A milky, fist-sized eye on a silver chain. It still looks around sometimes. Area attacks reach further and hit harder.' });
+add({ id: 'kraken_ink', name: 'Kraken ink', kind: 'material', stack: 20, tier: 3, sellValue: 6, blurb: 'Black, cold and endless. Alchemists brew it into an elixir of reach.' });
 add({ id: 'trolltooth_necklace', name: 'Trolltooth necklace', kind: 'trinket', stack: 1, slot: 'neck', fixedRarity: 4, mods: { maxHp: 10, meleeDmg: 0.06, luck: 5 }, sellValue: 60, blurb: 'Old Knut’s own. Rarely, he drops it.' });
 
 export const ITEMS: Record<string, ItemDef> = Object.fromEntries(defs.map((d) => [d.id, d]));

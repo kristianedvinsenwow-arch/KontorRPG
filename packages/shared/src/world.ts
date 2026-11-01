@@ -4,8 +4,8 @@
  * and the server can validate requests by id.
  */
 import { CHUNK_SIZE, SPIKE_CHUNKS, WATER_LEVEL, WORLD_HALF } from './constants.js';
-import { heightAt, mulberry32, VILLAGE, MARKET, STALL, LAKE_ROAD, MANOR, LAKE, PIER, GRUBEN, GRUBEN_SPOTS, inGruben, FJORD, FJORD_SPOTS, inFjord, SHIPWRECK, FORD_Z, fjordMid } from './terrain.js';
-import { CAVE, CAVE_ENTRANCE, CHUNK_RANGES, GRUBEN_PASS, caveClearance, caveFloor, caveRoomCentre, inBounds } from './cave.js';
+import { heightAt, mulberry32, VILLAGE, MARKET, STALL, LAKE_ROAD, MANOR, MANOR_LAWN, MANOR_GATE, MANOR_DOCK, LAKE, PIER, GRUBEN, GRUBEN_SPOTS, inGruben, FJORD, FJORD_SPOTS, inFjord, SHIPWRECK, FORD_Z, fjordMid } from './terrain.js';
+import { CAVE, CAVE_ENTRANCE, CHUNK_RANGES, GRUBEN_PASS, caveClearance, caveFloor, caveRoomCentre, grottoRoomCentre, inBounds, inGrottoPool } from './cave.js';
 import { ARMOUR_PIECES, CLOTHS, ITEMS, JEWELS } from './items.js';
 import { HOUSES, MANOR_ID, houseAt, toWorld, type HouseFrame } from './houses.js';
 import type { SkillId } from './skills.js';
@@ -69,6 +69,8 @@ export const PATHS: [number, number][][] = [
   [[FJ.x + 34, FJ.z + 14], [FJ.x + 34, FJ.z + 34], [FJ.x + 38, FJ.z + 52]],
   // Round the lake to the manor.
   LAKE_ROAD,
+  // From the manor gate down the lawn to its dock.
+  [[MANOR_GATE.x, MANOR_GATE.z], [MANOR_DOCK.x - MANOR_DOCK.ux * 1.5, MANOR_DOCK.z - MANOR_DOCK.uz * 1.5]],
   // Over the wolf meadows to the Gruben pass.
   [[66, 33], [84, 42], [96, 48]],
   // Gruben: from the arrival camp up the valley to the miners' village and the pit.
@@ -101,6 +103,7 @@ export function keepClear(x: number, z: number): boolean {
   }
   if (Math.hypot(x - GRUBEN_PASS.x, z - GRUBEN_PASS.z) < 7) return true;
   if (Math.hypot(x - MANOR.x, z - MANOR.z) < MANOR.r + 3) return true; // the manor and its garden
+  if (Math.hypot(x - MANOR_LAWN.x, z - MANOR_LAWN.z) < MANOR_LAWN.r + 2) return true; // its lawn down to the dock
   if (Math.hypot(x, z) < 18 || Math.hypot(x - VILLAGE.x, z - VILLAGE.z) < VILLAGE.r + 7 || Math.hypot(x - CAVE_ENTRANCE.x, z - CAVE_ENTRANCE.z) < 8) return true;
   // The pier and a strip of shore around it.
   const px = x - PIER.x, pz = z - PIER.z, along = px * PIER.ux + pz * PIER.uz, side = -px * PIER.uz + pz * PIER.ux;
@@ -192,6 +195,9 @@ function generateVeins(): Vein[] {
     .forEach(([x, z], i) => add('silver', x, z, `c-s${i}`, true));
   [[CAVE.x + 1.6, CAVE.z - 10], [CAVE.x + 7, CAVE.z - 26]].forEach(([x, z], i) => add('iron', x, z, `c-i${i}`, true));
   [[gal.x - 7, gal.z + 1], [gal.x + 2, gal.z - 6], [roost.x, roost.z + 4]].forEach(([x, z], i) => add('coal', x, z, `c-c${i}`, true));
+  // Sjøgrotta: sea glass and coral in the wet walls, silver deeper down.
+  ([[1, -6, 5, 'seaglass'], [1, 7, -6, 'coral'], [2, 6, -6, 'seaglass'], [2, -6, 6, 'coral'], [2, 7, 4, 'silver'], [3, -7, -3, 'silver'], [3, 6, 4, 'seaglass'], [3, 5, -6, 'silver'], [0, -4, -3, 'coral']] as [number, number, number, VeinType][])
+    .forEach(([room, dx, dz, type], i) => { const c = grottoRoomCentre(room); add(type, c.x + dx, c.z + dz, `gr-${type[0]}${i}`, true); });
   // Gruben: coal seams all over, silver and iron on the scree slopes.
   const grng = mulberry32(9911);
   const want: [VeinType, number][] = [['coal', 12], ['silver', 7], ['iron', 9]];
@@ -392,7 +398,14 @@ export const LAKE_TREASURE: { what: 'gem' | 'gear' | 'plans' | 'mount'; chance: 
 /** You must stand within this of the water's edge, and cast at most this far. */
 export const CAST_RANGE = 14;
 /** A point is fishable if it's lake water deep enough. */
-export const isFishable = (x: number, z: number) => heightAt(x, z) < WATER_LEVEL - 0.4 && (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r || inFjord(x, z));
+export const isFishable = (x: number, z: number) => inGrottoPool(x, z) || (heightAt(x, z) < WATER_LEVEL - 0.4 && (Math.hypot(x - LAKE.x, z - LAKE.z) < LAKE.r || inFjord(x, z)));
+/** The glowing pools in Sjøgrotta: glowfin, and pearls now and then. */
+export const GROTTO_FISH_TABLE: { item: string; level: number; xp: number; weight: number; difficulty: number }[] = [
+  { item: 'raw_glowfin', level: 16, xp: 55, weight: 60, difficulty: 0.55 },
+  { item: 'raw_cod', level: 16, xp: 42, weight: 25, difficulty: 0.5 },
+  { item: 'raw_wolffish', level: 28, xp: 80, weight: 10, difficulty: 0.75 },
+];
+export const GROTTO_RARE = { item: 'pearl', chance: 1 / 40, xp: 120, difficulty: 0.85 };
 
 // ------------------------------------------------------------------ places: stations, NPCs, inn
 
@@ -633,6 +646,7 @@ const R: Recipe[] = [
   // alchemy: one vial each
   { id: 'healing_draught', skill: 'alchemy', station: 'alchemy', level: 1, inputs: [{ item: 'angelica', qty: 2 }, { item: 'vial', qty: 1 }], output: { item: 'healing_draught', qty: 1 }, xp: 12, seconds: 2.5 },
   { id: 'cloudberry_tonic', skill: 'alchemy', station: 'alchemy', level: 6, inputs: [{ item: 'cloudberry', qty: 2 }, { item: 'angelica', qty: 1 }, { item: 'vial', qty: 1 }], output: { item: 'cloudberry_tonic', qty: 1 }, xp: 24, seconds: 2.8 },
+  { id: 'ink_elixir', skill: 'alchemy', station: 'alchemy', level: 18, inputs: [{ item: 'kraken_ink', qty: 1 }, { item: 'roseroot', qty: 1 }, { item: 'vial', qty: 1 }], output: { item: 'ink_elixir', qty: 1 }, xp: 70, seconds: 3.2 },
   { id: 'strength_elixir', skill: 'alchemy', station: 'alchemy', level: 12, inputs: [{ item: 'roseroot', qty: 2 }, { item: 'bat_wing', qty: 1 }, { item: 'vial', qty: 1 }], output: { item: 'strength_elixir', qty: 1 }, xp: 40, seconds: 3 },
   { id: 'mind_elixir', skill: 'alchemy', station: 'alchemy', level: 15, inputs: [{ item: 'roseroot', qty: 1 }, { item: 'wisp_essence', qty: 1 }, { item: 'vial', qty: 1 }], output: { item: 'mind_elixir', qty: 1 }, xp: 50, seconds: 3 },
   { id: 'warding_elixir', skill: 'alchemy', station: 'alchemy', level: 17, inputs: [{ item: 'cloudberry', qty: 2 }, { item: 'grave_dust', qty: 2 }, { item: 'vial', qty: 1 }], output: { item: 'warding_elixir', qty: 1 }, xp: 55, seconds: 3 },
@@ -673,6 +687,7 @@ const R: Recipe[] = [
   { id: 'cooked_herring', skill: 'cooking', station: ['campfire', 'stove'], level: 8, inputs: [{ item: 'raw_herring', qty: 1 }], output: { item: 'cooked_herring', qty: 1 }, xp: 20, seconds: 2.2, burns: true },
   { id: 'cooked_mackerel', skill: 'cooking', station: ['campfire', 'stove'], level: 12, inputs: [{ item: 'raw_mackerel', qty: 1 }], output: { item: 'cooked_mackerel', qty: 1 }, xp: 28, seconds: 2.4, burns: true },
   { id: 'cooked_cod', skill: 'cooking', station: ['campfire', 'stove'], level: 16, inputs: [{ item: 'raw_cod', qty: 1 }], output: { item: 'cooked_cod', qty: 1 }, xp: 36, seconds: 2.6, burns: true },
+  { id: 'cooked_glowfin', skill: 'cooking', station: ['campfire', 'stove'], level: 20, inputs: [{ item: 'raw_glowfin', qty: 1 }], output: { item: 'cooked_glowfin', qty: 1 }, xp: 46, seconds: 2.7, burns: true },
   { id: 'cooked_halibut', skill: 'cooking', station: ['campfire', 'stove'], level: 22, inputs: [{ item: 'raw_halibut', qty: 1 }], output: { item: 'cooked_halibut', qty: 1 }, xp: 50, seconds: 2.8, burns: true },
   { id: 'cooked_wolffish', skill: 'cooking', station: ['campfire', 'stove'], level: 28, inputs: [{ item: 'raw_wolffish', qty: 1 }], output: { item: 'cooked_wolffish', qty: 1 }, xp: 66, seconds: 3, burns: true },
   { id: 'cooked_pike', skill: 'cooking', station: ['campfire', 'stove'], level: 18, inputs: [{ item: 'raw_pike', qty: 1 }], output: { item: 'cooked_pike', qty: 1 }, xp: 38, seconds: 2.8, burns: true },

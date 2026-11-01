@@ -468,3 +468,8 @@ select:focus { border-color: var(--amber); outline: none; }
 .savedskills .sk { display: flex; justify-content: space-between; border-bottom: 1px dotted var(--line); }
 .creator.locked { gap: 12px; padding-top: 22px; }
 .creator.locked h1 { font-size: 44px; margin: 0; }
+
+/* The Kraken's ink cloud: a black wash that fades over a few seconds. */
+#ink { position: fixed; inset: 0; pointer-events: none; z-index: 15; opacity: 0; background: radial-gradient(circle at 50% 55%, rgba(6, 8, 14, .78) 0%, rgba(2, 3, 6, .97) 55%); }
+#ink.on { animation: ink 4.5s ease-out forwards; }
+@keyframes ink { 0% { opacity: 0; } 8% { opacity: 1; } 55% { opacity: .92; } 100% { opacity: 0; } }

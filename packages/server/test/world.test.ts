@@ -1091,3 +1091,24 @@ test('the Lakeside Manor: 600 g a week, Lord while you rent it, every workshop i
   advance(15 * 24 * 3600 * 1000); world.step();
   assert.notEqual(p.state.title, 'Lord', 'title goes when the lease runs out');
 });
+
+test('Sjøgrotta: walk in from Saltfjorden; monsters, ore, fishable pools; the Kraken stays in its pool and bursts tentacles under you', () => {
+  const { world, c, p, place, advance } = game(() => 0.4);
+  const portal = PORTAL_BY_ID.get('grotto')!;
+  place(portal.at.x, portal.at.z);
+  world.handle(c, { t: 'travel', portal: 'grotto' });
+  assert.equal(regionAt(p.state.x, p.state.z), 'cave');
+  assert.ok(VEINS.some((v) => v.id.startsWith('gr-')));
+  const kinds = new Set([...world.mobs.values()].filter((m) => m.spawn.id.startsWith('grotto-')).map((m) => m.def.kind));
+  for (const k of ['grotto_crab', 'deep_naga', 'tide_wraith']) assert.ok(kinds.has(k as never), k);
+  const kraken = world.mobs.get('kraken')!;
+  assert.ok(isFishable(kraken.x + 1, kraken.z + 1), 'its pool can be fished');
+  // Stand at the pool's edge and pick a fight.
+  p.xp.combat = xpForLevel(20); p.hp = 1e6; world.recompute(p); p.stats.maxHp = 1e6;
+  place(kraken.x + 4.6, kraken.z);
+  const hp0 = p.hp;
+  for (let i = 0; i < 40; i++) { advance(500); world.step(); }
+  assert.ok(c.inbox.some((m) => m.t === 'fx' && (m as { kind: string }).kind === 'eruptWarn'), 'rings warn of tentacles');
+  assert.ok(p.hp < hp0, 'and they hurt');
+  assert.ok(Math.hypot(kraken.x - kraken.spawn.x, kraken.z - kraken.spawn.z) < 0.01, 'it never leaves its pool');
+});

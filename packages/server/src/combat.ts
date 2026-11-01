@@ -94,6 +94,13 @@ export function stepMobs(w: World, dt: number, now: number): void {
     if (target && (target.dead || !sameRegion(m, target.state))) { target = undefined; m.target = null; }
     const home = Math.hypot(m.x - m.spawn.x, m.z - m.spawn.z);
     if (target && home > m.spawn.leash) { m.target = null; target = undefined; m.returning = true; }
+    // A rooted boss can't chase: it lets go of anyone who leaves its room, and heals up when alone.
+    if (m.def.rooted) {
+      if (target && Math.hypot(target.state.x - m.x, target.state.z - m.z) > m.def.aggro + 12) { m.target = null; target = undefined; }
+      if (!target && m.hp < m.def.hp && ![...w.players.values()].some((p) => !p.dead && sameRegion(m, p.state) && Math.hypot(p.state.x - m.x, p.state.z - m.z) < m.def.aggro + 12)) {
+        m.hp = m.def.hp; m.dmgBy.clear(); m.burn = null; m.bleed = null; resetBoss(w, m);
+      }
+    }
     // Fight whoever is closest among those near it (a shield bearer counts as closer; a taunt wins).
     if (target && !m.returning && now >= (m.nextThreat ?? 0)) {
       m.nextThreat = now + 500;
@@ -128,14 +135,34 @@ export function stepMobs(w: World, dt: number, now: number): void {
     } else if (target) {
       const d = Math.hypot(target.state.x - m.x, target.state.z - m.z);
       const reach = m.def.range + 0.35 + mobRadius(m) * 0.5;
-      if (m.slamAt) { /* rooted while winding up */ } else if (d > reach * 0.85) moveToward(m, target.state.x, target.state.z, speed, dt, reach * 0.8);
+      if (m.slamAt || m.def.rooted) { /* rooted (winding up a slam, or the Kraken in its pool) */ if (m.def.rooted) m.yaw = Math.atan2(-(target.state.x - m.x), -(target.state.z - m.z)); } else if (d > reach * 0.85) moveToward(m, target.state.x, target.state.z, speed, dt, reach * 0.8);
       else m.yaw = Math.atan2(-(target.state.x - m.x), -(target.state.z - m.z));
       // Enrage, and calling the honour guard, at low health.
       if (m.def.enrage && !m.enraged && m.hp < m.def.hp * m.def.enrage) {
         m.enraged = true;
         w.broadcastNear(m, { t: 'notice', kind: 'error', text: `${m.def.name} is enraged!` });
+        // The Kraken's ink: everyone close is blinded for a moment (drawn on their screens).
+        if (m.def.ink) w.broadcastNear(m, { t: 'fx', kind: 'ink', from: m.id, r: 16 });
       }
       if (m.def.adds && !m.called && m.hp < m.def.hp * m.def.adds) { m.called = true; callAdds(w, m, now); }
+      // Tentacles: a ring appears under a few of the fighters, then the sea floor bursts there.
+      const er = m.def.erupt;
+      if (er && m.nextErupt === undefined) m.nextErupt = now + er.every * 500; // the first comes a little sooner
+      if (er && !frozen && now >= m.nextErupt!) {
+        m.nextErupt = now + er.every * 1000 * (m.enraged ? 0.7 : 1);
+        const victims = [...w.players.values()]
+          .filter((p) => !p.dead && sameRegion(m, p.state) && (m.dmgBy.has(p.state.id) || Math.hypot(p.state.x - m.x, p.state.z - m.z) < m.def.aggro + 4))
+          .sort(() => w.rand() - 0.5).slice(0, er.count + (m.enraged ? 1 : 0));
+        for (const v of victims) {
+          const x = v.state.x, z = v.state.z, power = m.def.dmg * er.mult * (m.enraged ? 1.2 : 1);
+          w.broadcastNear(m, { t: 'fx', kind: 'eruptWarn', from: m.id, x, z, r: er.r });
+          w.later(now + ERUPT_WARN_MS, () => {
+            if (m.dead) return;
+            w.broadcastNear(m, { t: 'fx', kind: 'erupt', from: m.id, x, z, r: er.r });
+            for (const p of w.players.values()) if (!p.dead && sameRegion(m, p.state) && Math.hypot(p.state.x - x, p.state.z - z) <= er.r) hurtPlayer(w, p, m, power, false, w.now());
+          });
+        }
+      }
       const fury = m.enraged ? 1.2 : 1;
       if (m.slamAt) {
         // Winding up a slam (the red ring on the ground): stand still, then hit everyone still inside.
@@ -182,6 +209,8 @@ function moveToward(m: Mob, x: number, z: number, speed: number, dt: number, sto
 }
 
 const SLAM_WARN_MS = 1300;
+/** How long the ring shows before tentacles burst up through it. */
+const ERUPT_WARN_MS = 1600;
 
 /** The boss's helpers rise next to it and go for whoever has been healing (else the weakest). */
 function callAdds(w: World, boss: Mob, now: number): void {
@@ -202,7 +231,7 @@ function callAdds(w: World, boss: Mob, now: number): void {
 
 /** A boss that resets (or dies) puts its helpers back to sleep. */
 function resetBoss(w: World, m: Mob): void {
-  m.enraged = false; m.called = false; m.slamAt = undefined;
+  m.enraged = false; m.called = false; m.slamAt = undefined; m.nextErupt = undefined;
   for (const a of w.mobs.values()) if (a.spawn.summonedBy === m.id) { a.dead = true; a.respawnAt = Infinity; a.target = null; }
 }
 

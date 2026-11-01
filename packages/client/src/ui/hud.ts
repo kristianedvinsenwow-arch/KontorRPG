@@ -1,5 +1,5 @@
 /** HUD: location, connection, who's online, toasts, chat. Plain DOM; rendered from the stores. */
-import { WEATHER_LABEL, daylight, regionAt, type WeatherKind } from '@kontor/shared';
+import { WEATHER_LABEL, daylight, regionAt, caveAt, type WeatherKind } from '@kontor/shared';
 import { PLAYER_COLORS } from '@kontor/shared';
 import { netStore, uiStore } from '../state/store.js';
 
@@ -89,7 +89,7 @@ export function initHud(onSendChat: (text: string) => void) {
     },
     frame(x: number, z: number) {
       coords.textContent = `${x.toFixed(0)}, ${z.toFixed(0)}`;
-      const r = regionAt(x, z), name = r === 'cave' ? 'The Old Mine' : r === 'gruben' ? 'Gruben' : r === 'fjord' ? 'Saltfjorden' : 'Mofjellet';
+      const r = regionAt(x, z), name = r === 'cave' ? (caveAt(x, z) === 'grotto' ? 'Sjøgrotta' : 'The Old Mine') : r === 'gruben' ? 'Gruben' : r === 'fjord' ? 'Saltfjorden' : 'Mofjellet';
       if (whereName.textContent !== name) whereName.textContent = name;
       frames++;
       const now = performance.now();
