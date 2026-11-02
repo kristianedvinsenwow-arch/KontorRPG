@@ -5,7 +5,7 @@
  * checks the same spots.
  */
 import * as THREE from 'three';
-import { GROTTO_ENTRANCE, MANOR_DOCK, MANOR_PRICE, mulberry32, stationHouse, STALL, STABLE, MARKET, TOWN_GATE, CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, FJORD_PIER, SHIPWRECK, fjordMid, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
+import { GROTTO_ENTRANCE, MANOR_DOCK, MANOR_PRICE, mulberry32, stationHouse, STALL, STABLE, MARKET, TOWN_GATE, CAVE_ENTRANCE, GRUBEN, GRUBEN_PASS, GRUBEN_SPOTS, FJORD, FJORD_SPOTS, FJORD_PIER, TRAWLER, TRAWLER_BOARD, SHIPWRECK, fjordMid, HOMES, HOUSES, INN, homeAt, innRoom, toWorld, NPCS, PIER, PORTAL_BY_ID, STATIONS, VILLAGE, heightAt, type Home, type Npc, type Station } from '@kontor/shared';
 import { mat, bx, mesh, canvasTex } from '../engine/procgen.js';
 import { makeCharacter, animateCharacter, type Character } from '../entities/character.js';
 import { applyGear } from '../entities/held.js';
@@ -996,6 +996,7 @@ export class Places {
   private fjord(): void {
     const F = FJORD, vx = FJORD_VILLAGE.x, vz = FJORD_VILLAGE.z;
     this.rowboat(FJORD_PIER, 'fjord_out', 'Rowboat to Bjørkvik', 'E at the end of the jetty');
+    tag('The trawler', `E here: ${TRAWLER.minutes}-min fishing trip · ${TRAWLER.price} g · once an hour`, 'place', new THREE.Vector3(TRAWLER_BOARD.x, FJORD_PIER.deck + 2.4, TRAWLER_BOARD.z), 40);
     const red = mat(0x8a2e24, 'wood', { r: 0.9 });
     const white = mat(0xe8e2d4, 'wood', { r: 0.9 });
     const shoreX = (lz: number) => F.x + fjordMid(lz) + 20; // roughly where the east shore meets the water

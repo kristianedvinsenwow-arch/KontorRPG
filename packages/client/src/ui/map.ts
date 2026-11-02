@@ -182,6 +182,7 @@ function drawZone(region: Region): HTMLElement {
     } else if (r === 'fjord') {
       mark(FJORD.x + FJORD_SPOTS.village.x, FJORD.z + FJORD_SPOTS.village.z, 'Fishing village', '#f2a23a', 7);
       { const b = PORTAL_BY_ID.get('fjord_out')!.at; mark(b.x, b.z, 'Rowboat to Bjørkvik', '#b77be8', 5); }
+      { const b = PORTAL_BY_ID.get('trawler')!.at; mark(b.x, b.z, '⚓ Trawler — 15 min fishing trips, once an hour', '#4ec9d8', 5); }
       mark(SHIPWRECK.x, SHIPWRECK.z, 'The wreck — the Drowned Captain (lv 15)', '#b77be8', 6);
       mark(GROTTO_ENTRANCE.x, GROTTO_ENTRANCE.z, 'Sjøgrotta — sea cave, lv 14–18, the Kraken', '#b77be8', 6);
       mark(FJORD.x + fjordMid(FORD_Z), FJORD.z + FORD_Z, 'The ford', '#d8c890', 4);

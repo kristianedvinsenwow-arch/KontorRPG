@@ -35,4 +35,4 @@ export const MAX_CHAT_LEN = 200;
 export const PLAYER_COLORS = ['#e8554e', '#4ea1e8', '#6fcf5f', '#e8b84e', '#b77be8', '#43d6c6', '#f07fb4', '#e2e2dc'];
 
 /** Bumped whenever the wire format changes; a mismatch forces the client to reload. */
-export const PROTOCOL_VERSION = 9;
+export const PROTOCOL_VERSION = 10;

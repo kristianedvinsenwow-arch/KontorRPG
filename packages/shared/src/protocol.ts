@@ -93,7 +93,9 @@ export type ClientMsg =
 
 // ---------- server → client ----------
 export type ServerMsg =
-  | { t: 'welcome'; id: string; build: string; proto: number; tickHz: number; you: PlayerState; character: { name: string; color: number; build: CharacterBuild }; saved: boolean }
+  /** You're aboard the trawler (seat, until; until 0 = you've stepped off). `now`: the server's clock, to sync the boat. */
+  | { t: 'trawler'; seat: number; until: number; now: number }
+  | { t: 'welcome'; now?: number; id: string; build: string; proto: number; tickHz: number; you: PlayerState; character: { name: string; color: number; build: CharacterBuild }; saved: boolean }
   | { t: 'snap'; tick: number; at: number; players: PlayerState[]; mobs: MobState[] }
   | { t: 'leave'; id: string }
   | { t: 'roster'; players: { id: string; name: string; color: number; race: Race; face?: number }[] }

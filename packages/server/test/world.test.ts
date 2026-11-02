@@ -1130,3 +1130,53 @@ test('the Kraken-caller trident: water bolts, and Tentacle Slap with no bolt', (
   advance(500); world.step();
   assert.ok(wolf.hp < hp1);
 });
+
+test('the trawler: hire a trip on the jetty, ride the loop, fish 2–3 at a time, once per clock hour, back on the jetty after 15 minutes', async () => {
+  const S = await import('@kontor/shared');
+  const { world, c, p, place, last, advance, now } = game();
+  place(S.BOAT_HOME.x, S.BOAT_HOME.z);
+  world.handle(c, { t: 'travel', portal: 'fjord' });
+  place(S.TRAWLER_BOARD.x, S.TRAWLER_BOARD.z);
+  const trip = () => p.trawler; // (a getter: TS would otherwise narrow it to undefined for good)
+  p.gold = 5;
+  world.handle(c, { t: 'travel', portal: 'trawler' });
+  assert.match(last('notice')!.text, /20 gold/);
+  assert.equal(trip(), undefined);
+  p.gold = 50;
+  world.handle(c, { t: 'travel', portal: 'trawler' });
+  assert.equal(p.gold, 50 - S.TRAWLER.price);
+  assert.ok(trip() && last('trawler')!.until === trip()!.until);
+  // The boat carries you: ignore whatever position the client sends.
+  advance(10_000); world.step();
+  const seat = S.trawlerSeat(now(), trip()!.seat);
+  assert.ok(Math.hypot(p.state.x - seat.x, p.state.z - seat.z) < 0.05, 'standing on deck, wherever the boat is');
+  world.handle(c, { t: 'input', seq: 99, x: p.state.x + 3, y: 1, z: p.state.z, yaw: 1, pitch: 0 });
+  assert.ok(Math.hypot(p.state.x - seat.x, p.state.z - seat.z) < 0.05 && p.state.yaw === 1, 'you can look around but not walk off');
+  // Fish over the side: the catch keeps going while the boat moves, and comes up 2–3 at a time.
+  p.xp.fishing = xpForLevel(30); world.recompute(p);
+  let cx = p.state.x, cz = p.state.z;
+  for (let a = 0; a < 16 && !S.isFishable(cx, cz); a++) { cx = p.state.x + Math.cos(a) * 5; cz = p.state.z + Math.sin(a) * 5; }
+  const before = p.bag.reduce((s, x) => s + (x?.qty ?? 0), 0);
+  world.handle(c, { t: 'cast', x: cx, z: cz });
+  assert.equal((last('fish') as any).state, 'cast');
+  advance(20_000); world.step();
+  assert.equal((last('fish') as any).state, 'bite');
+  advance(3000);
+  world.handle(c, { t: 'reel', ok: true });
+  assert.equal((last('fish') as any).state, 'caught');
+  const got = p.bag.reduce((s, x) => s + (x?.qty ?? 0), 0) - before;
+  assert.ok(got >= 2 && got <= 3, `two or three fish (${got})`);
+  // Step off, and you can't hire again this hour.
+  world.handle(c, { t: 'travel', portal: 'trawler' });
+  assert.equal(trip(), undefined);
+  assert.ok(Math.hypot(p.state.x - S.TRAWLER_BOARD.x, p.state.z - S.TRAWLER_BOARD.z) < 1, 'back on the jetty');
+  world.handle(c, { t: 'travel', portal: 'trawler' });
+  assert.match(last('notice')!.text, /this hour/);
+  // Next hour: a full trip, and you're put ashore when it ends.
+  advance(3_600_000 - (now() % 3_600_000) + 1000);
+  world.handle(c, { t: 'travel', portal: 'trawler' });
+  assert.ok(trip());
+  advance(S.TRAWLER.minutes * 60_000 + 500); world.step();
+  assert.equal(trip(), undefined);
+  assert.ok(Math.hypot(p.state.x - S.TRAWLER_BOARD.x, p.state.z - S.TRAWLER_BOARD.z) < 1);
+});

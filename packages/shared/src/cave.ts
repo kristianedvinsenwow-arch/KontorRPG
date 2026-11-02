@@ -3,7 +3,7 @@
  * in its own region far outside the overworld (around CAVE.x, CAVE.z). An entrance in the hills
  * teleports you there; the exit brings you back. Shape = corridors (capsules) + chambers (circles).
  */
-import { heightAt, pierDeck, GRUBEN, inGruben, FJORD, FJORD_SPOTS, inFjord, BOAT_HOME, BOAT_FJORD } from './terrain.js';
+import { heightAt, pierDeck, GRUBEN, inGruben, FJORD, FJORD_SPOTS, FJORD_PIER, inFjord, BOAT_HOME, BOAT_FJORD } from './terrain.js';
 import { CHUNK_SIZE, WORLD_HALF } from './constants.js';
 import { houseFloor } from './houses.js';
 
@@ -146,6 +146,8 @@ export const regionAt = (x: number, z: number): Region => (inCaveRegion(x, z) ? 
 /** `use`: taken with E (a rowboat) instead of by walking in. */
 export interface Portal { id: string; name: string; at: { x: number; z: number; r: number }; to: { x: number; z: number }; level?: number; use?: boolean }
 export const GRUBEN_PASS = { x: 99, z: 49.5, r: 2.6 };
+/** Where you hire the fjord trawler, halfway out along Saltfjorden's jetty (see trawler.ts). */
+const TRAWLER_BOARD_SPOT = (() => { const P = FJORD_PIER, d = P.length * 0.5; return { x: P.x + P.ux * d, z: P.z + P.uz * d, r: 1.8 }; })();
 /** Sjøgrotta's mouth, in Saltfjorden's north-eastern hills, and where you come back out. */
 export const GROTTO_ENTRANCE = { x: FJORD.x + FJORD_SPOTS.grotto.x, z: FJORD.z + FJORD_SPOTS.grotto.z - 1.5, r: 2.4 };
 export const GROTTO_EXIT_OUT = { x: FJORD.x + FJORD_SPOTS.grotto.x, z: FJORD.z + FJORD_SPOTS.grotto.z + 3.5 };
@@ -157,6 +159,7 @@ export const PORTALS: Portal[] = [
   { id: 'gruben', name: 'The pass to Gruben', at: GRUBEN_PASS, to: { x: GRUBEN.x, z: GRUBEN.z + 58 }, level: 12 },
   { id: 'fjord', name: 'Rowboat to Saltfjorden', at: { ...BOAT_HOME, r: 2 }, to: step(BOAT_FJORD, 1.5, 0), use: true },
   { id: 'fjord_out', name: 'Rowboat to Bjørkvik', at: { ...BOAT_FJORD, r: 2 }, to: BOAT_HOME, use: true },
+  { id: 'trawler', name: 'The trawler', at: TRAWLER_BOARD_SPOT, to: TRAWLER_BOARD_SPOT, use: true },
   { id: 'grotto', name: 'Sjøgrotta', at: GROTTO_ENTRANCE, to: { x: GROTTO.x, z: GROTTO.z + 2 }, level: 14 },
   { id: 'grotto_out', name: 'Out of the grotto', at: { x: GROTTO.x, z: GROTTO.z + 6.5, r: 2 }, to: GROTTO_EXIT_OUT },
   { id: 'gruben_out', name: 'Back to the valley', at: { x: GRUBEN.x, z: GRUBEN.z + 64, r: 2.6 }, to: { x: GRUBEN_PASS.x - 4.5, z: GRUBEN_PASS.z - 2.5 } },

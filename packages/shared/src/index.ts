@@ -17,3 +17,4 @@ export * from './houses.js';
 export * from './sky.js';
 export * from './achievements.js';
 export * from './zones.js';
+export * from './trawler.js';

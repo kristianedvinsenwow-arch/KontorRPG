@@ -9,7 +9,7 @@ import {
   NPC_BY_ID, PLAYER_COLORS, PROTOCOL_VERSION, QUEST_BY_ID, RECIPE_BY_ID, START_GOLD, START_TOOLS, STATION_BY_ID, TICK_HZ, USE_RANGE,
   EAT_LOCK_MS, POTION_CD_MS, addStack, burnChance, knifeRepair, knifeUses, STATIONS, canLearn, checkStep, computeStats, countItem, emptyBag, faceOf, groundAt, levelOf, periodKey,
   questAvailable, r2, r3, recipeAt, removeItem, resizeBag, respecCost, rollCraftRarity, canCraftEpic, sellEach, rollEffects, rollsRarity,
-  validateBuild, xpMult, COMBAT_TREES, TALENT_TREE, SPAWN_POINT, VILLAGE, STOVE_SPEED, skillLevel, MANOR_CRAFT, MANOR_ID, LORD_TITLE,
+  validateBuild, xpMult, COMBAT_TREES, TALENT_TREE, SPAWN_POINT, VILLAGE, STOVE_SPEED, skillLevel, TRAWLER, TRAWLER_SEATS, trawlerSeat, trawlerHour, MANOR_CRAFT, MANOR_ID, LORD_TITLE,
   type Buff, type ClientMsg, type HoldSlot, type MobKind, type PlayerState, type ServerMsg, type SkillId, type Slot,
   type Stack, type TreeId,
 } from '@kontor/shared';
@@ -137,6 +137,8 @@ export class World {
     for (const [id, p] of this.players) {
       if (p.client !== client) continue;
       this.players.delete(id);
+      // Logged off mid-trip: you're saved back on the jetty, not in the middle of the fjord.
+      if (p.trawler) { const at = PORTAL_BY_ID.get('trawler')!.at; Object.assign(p.state, { x: at.x, y: groundAt(at.x, at.z), z: at.z }); p.trawler = undefined; }
       void this.save(p);
       this.broadcast({ t: 'leave', id });
       this.broadcast({ t: 'system', text: `${p.state.name} logged out` });
@@ -268,7 +270,7 @@ export class World {
     if (p.lease && p.lease.until > now && !this.rooms[p.lease.room]) this.rooms[p.lease.room] = { key: this.roomKey(p), name: p.state.name, until: p.lease.until };
     this.refreshGear(p, false);
     this.players.set(id, p);
-    client.send({ t: 'welcome', id, build: this.opts.build, proto: PROTOCOL_VERSION, tickHz: TICK_HZ, you: state, character: { name: c.name, color: c.color, build: c.build }, saved: wasSaved });
+    client.send({ t: 'welcome', now: this.now(), id, build: this.opts.build, proto: PROTOCOL_VERSION, tickHz: TICK_HZ, you: state, character: { name: c.name, color: c.color, build: c.build }, saved: wasSaved });
     this.sendInv(p);
     client.send({ t: 'skills', xp: p.xp });
     client.send({ t: 'talents', alloc: p.talents, respecs: p.respecs });
@@ -480,6 +482,8 @@ export class World {
     p.lastSeq = msg.seq;
     const now = this.now();
     if (p.dead) return;
+    // Aboard the trawler you look around (and fish), but the boat decides where you are.
+    if (p.trawler) { p.state.yaw = r3(msg.yaw); p.state.pitch = r3(Math.max(-1.55, Math.min(1.55, msg.pitch))); if (msg.act && msg.act !== 'fish') { p.act = msg.act; p.actUntil = now + 450; } return; }
     const dt = (now - p.lastValid.at) / 1000;
     const next = { x: msg.x, y: msg.y, z: msg.z };
     const check = checkStep(p.lastValid, next, dt, p.stats.speedCap);
@@ -1013,9 +1017,55 @@ export class World {
     this.sendLease(p);
   }
 
+  // ---------------------------------------------------------------- the fjord trawler
+
+  /** Hire a trip on the trawler (once per clock hour), or step off it if you're aboard. */
+  private trawler(p: ServerPlayer): void {
+    const now = this.now();
+    if (p.trawler && p.trawler.until > now) return this.leaveTrawler(p, 'You step off onto the jetty.');
+    const at = PORTAL_BY_ID.get('trawler')!.at;
+    if (Math.hypot(p.state.x - at.x, p.state.z - at.z) > at.r + 3) return this.notice(p, 'Hire the trawler on Saltfjorden’s jetty.', 'error');
+    const hour = trawlerHour(now), c = p.achievements.c;
+    if (c.trawlerHour === hour) {
+      const mins = Math.ceil(((hour + 1) * 3_600_000 - now) / 60_000);
+      return this.notice(p, `You’ve had your trip this hour. The next one is free to hire on the hour (in ${mins} min).`, 'error');
+    }
+    if (p.gold < TRAWLER.price) return this.notice(p, `A trip costs ${TRAWLER.price} gold.`, 'error');
+    p.gold -= TRAWLER.price;
+    c.trawlerHour = hour;
+    this.sendAchievements(p);
+    const taken = new Set([...this.players.values()].filter((q) => q.trawler && q.trawler.until > now).map((q) => q.trawler!.seat % TRAWLER_SEATS.length));
+    let seat = 0; while (taken.has(seat) && seat < TRAWLER_SEATS.length) seat++;
+    p.trawler = { until: now + TRAWLER.minutes * 60_000, seat };
+    this.dismount(p);
+    stopFishing(this, p, 'cancel');
+    this.placeOnTrawler(p, now);
+    p.client.send({ t: 'trawler', seat, until: p.trawler.until, now });
+    this.notice(p, `All aboard! ${TRAWLER.minutes} minutes on the trawler: every fish comes up two or three at a time, and rare catches are ${TRAWLER.rareMult}× likelier. Press E to step off.`);
+    p.dirty = true;
+    this.sendInv(p);
+  }
+
+  private placeOnTrawler(p: ServerPlayer, now: number): void {
+    const s = trawlerSeat(now, p.trawler!.seat);
+    Object.assign(p.state, { x: r2(s.x), y: r2(s.y), z: r2(s.z), spd: 0 }); // standing still: the boat does the moving
+    p.lastValid = { x: s.x, y: s.y, z: s.z, at: now };
+  }
+
+  private leaveTrawler(p: ServerPlayer, text: string): void {
+    p.trawler = undefined;
+    stopFishing(this, p, 'cancel');
+    p.client.send({ t: 'trawler', seat: 0, until: 0, now: this.now() });
+    if (p.dead) return; // you'll respawn as usual
+    const at = PORTAL_BY_ID.get('trawler')!.at;
+    this.teleport(p, at.x, at.z);
+    this.notice(p, text);
+  }
+
   // ---------------------------------------------------------------- the cave
 
   private travel(p: ServerPlayer, id: string): void {
+    if (id === 'trawler') return this.trawler(p);
     const portal = PORTAL_BY_ID.get(id);
     if (!portal) return;
     if (Math.hypot(p.state.x - portal.at.x, p.state.z - portal.at.z) > portal.at.r + 3) return this.notice(p, `Walk into ${portal.name.toLowerCase()}.`, 'error');
@@ -1044,6 +1094,8 @@ export class World {
     this.closeVacantDoors(now);
     const list = [...this.players.values()];
     for (const p of list) {
+      // Trawler passengers ride the deck (the server moves them); the trip ends after 15 minutes.
+      if (p.trawler) { if (p.dead) this.leaveTrawler(p, ''); else if (p.trawler.until <= now) this.leaveTrawler(p, 'The trawler’s back at the jetty. Same time next hour?'); else this.placeOnTrawler(p, now); }
       // Whoever rents the manor is styled Lord (back to their own title once it's vacant).
       const title = this.isLord(p, now) ? LORD_TITLE : titleOf(p.achievements.title);
       if (p.state.title !== title) p.state.title = title;

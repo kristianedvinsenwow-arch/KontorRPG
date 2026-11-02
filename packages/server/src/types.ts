@@ -70,6 +70,8 @@ export interface ServerPlayer {
   /** Warding Light: overhealing kept as a shield that soaks damage. */
   shield?: { amt: number; until: number };
   fishing: Fishing | null;
+  /** Aboard the fjord trawler until this time, in this place on deck. */
+  trawler?: { until: number; seat: number };
 }
 
 export interface Mob {

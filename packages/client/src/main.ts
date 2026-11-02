@@ -6,7 +6,7 @@
 import './styles.css';
 import * as THREE from 'three';
 import {
-  CAST_RANGE, knifeUses, EAT_LOCK_MS, pierDeck, heightAt as heightAtWorld, STATION_BY_ID, daylight, sunAt, weatherAt, HOMES, HOUSES, PORTALS, regionAt, homeAt, homeDoorway, innRoom, toWorld, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS, specialFor,
+  CAST_RANGE, TRAWLER, trawlerSeat, trawlerHour, INTERP_DELAY_MS, knifeUses, EAT_LOCK_MS, pierDeck, heightAt as heightAtWorld, STATION_BY_ID, daylight, sunAt, weatherAt, HOMES, HOUSES, PORTALS, regionAt, homeAt, homeDoorway, innRoom, toWorld, EYE_HEIGHT, INPUT_HZ, ITEMS, MINE_RANGE, NPCS, PLAYER_COLORS, RACES, RECIPE_BY_ID, SPECIALS, specialFor,
   STATIONS, TREE_BY_ID, TREE_TYPES, USE_RANGE, VEIN_BY_ID, VEIN_TYPES, WATER_LEVEL,
   MOBS, groundAt, attackInterval, attackRange, computeStats, faceOf, inCaveRegion, caveAt, isFishable, levelFromXp, skillLevel, r2, r3, swingSeconds, weaponClass,
   PICK_SEC, PLANT_BY_ID, PLANT_TYPES, type Plant, type CharacterBuild, type HoldSlot, type MobState, type PlayerStats, type Tree, type Vein,
@@ -26,6 +26,7 @@ import { makeHorse, animateHorse, riderEyeLift, type Horse } from './entities/ho
 import { Places } from './world/places.js';
 import { CaveView } from './world/cave.js';
 import { GrottoView } from './world/grotto.js';
+import { TrawlerView } from './world/trawler.js';
 import { cullChildren } from './engine/cull.js';
 import { Fx } from './world/fx.js';
 import { initTrees, setTreesDepleted, animateTrees, targetTree } from './world/trees.js';
@@ -60,6 +61,13 @@ const precip = new Precip(scene);
 const places = new Places(scene);
 const caveView = new CaveView(scene);
 const grottoView = new GrottoView(scene);
+const trawlerView = new TrawlerView(scene);
+/** Server clock minus ours (the trawler sails by the server's clock). */
+let clockOffset = 0;
+/** Aboard the trawler: your place on deck and when the trip ends (server time). */
+let aboard: { seat: number; until: number } | null = null;
+/** Where the boat is drawn: the same moment remote players are drawn at, so passengers stay on deck. */
+const boatTime = () => Date.now() + clockOffset - INTERP_DELAY_MS;
 const mobs = new Mobs(scene);
 mobs.onVoice = (kind, mood, pos) => sound.voice(kind, mood, { x: pos.x, y: pos.y + 1, z: pos.z });
 const fx = new Fx(scene);
@@ -228,6 +236,8 @@ net.on((msg) => {
   switch (msg.t) {
     case 'welcome':
       myId = msg.id;
+      if (msg.now) clockOffset = msg.now - Date.now();
+      aboard = null;
       myName = msg.character.name;
       useCharacter(msg.character.name, msg.character.color, msg.character.build);
       if (msg.saved) hud.system(`Welcome back, ${msg.character.name}.`);
@@ -255,6 +265,10 @@ net.on((msg) => {
     case 'talents': gameStore.set({ talents: msg.alloc, respecs: msg.respecs }); break;
     case 'quests': gameStore.set({ quests: msg.state }); break;
     case 'achievements': gameStore.set({ ach: { c: msg.c, done: msg.done, title: msg.title } }); break;
+    case 'trawler':
+      clockOffset = msg.now - Date.now();
+      aboard = msg.until ? { seat: msg.seat, until: msg.until } : null;
+      break;
     case 'lease': gameStore.set({ lease: { room: msg.room, until: msg.until, storage: msg.storage } }); break;
     case 'rooms': gameStore.set({ rooms: msg.taken }); places.setRooms(msg.taken); break;
     case 'doors': {
@@ -438,6 +452,13 @@ function myRoom(): number | null {
   return l.room != null && (l.until ?? 0) > Date.now() ? l.room : null;
 }
 
+/** At the jetty: what a trip costs, or when you can go again. */
+function trawlerPrompt(): string {
+  const t = Date.now() + clockOffset, hour = trawlerHour(t);
+  if (gameStore.get().ach.c.trawlerHour === hour) return `<span class="bad">Trawler — you’ve had this hour’s trip · next in ${Math.ceil(((hour + 1) * 3_600_000 - t) / 60_000)} min</span>`;
+  return `<b>E</b> Hire the trawler — ${TRAWLER.minutes} min · ${TRAWLER.price} g · once an hour <span class="dim">(2–3 fish a catch, rare ×${TRAWLER.rareMult})</span>`;
+}
+
 function use() {
   if (!near || !me) return;
   if (near.kind === 'loot') net.send({ t: 'pickup', id: near.id });
@@ -556,6 +577,7 @@ function interact(now: number, playing: boolean) {
       if (tb < best) { best = tb; near = { kind: 'bed', id: h.id, name: 'bed' }; }
     }
     // A rowboat at the end of the pier: stand at the end and press E.
+    if (aboard) near = { kind: 'boat', id: 'trawler', name: 'Step off the trawler' };
     if (!near) for (const p of PORTALS) if (p.use && regionAt(p.at.x, p.at.z) === regionAt(me.x, me.z) && Math.hypot(me.x - p.at.x, me.z - p.at.z) < p.at.r + 0.6) near = { kind: 'boat', id: p.id, name: p.name };
   }
   // Portals (the mine, the Gruben pass): walk in. (Rowboats are taken with E.)
@@ -650,8 +672,10 @@ function interact(now: number, playing: boolean) {
 
   // Prompt under the crosshair.
   if (!playing || fishing.active) setPrompt(null);
-  else if (near?.kind === 'boat') setPrompt(`<b>E</b> Travel — ${near.name}`);
-  else if (castAt) setPrompt('Waiting for a bite… (walk away to stop)');
+  else if (near?.kind === 'boat' && near.id === 'trawler' && !aboard) setPrompt(trawlerPrompt());
+  else if (near?.kind === 'boat' && !aboard) setPrompt(`<b>E</b> Travel — ${near.name}`);
+  else if (castAt) setPrompt(aboard ? 'Waiting for a bite…' : 'Waiting for a bite… (walk away to stop)');
+  else if (aboard && aimed?.kind !== 'water') setPrompt(`On the trawler · ${Math.max(1, Math.ceil((aboard.until - Date.now() - clockOffset) / 60_000))} min left · <b>E</b> Step off`);
   else if (aimed?.kind === 'ally') setPrompt(`<b>Click</b> heal · <b>Right click</b> Mending Circle`);
   else if (aimed?.kind === 'mob') setPrompt(`<b>Click</b> attack · <b>Right click</b> ${specialFor(main, gameStore.get().equip.offHand).name}`);
   else if (aimed?.kind === 'vein' || aimed?.kind === 'tree') {
@@ -712,7 +736,12 @@ function frame() {
     const moveIn = playing && !fishing.active ? input.axes() : { forward: 0, right: 0, jump: false };
     const mounted = gameStore.get().mounted;
     mountedNow = !!mounted;
-    stepPlayer(me, moveIn, colliders, dt, stats?.all.moveSpeed ?? 0, mounted ? ITEMS[mounted]?.mount?.mult ?? 1 : 1);
+    if (aboard) {
+      // On the trawler you stand at your place on deck and the boat carries you (and your bobber).
+      const s = trawlerSeat(boatTime(), aboard.seat), dx = s.x - me.x, dz = s.z - me.z;
+      if (castAt && Math.hypot(dx, dz) < 2) { castAt.x += dx; castAt.z += dz; fx.moveBobber(castAt); }
+      me.x = s.x; me.y = s.y; me.z = s.z; me.vx = me.vy = me.vz = 0; me.speed = 0; me.onGround = true;
+    } else stepPlayer(me, moveIn, colliders, dt, stats?.all.moveSpeed ?? 0, mounted ? ITEMS[mounted]?.mount?.mult ?? 1 : 1);
     mountLift += ((mounted && myBuild ? riderEyeLift(mounted, myBuild.race) : 0) - mountLift) * Math.min(1, dt * 6);
     if (myHorse) {
       myHorse.g.position.set(me.x, me.y, me.z);
@@ -727,6 +756,7 @@ function frame() {
     gfx.setUnderground(under);
     const region = regionAt(me.x, me.z);
     gfx.setRegion(region);
+    trawlerView.update(dt, boatTime(), region === 'fjord', 1 - daylight(Date.now() + debugSky.offset));
     // Time of day and weather (the same for everyone: worked out from the clock).
     const ms = Date.now() + debugSky.offset, sunDir = sunAt(ms), day = daylight(ms), weather = debugSky.weather ?? weatherAt(region, ms);
     // Sky, fog, clock and ambience change slowly: a few updates a second is plenty.
@@ -782,7 +812,7 @@ function frame() {
       const pos = remotePosition(remotes, p.id);
       return pos ? { x: pos.x, z: pos.z, name: p.name, color: PLAYER_COLORS[p.color % PLAYER_COLORS.length] } : null;
     }).filter((x): x is NonNullable<typeof x> => !!x);
-    if (castAt && Math.hypot(me.x - castAt.x, me.z - castAt.z) > CAST_RANGE + 3) { castAt = null; fx.setBobber(null); }
+    if (castAt && !aboard && Math.hypot(me.x - castAt.x, me.z - castAt.z) > CAST_RANGE + 3) { castAt = null; fx.setBobber(null); }
     if (now >= nextMiniAt) { nextMiniAt = now + 250; drawMinimap(minimap, mobs.all().filter((m) => !(m.st & 8)).map((m) => ({ x: m.x, z: m.z, boss: MOBS[m.k].boss }))); }
   } else {
     flyT += dt * 0.04;

@@ -3,7 +3,7 @@
  * (cast → bite → the client's reel minigame → catch). All rolls happen here.
  */
 import {
-  FISH_TABLE, SEA_FISH_TABLE, SEA_RARE, GROTTO_FISH_TABLE, GROTTO_RARE, inGrottoPool, SEA_TREASURE, LAKE_TREASURE, ITEMS, MINE_RANGE, RARE_FISH, TREE_BY_ID, TREE_TYPES, VEIN_BY_ID, VEIN_TYPES, CAST_RANGE,
+  TRAWLER, FISH_TABLE, SEA_FISH_TABLE, SEA_RARE, GROTTO_FISH_TABLE, GROTTO_RARE, inGrottoPool, SEA_TREASURE, LAKE_TREASURE, ITEMS, MINE_RANGE, RARE_FISH, TREE_BY_ID, TREE_TYPES, VEIN_BY_ID, VEIN_TYPES, CAST_RANGE,
   PICK_SEC, PLANT_BY_ID, regionAt, weatherAt, PLANT_TYPES, isFishable, levelOf, skillLevel, roomFor, swingSeconds, type NodeTypeDef, type Stack,
 } from '@kontor/shared';
 import type { ServerPlayer } from './types.js';
@@ -122,7 +122,8 @@ export function cast(w: World, p: ServerPlayer, x: number, z: number): void {
   // Decide the fish now; the client only learns what it was if the catch succeeds.
   const lvl = skillLevel(p.xp, 'fishing', p.stats.all.skillLvl);
   let pick: { item: string; xp: number; difficulty: number; rare: boolean; stack?: Stack } = { item: FISH_TABLE[0].item, xp: FISH_TABLE[0].xp, difficulty: FISH_TABLE[0].difficulty, rare: false };
-  const luckK = (1 + st.rareFish) * (1 + st.luck * 0.01);
+  const boat = !!p.trawler && p.trawler.until > w.now();
+  const luckK = (1 + st.rareFish) * (1 + st.luck * 0.01) * (boat ? TRAWLER.rareMult : 1); // the trawler: 2.5× the rare rolls
   const sea = regionAt(x, z) === 'fjord', pool = inGrottoPool(x, z);
   if (pool && lvl < GROTTO_FISH_TABLE[0].level) return w.notice(p, `Nothing bites in these pools under Fishing ${GROTTO_FISH_TABLE[0].level}.`, 'error');
   if (sea && lvl < SEA_FISH_TABLE[0].level) return w.notice(p, `Sea fish won’t bite for a beginner — you need Fishing ${SEA_FISH_TABLE[0].level}.`, 'error');
@@ -144,7 +145,7 @@ export function cast(w: World, p: ServerPlayer, x: number, z: number): void {
     else if (treasure.what === 'plans') stack = { id: ['spear_plans', 'halberd_plans', 'warhammer_plans'][Math.floor(w.rand() * 3)], qty: 1 };
     else stack = { id: 'fjord_horse', qty: 1 };
     pick = { item: stack.id, xp: treasure.xp, difficulty: Math.min(1.25, diff), rare: true, stack };
-  } else if (w.rand() < rare.chance * (1 + st.rareFish) * (1 + st.luck * 0.01)) pick = { item: rare.item, xp: rare.xp, difficulty: rare.difficulty, rare: true };
+  } else if (w.rand() < rare.chance * luckK) pick = { item: rare.item, xp: rare.xp, difficulty: rare.difficulty, rare: true };
   else {
     const table = (pool ? GROTTO_FISH_TABLE : sea ? SEA_FISH_TABLE : FISH_TABLE).filter((f) => f.level <= lvl);
     let roll = w.rand() * table.reduce((s, f) => s + f.weight, 0);
@@ -162,7 +163,7 @@ const REEL_WINDOW = 25_000;
 export function stepFishing(w: World, p: ServerPlayer, now: number): void {
   const f = p.fishing;
   if (!f) return;
-  if (Math.hypot(p.state.x - f.fromX, p.state.z - f.fromZ) > 2.5 || p.dead) return stopFishing(w, p, 'cancel');
+  if ((!p.trawler && Math.hypot(p.state.x - f.fromX, p.state.z - f.fromZ) > 2.5) || p.dead) return stopFishing(w, p, 'cancel'); // the trawler moves; you don't
   if (f.phase === 'wait' && now >= f.biteAt) {
     f.phase = 'bite';
     f.biteAt = now;
@@ -178,7 +179,9 @@ export function reel(w: World, p: ServerPlayer, ok: boolean): void {
   // A real minigame takes a moment; an instant "ok" is a bot.
   if (!ok || now - f.biteAt < 2500 || now - f.biteAt > REEL_WINDOW + 2000) return stopFishing(w, p, 'lost');
   const st = p.stats.scoped.fishing;
-  const qty = f.stack ? f.stack.qty : w.rand() < st.doubleYield + st.luck * 0.002 && !f.rare ? 2 : 1;
+  // On the trawler every ordinary fish comes up two or three at a time.
+  const [lo, hi] = TRAWLER.fishQty;
+  const qty = f.stack ? f.stack.qty : p.trawler && !f.rare ? lo + Math.floor(w.rand() * (hi - lo + 1)) : w.rand() < st.doubleYield + st.luck * 0.002 && !f.rare ? 2 : 1;
   const left = w.give(p, f.stack ? { ...f.stack } : { id: f.item, qty });
   if (left === qty) return stopFishing(w, p, 'lost');
   const xp = w.addXp(p, 'fishing', f.xp);

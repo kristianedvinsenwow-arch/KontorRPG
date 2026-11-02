@@ -125,6 +125,8 @@ export class Fx {
     this.scene.add(b);
     this.bobber = b;
   }
+  /** The bobber drifts along with you (cast from the trawler). */
+  moveBobber(at: THREE.Vector3): void { if (this.bobber) { this.bobber.position.x = at.x; this.bobber.position.z = at.z; } }
   bite(): void { this.bobberBite = true; if (this.bobber) this.ring(this.bobber.position, 1.2, 0xffffff, 0.6); }
 
   // ---------------------------------------------------------------- ground loot
