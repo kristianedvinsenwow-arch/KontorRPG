@@ -26,6 +26,7 @@ import { makeHorse, animateHorse, riderEyeLift, type Horse } from './entities/ho
 import { Places } from './world/places.js';
 import { CaveView } from './world/cave.js';
 import { GrottoView } from './world/grotto.js';
+import { cullChildren } from './engine/cull.js';
 import { Fx } from './world/fx.js';
 import { initTrees, setTreesDepleted, animateTrees, targetTree } from './world/trees.js';
 import { createLocalPlayer, stepPlayer, type LocalPlayer } from './physics/movement.js';
@@ -741,6 +742,9 @@ function frame() {
     caveView.setVisible(which === 'mine');
     grottoView.setVisible(which === 'grotto');
     if (!under) { terrain.update(me.x, me.z); terrain.followWater(me.x, me.z); }
+    // Underground, the outdoor world isn't drawn at all; outdoors, only what's near.
+    terrain.setShown(!under); places.setShown(!under); plants.group.visible = !under;
+    if (slow) { if (!under) { places.cull(cam.position); cullChildren(plants.group, cam.position, 140); } cullChildren(veins.group, cam.position, 140); }
 
     // Footsteps (hooves when riding): one per half stride, by what's underfoot.
     const prevPh = walkPh;
@@ -803,6 +807,7 @@ function frame() {
   renderer.setScissorTest(false);
   renderer.setClearColor(0x000000, 1);
   terrain.animate(clock.elapsedTime);
+  gfx.adapt(dt);
   gfx.renderWorld();
   if (me && u.panel !== 'character' && viewmodel.root.visible && !dead) {
     renderer.clearDepth();

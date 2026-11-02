@@ -1144,6 +1144,24 @@ export class Places {
     for (const [dx, dz] of [[-2.5, 0.2], [2.5, 0.2], [-2.9, 1.8], [2.9, 1.8], [0, 3.2]]) this.colliders.push({ x: x + dx, z: z + dz, r: 1.2 });
   }
 
+  /**
+   * Only draw buildings, fences and props near you: everything in every region lives in one group,
+   * so without this Gruben and Saltfjorden were drawn from Bjørkvik too (a kilometre away, but
+   * inside the camera's far plane). Checked a couple of times a second.
+   */
+  private cullCentres: { o: THREE.Object3D; c: THREE.Vector3; r: number }[] | null = null;
+  private nextCull = 0;
+  cull(at: THREE.Vector3, range = 260): void {
+    if (this.t < this.nextCull) return;
+    this.nextCull = this.t + 0.5;
+    if (!this.cullCentres) {
+      const box = new THREE.Box3(), sph = new THREE.Sphere();
+      this.cullCentres = this.group.children.filter((o) => !(o as THREE.Light).isLight).map((o) => { box.setFromObject(o); box.getBoundingSphere(sph); return { o, c: sph.center.clone(), r: Number.isFinite(sph.radius) ? sph.radius : 0 }; });
+    }
+    for (const e of this.cullCentres) e.o.visible = e.c.distanceTo(at) - e.r < range;
+  }
+  setShown(on: boolean): void { this.group.visible = on; }
+
   animate(dt: number, at: THREE.Vector3): void {
     this.t += dt;
     // The light pool: a fixed number of real lights (a changing count would recompile shaders),

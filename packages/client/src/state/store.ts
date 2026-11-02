@@ -67,14 +67,16 @@ const SETTINGS_KEY = 'kontorrpg.settings';
 
 /** Settings are a per-browser convenience, so localStorage is the right home (wrapped: it can throw). */
 export function loadSettings(): Settings {
-  const d: Settings = { name: '', color: Math.floor(Math.random() * 8), sensitivity: 1, quality: 'high', volume: { master: 0.8, sfx: 0.9, amb: 0.6 }, build: defaultBuild() };
+  const d: Settings = { name: '', color: Math.floor(Math.random() * 8), sensitivity: 1, quality: 'medium', volume: { master: 0.8, sfx: 0.9, amb: 0.6 }, build: defaultBuild() };
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       const s = { ...d, ...parsed } as Settings;
       if (parsed.lowGpu === true && !parsed.quality) s.quality = 'low'; // older saved setting
-      if (!['low', 'medium', 'high'].includes(s.quality)) s.quality = 'high';
+      if (!['low', 'medium', 'high'].includes(s.quality)) s.quality = 'medium';
+      // Performance pass (Nov 2026): 'high' got heavy; everyone starts again from 'medium' once.
+      if (!(parsed as { perf2?: boolean }).perf2) { s.quality = s.quality === 'low' ? 'low' : 'medium'; (s as { perf2?: boolean }).perf2 = true; }
       if (!s.volume || typeof s.volume.master !== 'number') s.volume = d.volume;
       if (validateBuild(s.build)) s.build = defaultBuild(); // rules changed since it was saved
       return s;

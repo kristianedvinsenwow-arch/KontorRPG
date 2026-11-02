@@ -137,23 +137,11 @@ function flowerTex(petal: string): THREE.CanvasTexture {
   return t;
 }
 
-/** Standard material + vertex sway for things that bend in the wind. */
+/** Material for grass, flowers and reeds (alpha-cut cards). */
 function windMaterial(map: THREE.Texture, color: number, strength: number): THREE.MeshStandardMaterial {
   const m = new THREE.MeshStandardMaterial({ map, color, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.92 });
-  m.onBeforeCompile = (shader) => {
-    shader.uniforms.uWind = wind;
-    shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nuniform float uWind;')
-      .replace('#include <begin_vertex>', `#include <begin_vertex>
-        #ifdef USE_INSTANCING
-          vec3 ip = instanceMatrix[3].xyz;
-        #else
-          vec3 ip = vec3(0.0);
-        #endif
-        float sway = sin(uWind * 1.7 + ip.x * 0.35 + ip.z * 0.27) * 0.6 + sin(uWind * 3.1 + ip.x * 0.9) * 0.25;
-        transformed.x += sway * ${strength.toFixed(3)} * uv.y * uv.y;
-        transformed.z += sway * ${(strength * 0.6).toFixed(3)} * uv.y * uv.y;`);
-  };
+  // No wind sway any more: it cost frame time on every one of thousands of tufts.
+  void strength;
   // Grass normals point up so tufts light like the ground beneath them instead of like thin cards.
   return m;
 }
@@ -247,7 +235,7 @@ export function buildProps(cx: number, cz: number, colliders: Collider[], dense:
   }
 
   // Ground cover: grass everywhere it's green and gentle, flower patches here and there.
-  const tufts = dense ? 1400 : 500;
+  const tufts = dense ? 900 : 400;
   for (let i = 0; i < tufts; i++) {
     const x = cx * CHUNK_SIZE + rng() * CHUNK_SIZE, z = cz * CHUNK_SIZE + rng() * CHUNK_SIZE;
     const y = heightAt(x, z);
@@ -277,6 +265,8 @@ export function buildProps(cx: number, cz: number, colliders: Collider[], dense:
     // Thin alpha-cut cards (grass, flowers, reeds): the ambient-occlusion pass draws them as solid
     // quads, which left a dark smudge floating over the grass tops, so it skips them.
     if (p.mat.alphaTest > 0) NO_AO.add(im);
+    // Ground cover is only drawn in the chunks right around you (see Terrain.update).
+    if (p.mat.alphaTest > 0) im.userData.cover = true;
     im.computeBoundingSphere();
     out.push(im);
   }

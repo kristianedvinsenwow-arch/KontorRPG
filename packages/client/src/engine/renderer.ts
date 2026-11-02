@@ -40,6 +40,8 @@ export interface Gfx {
   follow(pos: THREE.Vector3): void;
   /** Draw the world (through post-processing when enabled). */
   renderWorld(): void;
+  /** Feed it the frame time: it lowers the render resolution when frames get slow, and raises it back. */
+  adapt(dt: number): void;
   /** Cave lighting: no sky, dark fog, dim fill light. */
   setUnderground(on: boolean): void;
   /** Outdoor mood per region: Gruben is greyer, colder and mistier. */
@@ -141,7 +143,7 @@ export function createGfx(container: HTMLElement, quality: Quality): Gfx {
 
   // Post-processing chain. Half-float target keeps HDR values for bloom; 4× MSAA replaces the
   // canvas antialiasing we turned off above.
-  const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: 4 });
+  const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, samples: quality === 'high' ? 4 : 2 });
   const composer = new EffectComposer(renderer, target);
   const renderPass = new RenderPass(scene, cam);
   const gtao = new GTAOPass(scene, cam, 1, 1);
@@ -180,6 +182,7 @@ export function createGfx(container: HTMLElement, quality: Quality): Gfx {
     scene.add(pts);
     return pts;
   })();
+  let baseRatio = 1, scale = 1, avg = 1 / 60, acc = 0;
   const gfx: Gfx = {
     renderer, scene, cam, vmScene, vmCam, sun, quality,
     setUnderground(on) {
@@ -195,6 +198,8 @@ export function createGfx(container: HTMLElement, quality: Quality): Gfx {
       sun.intensity = on ? 0.15 : 3.0;
       hemi.intensity = on ? 0.35 : 0.45;
       hemi.color.setHex(on ? 0x6a7a90 : 0xcfe0ee);
+      // No sun underground, so no shadow pass at all down there.
+      sun.castShadow = !on && gfx.quality !== 'low';
     },
     setRegion(r) { (gfx as any)._region = r; },
     /**
@@ -234,10 +239,12 @@ export function createGfx(container: HTMLElement, quality: Quality): Gfx {
     },
     setQuality(q) {
       gfx.quality = q;
-      renderer.setPixelRatio(q === 'low' ? 1 : Math.min(window.devicePixelRatio || 1, q === 'high' ? 2 : 1.5));
+      baseRatio = q === 'low' ? 0.85 : Math.min(window.devicePixelRatio || 1, q === 'high' ? 1.5 : 1);
+      scale = 1;
+      renderer.setPixelRatio(baseRatio);
       renderer.shadowMap.enabled = q !== 'low';
-      sun.castShadow = q !== 'low';
-      const size = q === 'high' ? 4096 : 2048;
+      sun.castShadow = q !== 'low' && !(gfx as any)._under;
+      const size = q === 'high' ? 2048 : 1024;
       if (sun.shadow.mapSize.x !== size) {
         sun.shadow.mapSize.set(size, size);
         sun.shadow.map?.dispose();
@@ -265,6 +272,19 @@ export function createGfx(container: HTMLElement, quality: Quality): Gfx {
       sun.position.set(sx + sunOffset.x, pos.y + sunOffset.y, sz + sunOffset.z);
       sky.position.copy(pos);
       stars.position.copy(pos);
+    },
+    adapt(dt) {
+      // Dynamic resolution: average the frame time; under ~45 fps step the resolution down (to
+      // 60% at most), over ~58 fps step it back up. Checked twice a second.
+      avg = avg * 0.9 + Math.min(0.1, dt) * 0.1;
+      if ((acc += dt) < 0.5) return;
+      acc = 0;
+      const next = avg > 1 / 45 ? Math.max(0.6, scale - 0.1) : avg < 1 / 58 ? Math.min(1, scale + 0.05) : scale;
+      if (Math.abs(next - scale) < 0.01) return;
+      scale = next;
+      renderer.setPixelRatio(baseRatio * scale);
+      composer.setPixelRatio(renderer.getPixelRatio());
+      gfx.resize();
     },
     renderWorld() {
       if (gfx.quality === 'low') {

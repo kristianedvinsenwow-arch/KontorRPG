@@ -7,6 +7,7 @@
 import * as THREE from 'three';
 import { GROTTO, GROTTO_GATE, GROTTO_POOLS, GROTTO_ROOMS, GROTTO_TUNNELS, caveFloor, mulberry32 } from '@kontor/shared';
 import { mat, bx, mesh } from '../engine/procgen.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { addLabel } from '../engine/labels.js';
 
 const X0 = -34, X1 = 34, Z0 = -108, Z1 = 14, STEP = 0.7, WALL = 7.5;
@@ -96,33 +97,42 @@ export class GrottoView {
       this.water.push(wm);
       const w = mesh(new THREE.CircleGeometry(p.r + 0.35, 32), wm, this.group, false);
       w.rotation.x = -Math.PI / 2; w.position.set(x, caveFloor(x, z) - 0.25, z);
-      const l = new THREE.PointLight(lair ? 0x4080a0 : 0x40e0c0, lair ? 3 : 4, p.r * 3.5, 1.4);
-      l.position.set(x, caveFloor(x, z) + 0.6, z);
-      this.group.add(l); this.lights.push(l);
     }
-    // Luminous anemones and pale crystals along the walls of every chamber.
+    // Luminous anemones and pale crystals along the walls of every chamber. Built as three merged
+    // meshes (one per colour) instead of hundreds of little ones: far fewer draw calls.
+    const HUES = [0x40e0c0, 0x8070ff, 0xff70c0];
+    const parts: THREE.BufferGeometry[][] = HUES.map(() => []);
+    const put = (geo: THREE.BufferGeometry, hue: number, m: THREE.Matrix4) => { const gg = (geo.index ? geo.toNonIndexed() : geo).applyMatrix4(m); gg.deleteAttribute('uv'); parts[hue].push(gg); };
+    const M4 = new THREE.Matrix4(), Q = new THREE.Quaternion(), E = new THREE.Euler(), S = new THREE.Vector3(), Pv = new THREE.Vector3();
     for (const r of GROTTO_ROOMS) {
       const x = GROTTO.x + r.c[0], z = GROTTO.z + r.c[1];
       for (let i = 0; i < Math.round(r.r * 1.1); i++) {
         const a = rng() * Math.PI * 2, d = r.r - 0.3 - rng() * 0.6;
-        const cx = x + Math.cos(a) * d, cz = z + Math.sin(a) * d, y = caveFloor(cx, cz);
-        const hue = [0x40e0c0, 0x8070ff, 0xff70c0][i % 3];
-        const gm = new THREE.MeshStandardMaterial({ color: hue, emissive: hue, emissiveIntensity: 1.2, roughness: 0.4 });
-        this.glows.push({ m: gm, base: 1.2, ph: rng() * 6 });
+        const cx = x + Math.cos(a) * d, cz = z + Math.sin(a) * d, y = caveFloor(cx, cz), hue = i % 3;
         if (i % 2) {
           // Anemone: a squat stalk with a ring of tendrils.
-          const g = new THREE.Group(); g.position.set(cx, y + 0.1 + rng() * 2.2, cz); this.group.add(g);
-          mesh(new THREE.CylinderGeometry(0.08, 0.12, 0.18, 8), gm, g);
-          for (let k = 0; k < 7; k++) { const tnd = mesh(new THREE.ConeGeometry(0.025, 0.22, 4), gm, g); const ta = (k / 7) * Math.PI * 2; tnd.position.set(Math.cos(ta) * 0.08, 0.16, Math.sin(ta) * 0.08); tnd.rotation.set(Math.sin(ta) * 0.6, 0, -Math.cos(ta) * 0.6); }
+          const by = y + 0.1 + rng() * 2.2;
+          put(new THREE.CylinderGeometry(0.08, 0.12, 0.18, 8), hue, M4.makeTranslation(cx, by, cz));
+          for (let k = 0; k < 7; k++) {
+            const ta = (k / 7) * Math.PI * 2;
+            M4.compose(Pv.set(cx + Math.cos(ta) * 0.08, by + 0.16, cz + Math.sin(ta) * 0.08), Q.setFromEuler(E.set(Math.sin(ta) * 0.6, 0, -Math.cos(ta) * 0.6)), S.set(1, 1, 1));
+            put(new THREE.ConeGeometry(0.025, 0.22, 4), hue, M4);
+          }
         } else {
-          const cr = mesh(new THREE.OctahedronGeometry(0.22 + rng() * 0.2, 0), gm, this.group);
-          cr.position.set(cx, y + 0.5 + rng() * 2, cz); cr.scale.set(0.6, 1.7, 0.6); cr.rotation.set(rng(), rng(), rng());
+          M4.compose(Pv.set(cx, y + 0.5 + rng() * 2, cz), Q.setFromEuler(E.set(rng(), rng(), rng())), S.set(0.6, 1.7, 0.6).multiplyScalar(0.22 + rng() * 0.2));
+          put(new THREE.OctahedronGeometry(1, 0), hue, M4);
         }
       }
-      const l = new THREE.PointLight(0x60c8e0, 3.2, r.r * 2.6, 1.6);
+      const l = new THREE.PointLight(0x60c8e0, 3.6, r.r * 2.8, 1.5);
       l.position.set(x - r.r * 0.3, caveFloor(x, z) + 3.8, z);
       this.group.add(l); this.lights.push(l);
     }
+    HUES.forEach((hue, k) => {
+      if (!parts[k].length) return;
+      const gm = new THREE.MeshStandardMaterial({ color: hue, emissive: hue, emissiveIntensity: 1.2, roughness: 0.4, flatShading: true });
+      this.glows.push({ m: gm, base: 1.2, ph: k * 2.1 });
+      this.group.add(new THREE.Mesh(mergeGeometries(parts[k]), gm));
+    });
     // The gate to the lair: a great arch of barnacled rock and whale ribs, with a warning.
     {
       const gx = GROTTO_GATE.x, gz = GROTTO_GATE.z, y = caveFloor(gx, gz);
@@ -157,7 +167,7 @@ export class GrottoView {
     if (!this.group.visible) return;
     this.t += dt;
     for (const g of this.glows) g.m.emissiveIntensity = g.base * (0.75 + Math.sin(this.t * 1.3 + g.ph) * 0.25);
-    this.lights.forEach((l, i) => (l.intensity = (i < GROTTO_POOLS.length ? 4 : 3.2) * (0.9 + Math.sin(this.t * 1.7 + i) * 0.1)));
+    this.lights.forEach((l, i) => (l.intensity = 3.6 * (0.9 + Math.sin(this.t * 1.7 + i) * 0.1)));
     for (const w of this.water) w.emissiveIntensity = (w.color.r < 0.1 ? 0.4 : 0.9) * (0.85 + Math.sin(this.t * 0.9) * 0.15);
   }
 }

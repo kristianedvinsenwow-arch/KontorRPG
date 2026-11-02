@@ -102,6 +102,7 @@ function buildGround(cx: number, cz: number): THREE.Mesh {
 
 export class Terrain {
   private chunks = new Map<string, Chunk>();
+  private coverAt: [number, number] = [NaN, NaN];
   readonly root = new THREE.Group();
   private water: Water;
   /** Fewer grass tufts on low quality. Changing it rebuilds chunks as they stream. */
@@ -117,6 +118,9 @@ export class Terrain {
     wind.value = t;
     this.water.animate(t);
   }
+
+  /** Hide the whole outdoor world (ground, props, water) while you're underground. */
+  setShown(on: boolean): void { this.root.visible = on; this.water.mesh.visible = on; }
 
   /** The water plane follows you between regions. */
   followWater(x: number, z: number): void { this.water.follow(x, z); }
@@ -145,6 +149,15 @@ export class Terrain {
       this.root.add(group);
       this.chunks.set(key, { key, group, colliders });
       built++;
+    }
+    // Grass, flowers and reeds only in the 3 × 3 chunks around you: further out they're a few
+    // pixels each but still cost a lot to draw.
+    if (built || pcx !== this.coverAt[0] || pcz !== this.coverAt[1]) {
+      this.coverAt = [pcx, pcz];
+      for (const ch of this.chunks.values()) {
+        const [kx, kz] = ch.key.split(',').map(Number), near = Math.abs(kx - pcx) <= 1 && Math.abs(kz - pcz) <= 1;
+        for (const o of ch.group.children) if (o.userData.cover) o.visible = near;
+      }
     }
     for (const [key, ch] of this.chunks) {
       if (want.has(key)) continue;

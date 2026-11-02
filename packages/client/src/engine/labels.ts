@@ -14,6 +14,8 @@ export interface Label {
   /** Scale the element with distance (rings) instead of a fixed size. */
   scale?: boolean;
   visible: boolean;
+  /** Place signs keep their own range (they're few and you navigate by them). */
+  sign?: boolean;
 }
 
 const layer = document.createElement('div');
@@ -21,11 +23,14 @@ layer.id = 'labels';
 document.body.append(layer);
 
 const labels = new Set<Label>();
+/** Name tags, speech and health bars never show further than the longest weapon reach (staffs, 26 m): fewer
+ *  DOM updates each frame, and less clutter. */
+export const LABEL_RANGE = 26;
 const v = new THREE.Vector3();
 const camPos = new THREE.Vector3();
 
 export function addLabel(el: HTMLElement, at: Label['at'], max = 40, scale = false): Label {
-  const l: Label = { el, at, max, scale, visible: true };
+  const l: Label = { el, at, max, scale, visible: true, sign: el.classList.contains('place') };
   el.classList.add('lbl3d');
   layer.append(el);
   labels.add(l);
@@ -60,8 +65,9 @@ export function updateLabels(cam: THREE.PerspectiveCamera): void {
     let show = !!p;
     if (p) {
       const d = p.distanceTo(camPos);
-      v.copy(p).project(cam);
-      show = d < l.max && v.z < 1 && v.z > -1 && Math.abs(v.x) < 1.2 && Math.abs(v.y) < 1.2;
+      // Cheap distance test first; only project what's close enough to show.
+      show = d < (l.sign ? l.max : Math.min(l.max, LABEL_RANGE));
+      if (show) { v.copy(p).project(cam); show = v.z < 1 && v.z > -1 && Math.abs(v.x) < 1.2 && Math.abs(v.y) < 1.2; }
       if (show) {
         const x = (v.x * 0.5 + 0.5) * w, y = (-v.y * 0.5 + 0.5) * h;
         const s = l.scale ? Math.max(0.25, Math.min(2.5, 9 / Math.max(1, d))) : Math.max(0.6, Math.min(1, 14 / Math.max(1, d)));
